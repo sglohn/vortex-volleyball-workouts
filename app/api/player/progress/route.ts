@@ -45,15 +45,16 @@ export async function GET(req: NextRequest) {
     const history = Object.entries(bySession).map(([sid, logs]) => {
       const sessionDate = sessions?.find(s => s.id === sid)?.checked_in_at ?? ''
       const best = getBestOneRepMax(logs)
-      const bestLog = logs.reduce((b, l) => {
+      let bestWeight = 0, bestReps = 0, bestEst = 0
+      for (const l of logs) {
         const est = l.weight_lbs && l.reps_completed ? estimateOneRepMax(l.weight_lbs, l.reps_completed) : 0
-        return est > (b.est ?? 0) ? { ...l, est } : b
-      }, {} as Record<string, unknown>)
+        if (est > bestEst) { bestEst = est; bestWeight = l.weight_lbs ?? 0; bestReps = l.reps_completed ?? 0 }
+      }
       return {
         date: sessionDate.split('T')[0],
         oneRepMax: best,
-        weight: (bestLog.weight_lbs as number) ?? 0,
-        reps: (bestLog.reps_completed as number) ?? 0,
+        weight: bestWeight,
+        reps: bestReps,
       }
     }).sort((a, b) => a.date.localeCompare(b.date))
 
