@@ -14,13 +14,15 @@ interface Measurement {
   notes?: string
 }
 
-const FIELDS = [
+type MeasurementKey = 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in'
+
+const FIELDS: Array<{ key: MeasurementKey; label: string; unit: string; showFt: boolean }> = [
   { key: 'height_in', label: 'Height', unit: 'in', showFt: true },
   { key: 'wingspan_in', label: 'Wingspan', unit: 'in', showFt: true },
   { key: 'standing_reach_in', label: 'Standing Reach', unit: 'in', showFt: true },
   { key: 'standing_vertical_in', label: 'Standing Vertical', unit: 'in', showFt: false },
   { key: 'approach_vertical_in', label: 'Approach Vertical', unit: 'in', showFt: false },
-] as const
+]
 
 export default function ProfilePage() {
   const router = useRouter()
@@ -43,9 +45,9 @@ export default function ProfilePage() {
 
   const latest = measurements[0]
 
-  function getTrend(key: string): string {
+  function getTrend(key: MeasurementKey): string {
     if (measurements.length < 2) return ''
-    const vals = measurements.map(m => (m as unknown as Record<string, unknown>)[key] as number).filter(Boolean)
+    const vals = measurements.map(m => m[key] as number | undefined).filter((v): v is number => v != null)
     if (vals.length < 2) return ''
     const diff = vals[0] - vals[vals.length - 1]
     const pct = Math.abs(diff / vals[vals.length - 1] * 100)
@@ -78,7 +80,7 @@ export default function ProfilePage() {
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Measurements</h2>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
             {FIELDS.map(f => {
-              const val = (latest as Record<string, unknown>)[f.key] as number | undefined
+              const val = latest[f.key]
               const trend = getTrend(f.key)
               return (
                 <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.625rem 0', borderBottom: '1px solid var(--court-border)' }}>
@@ -120,7 +122,7 @@ export default function ProfilePage() {
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.75rem' }}>
                   {FIELDS.map(f => {
-                    const val = (m as Record<string, unknown>)[f.key] as number | undefined
+                    const val = m[f.key]
                     if (!val) return null
                     return (
                       <div key={f.key}>
