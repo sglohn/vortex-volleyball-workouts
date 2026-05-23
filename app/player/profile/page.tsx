@@ -45,7 +45,7 @@ export default function ProfilePage() {
 
   function getTrend(key: string): string {
     if (measurements.length < 2) return ''
-    const vals = measurements.map(m => (m as Record<string, unknown>)[key] as number).filter(Boolean)
+    const vals = measurements.map(m => (m as unknown as Record<string, unknown>)[key] as number).filter(Boolean)
     if (vals.length < 2) return ''
     const diff = vals[0] - vals[vals.length - 1]
     const pct = Math.abs(diff / vals[vals.length - 1] * 100)
