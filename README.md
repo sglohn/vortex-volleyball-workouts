@@ -90,6 +90,7 @@ Open [http://localhost:3000](http://localhost:3000)
 
 ## Extending
 
+
 - Add email/push notifications for missed sessions
 - Add a rest timer per exercise
 - Add workout templates / periodization planner
