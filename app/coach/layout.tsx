@@ -19,6 +19,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
 
   useEffect(() => {
+    if (typeof window === 'undefined') return
     if (path !== '/coach' && !localStorage.getItem('vx_coach')) router.push('/coach')
   }, [path, router])
 
