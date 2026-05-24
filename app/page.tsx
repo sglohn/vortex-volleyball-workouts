@@ -53,14 +53,11 @@ export default function HomePage() {
         templateId: data.templateId,
         hasHealthFlags: data.hasHealthFlags,
         healthReports: data.healthReports,
+        isResumed: data.isResumed,
       }))
 
-      // If they have active health flags, go to health page first
-      if (data.hasHealthFlags) {
-        router.push('/player/health')
-      } else {
-        router.push('/player/workout')
-      }
+      // Always route through body check first
+      router.push('/player/bodycheck')
     } catch {
       setError('Something went wrong')
       setLoading(false)
