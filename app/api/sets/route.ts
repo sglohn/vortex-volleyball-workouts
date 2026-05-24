@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { getBestOneRepMax, recommendWeight } from '@/lib/fitness'
+import { getBestOneRepMax, recommendWeightForPhase } from '@/lib/fitness'
+import { PhaseType } from '@/lib/types'
 
 export async function POST(req: NextRequest) {
-  const { sessionId, exerciseId, setNumber, weightLbs, repsCompleted, completed } = await req.json()
+  const {
+    sessionId,
+    exerciseId,
+    setNumber,
+    weightLbs,
+    repsCompleted,
+    velocityMs,
+    completed,
+  } = await req.json()
 
   if (!sessionId || !exerciseId || !setNumber) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
@@ -11,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   const db = createServerClient()
 
-  // Upsert the set log (update if exists, insert if not)
+  // Upsert set log
   const { data: existing } = await db
     .from('set_logs')
     .select('id')
@@ -21,41 +30,70 @@ export async function POST(req: NextRequest) {
     .single()
 
   let logId: string
+  const logData = {
+    weight_lbs: weightLbs ?? null,
+    reps_completed: repsCompleted ?? null,
+    completed,
+    logged_at: new Date().toISOString(),
+  }
+
   if (existing) {
-    await db.from('set_logs').update({
-      weight_lbs: weightLbs,
-      reps_completed: repsCompleted,
-      completed,
-      logged_at: new Date().toISOString(),
-    }).eq('id', existing.id)
+    await db.from('set_logs').update(logData).eq('id', existing.id)
     logId = existing.id
   } else {
-    const { data: newLog } = await db.from('set_logs').insert({
-      session_id: sessionId,
-      exercise_id: exerciseId,
-      set_number: setNumber,
-      weight_lbs: weightLbs,
-      reps_completed: repsCompleted,
-      completed,
-    }).select('id').single()
+    const { data: newLog } = await db
+      .from('set_logs')
+      .insert({ session_id: sessionId, exercise_id: exerciseId, set_number: setNumber, ...logData })
+      .select('id')
+      .single()
     logId = newLog?.id
   }
 
-  // Recalculate 1RM from all logs for this player + exercise
-  const { data: session } = await db.from('sessions').select('player_id').eq('id', sessionId).single()
-  const { data: playerSessions } = await db.from('sessions').select('id').eq('player_id', session?.player_id)
-  const sessionIds = playerSessions?.map(s => s.id) ?? []
+  // Log OVR velocity if provided
+  if (velocityMs) {
+    const { data: session } = await db.from('sessions').select('player_id').eq('id', sessionId).single()
+    if (session) {
+      await db.from('ovr_logs').insert({
+        player_id: session.player_id,
+        session_id: sessionId,
+        exercise_id: exerciseId,
+        log_type: 'velocity',
+        value: velocityMs,
+        weight_lbs: weightLbs ?? null,
+      })
+    }
+  }
 
+  // Recalculate 1RM
+  const { data: session } = await db.from('sessions').select('player_id, team_id').eq('id', sessionId).single()
+  const { data: playerSessions } = await db.from('sessions').select('id').eq('player_id', session?.player_id)
   const { data: allLogs } = await db
     .from('set_logs')
     .select('weight_lbs, reps_completed')
     .eq('exercise_id', exerciseId)
-    .in('session_id', sessionIds)
+    .in('session_id', playerSessions?.map(s => s.id) ?? ['none'])
     .eq('completed', true)
 
-  const { data: ex } = await db.from('exercises').select('reps').eq('id', exerciseId).single()
   const newOneRepMax = getBestOneRepMax(allLogs ?? [])
-  const recommendation = newOneRepMax > 0 && ex ? recommendWeight(newOneRepMax, ex.reps) : undefined
+
+  // Get current phase for recommendation
+  let phaseType: PhaseType = 'general'
+  if (session?.team_id) {
+    const today = new Date().toISOString().split('T')[0]
+    const { data: phases } = await db
+      .from('training_phases')
+      .select('phase_type')
+      .eq('team_id', session.team_id)
+      .lte('starts_on', today)
+      .gte('ends_on', today)
+      .limit(1)
+    phaseType = (phases?.[0]?.phase_type as PhaseType) ?? 'general'
+  }
+
+  const { data: ex } = await db.from('exercise_library').select('default_reps').eq('id', exerciseId).single()
+  const recommendation = newOneRepMax > 0
+    ? recommendWeightForPhase(newOneRepMax, ex?.default_reps ?? '8', phaseType)
+    : null
 
   return NextResponse.json({ id: logId, newOneRepMax, recommendation })
 }
