@@ -83,7 +83,7 @@ export default function CoachPlayerDetailPage() {
                     <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f87171' }}>{r.body_part as string}</span>
                     <span className={`tag ${r.report_type === 'major_injury' ? 'tag-danger' : 'tag-warn'}`}>{r.report_type === 'major_injury' ? 'Injury' : 'Pain'}</span>
                   </div>
-                  {r.pain_level && <div style={{ fontSize: '0.8rem', color: painLevelColor(r.pain_level as number) }}>{r.pain_level}/10 — {painLevelLabel(r.pain_level as number)}</div>}
+                  {r.pain_level != null && <div style={{ fontSize: '0.8rem', color: painLevelColor(Number(r.pain_level)) }}>{String(r.pain_level)}/10 — {painLevelLabel(Number(r.pain_level))}</div>}
                   {r.description && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{r.description as string}</div>}
                   <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
                     <button onClick={() => updateHealth(r.id as string, 'monitoring', '')} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#facc15', color: '#facc15' }}>Monitoring</button>
