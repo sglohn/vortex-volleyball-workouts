@@ -29,7 +29,19 @@ export async function POST(req: NextRequest) {
   const teamId = playerTeam?.team_id ?? null
   const today = new Date().toISOString().split('T')[0]
 
-  // Check for player workout override today
+  // Check for today's existing incomplete session — resume it
+  const { data: existingSession } = await db
+    .from('sessions')
+    .select('id, team_id')
+    .eq('player_id', playerId)
+    .gte('checked_in_at', `${today}T00:00:00.000Z`)
+    .lte('checked_in_at', `${today}T23:59:59.999Z`)
+    .is('completed_at', null)
+    .order('checked_in_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  // Find today's template
   let templateId: string | null = null
   const { data: override } = await db
     .from('player_overrides')
@@ -41,7 +53,6 @@ export async function POST(req: NextRequest) {
   if (override?.template_id) {
     templateId = override.template_id
   } else if (teamId) {
-    // Get team schedule for today
     const { data: schedule } = await db
       .from('team_schedule')
       .select('template_id')
@@ -51,7 +62,7 @@ export async function POST(req: NextRequest) {
     templateId = schedule?.template_id ?? null
   }
 
-  // Fallback: get active workout from old system
+  // Fallback legacy
   let legacyWorkoutId: string | null = null
   if (!templateId) {
     const { data: workout } = await db
@@ -69,24 +80,28 @@ export async function POST(req: NextRequest) {
     .eq('player_id', playerId)
     .eq('status', 'active')
 
-  // Create session
-  const { data: session, error: sessionError } = await db
-    .from('sessions')
-    .insert({
-      player_id: playerId,
-      workout_id: legacyWorkoutId,
-      team_id: teamId,
-    })
-    .select('id')
-    .single()
+  let sessionId: string
 
-  if (sessionError) return NextResponse.json({ error: 'Could not create session' }, { status: 500 })
+  if (existingSession) {
+    // Resume existing session
+    sessionId = existingSession.id
+  } else {
+    // Create new session
+    const { data: session, error: sessionError } = await db
+      .from('sessions')
+      .insert({ player_id: playerId, workout_id: legacyWorkoutId, team_id: teamId })
+      .select('id')
+      .single()
+    if (sessionError) return NextResponse.json({ error: 'Could not create session' }, { status: 500 })
+    sessionId = session.id
+  }
 
   return NextResponse.json({
-    sessionId: session.id,
+    sessionId,
     playerName: player.name,
     teamId,
     templateId,
+    isResumed: !!existingSession,
     hasHealthFlags: (healthReports?.length ?? 0) > 0,
     healthReports: healthReports ?? [],
   })
@@ -95,7 +110,6 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const { sessionId } = await req.json()
   if (!sessionId) return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 })
-
   const db = createServerClient()
   await db.from('sessions').update({ completed_at: new Date().toISOString() }).eq('id', sessionId)
   return NextResponse.json({ ok: true })
