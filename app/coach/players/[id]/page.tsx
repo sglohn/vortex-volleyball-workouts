@@ -77,20 +77,27 @@ export default function CoachPlayerDetailPage() {
           </h2>
           {activeHealth.length === 0
             ? <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No active health concerns.</p>
-            : activeHealth.map(r => (
-                <div key={r.id as string} style={{ background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.5rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                    <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f87171' }}>{r.body_part as string}</span>
-                    <span className={`tag ${r.report_type === 'major_injury' ? 'tag-danger' : 'tag-warn'}`}>{r.report_type === 'major_injury' ? 'Injury' : 'Pain'}</span>
+            : activeHealth.map(r => {
+                const rid = r.id as string
+                const bodyPart = r.body_part as string
+                const reportType = r.report_type as string
+                const painLevel = r.pain_level != null ? Number(r.pain_level) : null
+                const description = r.description as string | undefined
+                return (
+                  <div key={rid} style={{ background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f87171' }}>{bodyPart}</span>
+                      <span className={`tag ${reportType === 'major_injury' ? 'tag-danger' : 'tag-warn'}`}>{reportType === 'major_injury' ? 'Injury' : 'Pain'}</span>
+                    </div>
+                    {painLevel != null && <div style={{ fontSize: '0.8rem', color: painLevelColor(painLevel) }}>{painLevel}/10 — {painLevelLabel(painLevel)}</div>}
+                    {description && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{description}</div>}
+                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
+                      <button onClick={() => updateHealth(rid, 'monitoring', '')} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#facc15', color: '#facc15' }}>Monitoring</button>
+                      <button onClick={() => updateHealth(rid, 'resolved', '')} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: 'var(--volt)', color: 'var(--volt)' }}>Resolved</button>
+                    </div>
                   </div>
-                  {r.pain_level != null && <div style={{ fontSize: '0.8rem', color: painLevelColor(Number(r.pain_level)) }}>{String(r.pain_level)}/10 — {painLevelLabel(Number(r.pain_level))}</div>}
-                  {r.description && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{r.description as string}</div>}
-                  <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
-                    <button onClick={() => updateHealth(r.id as string, 'monitoring', '')} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#facc15', color: '#facc15' }}>Monitoring</button>
-                    <button onClick={() => updateHealth(r.id as string, 'resolved', '')} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: 'var(--volt)', color: 'var(--volt)' }}>Resolved</button>
-                  </div>
-                </div>
-              ))
+                )
+              })
           }
         </div>
 
