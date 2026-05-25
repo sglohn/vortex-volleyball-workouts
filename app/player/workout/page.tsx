@@ -19,7 +19,7 @@ type WorkoutView = 'blocks' | 'active_block'
 
 export default function PlayerWorkoutPage() {
   const router = useRouter()
-  const [session, setSession] = useState<{ sessionId: string; playerName: string; templateId?: string } | null>(null)
+  const [session, setSession] = useState<{ sessionId: string; playerName: string; templateId?: string; checkedInAt?: string; teamMode?: boolean; teamModeUrl?: string } | null>(null)
   const [workout, setWorkout] = useState<WorkoutData | null>(null)
   const [phase, setPhase] = useState<{ phase_type: string; name: string; description?: string } | null>(null)
   const [loading, setLoading] = useState(true)
@@ -187,8 +187,25 @@ export default function PlayerWorkoutPage() {
   async function handleFinish() {
     if (!session) return
     await fetch('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId }) })
-    setFinished(true)
+
+    const completedSets = workout?.blocks.reduce((sum, b) => sum + b.exercises.reduce((s, e) => s + e.setLogs.filter(l => l.completed).length, 0), 0) ?? 0
+    const totalSets = workout?.blocks.reduce((sum, b) => sum + b.exercises.filter(e => !e.skipped).length * b.sets, 0) ?? 0
+    const totalWeight = workout?.blocks.reduce((sum, b) =>
+      sum + b.exercises.reduce((s, e) =>
+        s + e.setLogs.filter(l => l.completed && l.weight_lbs).reduce((ws, l) => ws + (l.weight_lbs! * (l.reps_completed ?? 1)), 0), 0), 0) ?? 0
+    const durationMin = Math.round((Date.now() - new Date(session.checkedInAt ?? Date.now()).getTime()) / 60000)
+    const completionData = { name: session.playerName, totalWeight: Math.round(totalWeight), durationMin, completedSets, totalSets }
+
+    const stored = localStorage.getItem('vx_session')
+    const s = stored ? JSON.parse(stored) : {}
+    if (s.teamMode && s.teamModeUrl) {
+      localStorage.removeItem('vx_session')
+      sessionStorage.setItem('vx_team_return', JSON.stringify(completionData))
+      router.push(s.teamModeUrl)
+      return
+    }
     localStorage.removeItem('vx_session')
+    setFinished(true)
   }
 
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading workout…</div>
@@ -202,14 +219,14 @@ export default function PlayerWorkoutPage() {
 
   if (finished) return (
     <div style={{ padding: '3rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }} className="fade-up">
-      <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(74,222,128,0.15)', border: '2px solid var(--volt)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="pulse">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--volt)" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+      <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--carolina-light)', border: '2px solid var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="pulse">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--carolina)" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
       <div>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, color: 'var(--volt)', marginBottom: '0.5rem' }}>WORKOUT DONE</h2>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, color: 'var(--black)', marginBottom: '0.5rem' }}>WORKOUT DONE</h2>
         <p style={{ color: 'var(--text-secondary)' }}>Great work, {session?.playerName}!</p>
       </div>
-      <button className="btn-volt" onClick={() => router.push('/')} style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>Sign Out</button>
+      <button className="btn-black" onClick={() => router.push('/')} style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>Sign Out</button>
     </div>
   )
 
