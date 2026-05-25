@@ -11,8 +11,7 @@ export default function PlayerLayout({ children }: { children: React.ReactNode }
   useEffect(() => {
     const stored = localStorage.getItem('vx_session')
     if (!stored) { router.push('/'); return }
-    const s = JSON.parse(stored)
-    setPlayerName(s.playerName ?? '')
+    setPlayerName(JSON.parse(stored).playerName ?? '')
   }, [router])
 
   const nav = [
@@ -24,18 +23,22 @@ export default function PlayerLayout({ children }: { children: React.ReactNode }
   ]
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
-      <div style={{ background: 'var(--court-surface)', borderBottom: '1px solid var(--court-border)', padding: '0.625rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', position: 'sticky', top: 0, zIndex: 10 }}>
-        <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--volt)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0a0f0d" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--page-bg)' }}>
+      {/* Top bar */}
+      <div style={{ background: 'var(--black)', padding: '0.625rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--yellow)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--black)" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
         </div>
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.08em', color: 'var(--volt)' }}>VORTEX S&C</span>
+        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', letterSpacing: '0.1em', color: 'var(--yellow)' }}>VORTEX S&C</span>
         <div style={{ flex: 1 }} />
-        {playerName && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{playerName}</span>}
-        <Link href="/" style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textDecoration: 'none' }}>Sign out</Link>
+        {playerName && <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>{playerName}</span>}
+        <Link href="/" style={{ color: 'var(--carolina-light)', fontSize: '0.75rem', textDecoration: 'none', fontWeight: 500 }}>Sign out</Link>
       </div>
+
       <main style={{ flex: 1, overflowY: 'auto', paddingBottom: '5rem' }}>{children}</main>
-      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--court-surface)', borderTop: '1px solid var(--court-border)', display: 'flex', justifyContent: 'space-around', padding: '0.4rem 0', zIndex: 10 }}>
+
+      {/* Bottom nav */}
+      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--white)', borderTop: '1.5px solid var(--gray-border)', display: 'flex', justifyContent: 'space-around', padding: '0.4rem 0', zIndex: 10, boxShadow: '0 -2px 12px rgba(0,0,0,0.07)' }}>
         {nav.map(item => (
           <Link key={item.href} href={item.href} className={`nav-item ${path === item.href ? 'active' : ''}`}>
             {item.icon}{item.label}
