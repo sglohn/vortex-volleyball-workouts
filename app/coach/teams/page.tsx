@@ -92,8 +92,8 @@ export default function CoachTeamsPage() {
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{t.playerCount ?? 0} players</div>
             <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <Link href={`/coach/schedule?team=${t.id}`} style={{ color: 'var(--volt)', fontSize: '0.8rem', textDecoration: 'none', fontWeight: 500 }}>Schedule</Link>
-              <span style={{ color: 'var(--court-muted)' }}>·</span>
+              <Link href={`/coach/schedule?team=${t.id}`} style={{ color: 'var(--carolina-dark)', fontSize: '0.8rem', textDecoration: 'none', fontWeight: 500 }}>Schedule</Link>
+              <a href={`/team/${t.id}`} target="_blank" rel="noopener noreferrer" style={{ background: 'var(--carolina)', color: 'var(--white)', fontSize: '0.78rem', textDecoration: 'none', fontWeight: 700, padding: '0.3rem 0.75rem', borderRadius: 6 }}>▶ Team Mode</a>
               <button onClick={() => startEdit(t)} className="btn-ghost" style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}>Edit</button>
             </div>
           </div>
