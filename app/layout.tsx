@@ -2,9 +2,8 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Vortex Workouts',
-  description: 'Vortex Volleyball weight room tracker',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
+  title: 'Vortex S&C',
+  description: 'Vortex Volleyball Strength & Conditioning',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
