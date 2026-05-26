@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     ? await db.from('health_reports').select('*').in('player_id', playerIds).in('status', ['active', 'monitoring']).order('reported_at', { ascending: false })
     : { data: [] }
 
-  const healthByPlayer: Record<string, typeof healthReports> = {}
+  const healthByPlayer: Record<string, Array<Record<string, unknown>>> = {}
   for (const r of (healthReports ?? [])) {
     if (!healthByPlayer[r.player_id]) healthByPlayer[r.player_id] = []
     healthByPlayer[r.player_id]!.push(r)
