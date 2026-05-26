@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   const healthByPlayer: Record<string, typeof healthReports> = {}
   for (const r of (healthReports ?? [])) {
     if (!healthByPlayer[r.player_id]) healthByPlayer[r.player_id] = []
-    healthByPlayer[r.player_id].push(r)
+    healthByPlayer[r.player_id]!.push(r)
   }
 
   // Session counts and strength data
