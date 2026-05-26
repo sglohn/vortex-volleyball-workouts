@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
-import { inchesToFeetInches, painLevelColor, painLevelLabel } from '@/lib/fitness'
+import { inchesToFeetInches, calcVertical, painLevelColor, painLevelLabel } from '@/lib/fitness'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 
 interface Measurement { height_in?: number; wingspan_in?: number; standing_reach_in?: number; standing_vertical_in?: number; approach_vertical_in?: number; measured_at?: string }
@@ -14,11 +14,11 @@ interface Phase { id: string; phase_type: string; name: string; description?: st
 type Tab = 'roster' | 'stats' | 'health'
 
 const MEAS_FIELDS = [
-  { key: 'height_in',            label: 'Height',            showFt: true  },
-  { key: 'wingspan_in',          label: 'Wingspan',          showFt: true  },
-  { key: 'standing_reach_in',    label: 'Standing Reach',    showFt: true  },
-  { key: 'standing_vertical_in', label: 'Standing Vertical', showFt: false },
-  { key: 'approach_vertical_in', label: 'Approach Vertical', showFt: false },
+  { key: 'height_in',            label: 'Height',          showFt: true  },
+  { key: 'wingspan_in',          label: 'Wingspan',        showFt: true  },
+  { key: 'standing_reach_in',    label: 'Standing Reach',  showFt: true  },
+  { key: 'standing_vertical_in', label: 'Block Touch',     showFt: true  },
+  { key: 'approach_vertical_in', label: 'Approach Touch',  showFt: true  },
 ]
 const POSITIONS = ['Setter','Outside Hitter','Middle Blocker','Opposite','Libero','Defensive Specialist','Other']
 const TREND_COLOR: Record<string, string> = { up: 'var(--success)', down: 'var(--danger)', flat: 'var(--text-muted)' }
@@ -242,8 +242,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                           <td key={f.key} style={{ padding: '0.75rem 0.875rem', textAlign: 'center' }}>
                             {val ? (
                               <div>
-                                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem', color: 'var(--carolina-deep)' }}>{val}"</div>
-                                {f.showFt && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{inchesToFeetInches(val)}</div>}
+                                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem', color: 'var(--carolina-deep)' }}>{inchesToFeetInches(val)}</div>
+                                {(f.key === 'standing_vertical_in' || f.key === 'approach_vertical_in') && (() => {
+                                  const reach = p.measurements?.standing_reach_in as number | undefined
+                                  const vert = calcVertical(val, reach)
+                                  return vert ? <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>+{vert}" vert</div> : null
+                                })()}
                               </div>
                             ) : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>}
                           </td>
@@ -283,9 +287,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                   {avgs.map(f => (
                     <div key={f.key} style={{ textAlign: 'center', background: 'var(--carolina-light)', borderRadius: 10, padding: '0.875rem', border: '1.5px solid var(--carolina-border)' }}>
                       <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: 'var(--carolina-deep)', lineHeight: 1 }}>
-                        {f.avg ? `${f.avg}"` : '—'}
+                        {f.avg ? inchesToFeetInches(f.avg) : '—'}
                       </div>
-                      {f.avg && f.showFt && <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{inchesToFeetInches(f.avg)}</div>}
                       <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginTop: '0.3rem' }}>{f.label}</div>
                       <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>{f.count}/{roster.length} measured</div>
                     </div>
