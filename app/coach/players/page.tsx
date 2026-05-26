@@ -11,6 +11,15 @@ interface Player {
 
 const POSITIONS = ['Setter','Outside Hitter','Middle Blocker','Opposite','Libero','Defensive Specialist','Other']
 
+function FF({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ display:'block', fontSize:'0.75rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.4rem', fontWeight:600 }}>{label}</label>
+      {children}
+    </div>
+  )
+}
+
 export default function CoachPlayersPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -24,6 +33,7 @@ export default function CoachPlayersPage() {
   const [saving, setSaving] = useState(false)
   const [filter, setFilter] = useState('')
   const [teamFilter, setTeamFilter] = useState('')
+  const [measurements, setMeasurements] = useState({ height_in:'', wingspan_in:'', standing_reach_in:'', standing_vertical_in:'', approach_vertical_in:'' })
 
   useEffect(() => {
     Promise.all([
@@ -33,7 +43,26 @@ export default function CoachPlayersPage() {
   }, [])
 
   function openAdd() { setForm({ name:'', jersey_number:'', position:'', pin:'', team_id:'' }); setEditTarget(null); setModal('add'); setMsg('') }
-  function openEdit(p: Player) { setForm({ name: p.name, jersey_number: p.jersey_number ?? '', position: p.position ?? '', pin: '', team_id: p.teamId ?? '' }); setEditTarget(p); setModal('edit'); setMsg('') }
+  function openEdit(p: Player) {
+    setForm({ name: p.name, jersey_number: p.jersey_number ?? '', position: p.position ?? '', pin: '', team_id: p.teamId ?? '' })
+    setMeasurements({ height_in:'', wingspan_in:'', standing_reach_in:'', standing_vertical_in:'', approach_vertical_in:'' })
+    setEditTarget(p)
+    setModal('edit')
+    setMsg('')
+    // Load latest measurements for this player
+    fetch(`/api/player/measurements?playerId=${p.id}`)
+      .then(r => r.json())
+      .then(d => {
+        const latest = d.measurements?.[0]
+        if (latest) setMeasurements({
+          height_in: latest.height_in?.toString() ?? '',
+          wingspan_in: latest.wingspan_in?.toString() ?? '',
+          standing_reach_in: latest.standing_reach_in?.toString() ?? '',
+          standing_vertical_in: latest.standing_vertical_in?.toString() ?? '',
+          approach_vertical_in: latest.approach_vertical_in?.toString() ?? '',
+        })
+      })
+  }
   function closeModal() { setModal(null); setEditTarget(null); setMsg('') }
 
   async function save() {
@@ -57,6 +86,15 @@ export default function CoachPlayersPage() {
       if (res.ok) {
         const team = teams.find(t => t.id === form.team_id)
         setPlayers(prev => prev.map(p => p.id === editTarget.id ? { ...p, ...data.player, teamName: team?.name, teamColor: team?.color, teamId: team?.id } : p))
+        // Save measurements if any were filled in
+        const hasMeasurements = Object.values(measurements).some(v => v !== '')
+        if (hasMeasurements) {
+          await fetch('/api/player/measurements', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ playerId: editTarget.id, ...measurements }),
+          })
+        }
         closeModal(); setMsg('Player updated'); setMsgErr(false); setTimeout(() => setMsg(''), 3000)
       } else { setMsg(data.error || 'Error saving'); setMsgErr(true) }
     }
@@ -75,12 +113,7 @@ export default function CoachPlayersPage() {
     (!teamFilter || p.teamName === teamFilter)
   )
 
-  const FF = ({ label, children }: { label: string; children: React.ReactNode }) => (
-    <div>
-      <label style={{ display:'block', fontSize:'0.75rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.4rem', fontWeight:600 }}>{label}</label>
-      {children}
-    </div>
-  )
+
 
   if (loading) return <div style={{ padding:'2rem', color:'var(--text-muted)' }}>Loading…</div>
 
