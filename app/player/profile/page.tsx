@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { inchesToFeetInches } from '@/lib/fitness'
+import { inchesToFeetInches, calcVertical } from '@/lib/fitness'
 
 interface Measurement {
   id: string; measured_at: string
@@ -11,11 +11,11 @@ interface Measurement {
 type MeasurementKey = 'height_in'|'wingspan_in'|'standing_reach_in'|'standing_vertical_in'|'approach_vertical_in'
 
 const FIELDS: Array<{ key: MeasurementKey; label: string; showFt: boolean }> = [
-  { key: 'height_in', label: 'Height', showFt: true },
-  { key: 'wingspan_in', label: 'Wingspan', showFt: true },
-  { key: 'standing_reach_in', label: 'Standing Reach', showFt: true },
-  { key: 'standing_vertical_in', label: 'Standing Vertical', showFt: false },
-  { key: 'approach_vertical_in', label: 'Approach Vertical', showFt: false },
+  { key: 'height_in',            label: 'Height',         showFt: true  },
+  { key: 'wingspan_in',          label: 'Wingspan',        showFt: true  },
+  { key: 'standing_reach_in',    label: 'Standing Reach',  showFt: true  },
+  { key: 'standing_vertical_in', label: 'Block Touch',     showFt: true  },
+  { key: 'approach_vertical_in', label: 'Approach Touch',  showFt: true  },
 ]
 
 export default function PlayerProfilePage() {
