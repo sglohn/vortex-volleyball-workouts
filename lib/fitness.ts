@@ -124,6 +124,15 @@ export function inchesToFeetInches(inches: number): string {
   return `${ft}'${remaining}"`
 }
 
+/**
+ * Calculate vertical jump from touch height and standing reach.
+ * Returns null if either value is missing.
+ */
+export function calcVertical(touchIn: number | undefined | null, standingReachIn: number | undefined | null): number | null {
+  if (!touchIn || !standingReachIn) return null
+  return Math.round((touchIn - standingReachIn) * 10) / 10
+}
+
 export function formatWeight(lbs: number): string {
   return `${lbs} lbs`
 }
