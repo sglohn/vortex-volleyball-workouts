@@ -71,7 +71,7 @@ export default function CoachTeamsPage() {
               <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1rem', color:'white' }}>{t.name.charAt(0)}</span>
             </div>
             <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontWeight:700, fontSize:'1rem' }}>{t.name}</div>
+              <Link href={`/coach/teams/${t.id}`} style={{ fontWeight:700, fontSize:'1rem', color:'var(--black)', textDecoration:'none' }}>{t.name} →</Link>
               <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginTop:'0.1rem' }}>
                 {t.age_group && <span>{t.age_group} · </span>}
                 <span>{t.playerCount ?? 0} players</span>
