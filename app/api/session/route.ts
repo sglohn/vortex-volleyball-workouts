@@ -67,7 +67,8 @@ export async function GET(req: NextRequest) {
   )
 
   // Build per-player stats
-  const logsBySession = Object.fromEntries(sessionIds.map(id => [id, [] as typeof logs]))
+  type LogRow = { session_id: string; exercise_id: string; set_number: number; weight_lbs: number | null; reps_completed: number | null; completed: boolean }
+  const logsBySession: Record<string, LogRow[]> = Object.fromEntries(sessionIds.map(id => [id, []]))
   for (const log of (logs ?? [])) {
     if (logsBySession[log.session_id]) {
       logsBySession[log.session_id].push(log)
