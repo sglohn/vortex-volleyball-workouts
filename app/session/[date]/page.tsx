@@ -85,7 +85,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     setPinError('')
     if (player.checkedIn && player.sessionId) {
       // Already checked in — go straight to workout
-      loadWorkout(player)
+      await loadWorkout(player)
     } else {
       setView('player_pin')
     }
@@ -93,14 +93,49 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   async function loadWorkout(player: PlayerRow) {
     const teamData = data?.templateByTeam[player.teamId]
-    if (!teamData?.templateId) return
+    if (!teamData?.templateId || !player.sessionId) return
+    // Fetch template structure
     const res = await fetch(`/api/workout?sessionId=${player.sessionId}&templateId=${teamData.templateId}`)
     const d = await res.json()
-    if (d.source === 'template') {
-      setWorkout(d.template)
-      setSessionInfo({ sessionId: player.sessionId!, playerId: player.id, playerName: player.name, templateId: teamData.templateId })
-      setActiveBlock(d.template.blocks[0]?.id ?? null)
-      setActiveExIdx(0); setActiveSetNum(1); setWeightInput(''); setRepsInput('')
+    if (d.source === 'template' && d.template) {
+      // Also fetch existing set logs so player can see what they've already done
+      const logsRes = await fetch(`/api/sets?sessionId=${player.sessionId}`)
+      const logsData = logsRes.ok ? await logsRes.json() : { logs: [] }
+      const existingLogs: Array<{exercise_id: string; set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean}> = logsData.logs ?? []
+
+      // Merge existing logs into template blocks
+      const templateWithLogs = {
+        ...d.template,
+        blocks: d.template.blocks.map((block: {id: string; block_label: string; sets: number; exercises: Array<{id: string; name: string; logs_weight: boolean; default_reps?: string}>}) => ({
+          ...block,
+          exercises: block.exercises.map(ex => ({
+            ...ex,
+            setLogs: Array.from({ length: block.sets }, (_, i) => {
+              const existing = existingLogs.find(l => l.exercise_id === ex.id && l.set_number === i + 1)
+              return existing ?? { set_number: i + 1, completed: false }
+            })
+          }))
+        }))
+      }
+
+      setWorkout(templateWithLogs)
+      setSessionInfo({ sessionId: player.sessionId, playerId: player.id, playerName: player.name, templateId: teamData.templateId })
+      // Find first incomplete set
+      let startBlock = templateWithLogs.blocks[0]?.id ?? null
+      let startEx = 0
+      let startSet = 1
+      outer: for (const block of templateWithLogs.blocks) {
+        for (let si = 0; si < block.sets; si++) {
+          for (let ei = 0; ei < block.exercises.length; ei++) {
+            if (!block.exercises[ei].setLogs[si]?.completed) {
+              startBlock = block.id; startEx = ei; startSet = si + 1
+              break outer
+            }
+          }
+        }
+      }
+      setActiveBlock(startBlock); setActiveExIdx(startEx); setActiveSetNum(startSet)
+      setWeightInput(''); setRepsInput(templateWithLogs.blocks.find((b: {id: string; exercises: Array<{default_reps?: string}>}) => b.id === startBlock)?.exercises[startEx]?.default_reps ?? '')
       setView('player_workout')
     }
   }
@@ -151,9 +186,9 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     })
 
     if (completed) {
-      // Return to leaderboard immediately so next player can step up
+      // Refresh data then return to leaderboard so next player can step up
       setSavingSet(false)
-      await loadData()
+      loadData() // fire and forget — don't await, it'll update in background
       setView('leaderboard')
       setSelectedPlayer(null)
       setWorkout(null)
@@ -161,7 +196,6 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
       return
     }
     setSavingSet(false)
-    loadData()
   }
 
   async function finishWorkout() {
