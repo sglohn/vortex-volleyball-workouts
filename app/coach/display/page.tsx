@@ -7,11 +7,10 @@ interface Exercise {
   id: string; name: string; default_reps?: string; customReps?: string
   coaching_notes?: string; customNotes?: string
   demo_image_url?: string; demo_url?: string
-  logs_weight: boolean; logs_velocity: boolean; skipped: boolean
+  logs_weight: boolean; skipped: boolean
 }
 interface Block { id: string; block_label: string; sets: number; exercises: Exercise[] }
 interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[] }
-
 interface Team { id: string; name: string; age_group?: string; color: string }
 
 function DisplayContent() {
@@ -19,46 +18,37 @@ function DisplayContent() {
   const [teams, setTeams] = useState<Team[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(searchParams.get('team'))
   const [workout, setWorkout] = useState<WorkoutData | null>(null)
-  const [phase, setPhase] = useState<{ phase_type: string; name: string; description?: string } | null>(null)
+  const [phase, setPhase] = useState<{ phase_type: string; name: string } | null>(null)
   const [loading, setLoading] = useState(false)
-  const [activeBlock, setActiveBlock] = useState<number | null>(null)
   const [noWorkout, setNoWorkout] = useState(false)
+  const [blockIdx, setBlockIdx] = useState(0)
+  const [showAll, setShowAll] = useState(false)
 
   const today = new Date().toISOString().split('T')[0]
 
   useEffect(() => {
-    fetch('/api/coach/teams')
-      .then(r => r.json())
-      .then(d => {
-        setTeams(d.teams ?? [])
-        if (!selectedTeamId && d.teams?.length) setSelectedTeamId(d.teams[0].id)
-      })
+    fetch('/api/coach/teams').then(r => r.json()).then(d => {
+      setTeams(d.teams ?? [])
+      if (!selectedTeamId && d.teams?.length) setSelectedTeamId(d.teams[0].id)
+    })
   }, [])
 
   useEffect(() => {
     if (!selectedTeamId) return
-    setLoading(true)
-    setNoWorkout(false)
-    setWorkout(null)
-    setActiveBlock(null)
+    setLoading(true); setNoWorkout(false); setWorkout(null); setBlockIdx(0); setShowAll(false)
 
-    // Get team schedule for today
     fetch(`/api/coach/schedule?teamId=${selectedTeamId}&weekOf=${today}`)
       .then(r => r.json())
       .then(async data => {
         const todayEntry = (data.schedule ?? []).find((s: { scheduled_date: string; template_id?: string }) => s.scheduled_date === today)
         if (!todayEntry?.template_id) { setNoWorkout(true); setLoading(false); return }
-
-        // Get phase
-        const phaseRes = await fetch(`/api/coach/phases?teamId=${selectedTeamId}`)
-        const phaseData = await phaseRes.json()
-        const activePhase = (phaseData.phases ?? []).find((p: { starts_on: string; ends_on: string }) => p.starts_on <= today && p.ends_on >= today)
+        const [phaseRes, tmplRes] = await Promise.all([
+          fetch(`/api/coach/phases?teamId=${selectedTeamId}`).then(r => r.json()),
+          fetch(`/api/coach/templates?id=${todayEntry.template_id}`).then(r => r.json()),
+        ])
+        const activePhase = (phaseRes.phases ?? []).find((p: { starts_on: string; ends_on: string }) => p.starts_on <= today && p.ends_on >= today)
         setPhase(activePhase ?? null)
-
-        // Get template
-        const tmplRes = await fetch(`/api/coach/templates?id=${todayEntry.template_id}`)
-        const tmplData = await tmplRes.json()
-        setWorkout(tmplData.template)
+        setWorkout(tmplRes.template)
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -66,152 +56,227 @@ function DisplayContent() {
 
   const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
   const selectedTeam = teams.find(t => t.id === selectedTeamId)
+  const blocks = workout?.blocks.filter(b => b.exercises.some(e => !e.skipped)) ?? []
+  const activeBlock = blocks[blockIdx]
+
+  const BG = '#0d1117'
+  const YELLOW = '#fbbf24'
+  const CAROLINA = '#56a0d3'
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--court-bg)', display: 'flex', flexDirection: 'column', fontFamily: 'var(--font-body)' }}>
+    <div style={{ height: '100vh', width: '100vw', overflow: 'hidden', display: 'flex', flexDirection: 'column', background: BG, color: '#f0f4f8', fontFamily: 'var(--font-body)', userSelect: 'none' }}>
 
-      {/* Top bar */}
-      <div style={{ background: 'var(--court-surface)', borderBottom: '1px solid var(--court-border)', padding: '0.875rem 2rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexShrink: 0 }}>
+      {/* ── TOP BAR ── */}
+      <div style={{ background: '#111827', borderBottom: `3px solid ${YELLOW}`, padding: '0.625rem 2rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexShrink: 0 }}>
         {/* Logo */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginRight: '0.5rem' }}>
-          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--volt)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#0a0f0d" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', flexShrink: 0 }}>
+          <div style={{ width: 36, height: 36, borderRadius: '50%', background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
           </div>
-          <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', letterSpacing: '0.08em', color: 'var(--volt)', lineHeight: 1 }}>VORTEX</div>
-            <div style={{ fontSize: '0.55rem', color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Strength & Conditioning</div>
-          </div>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', letterSpacing: '0.1em', color: YELLOW }}>VORTEX S&C</div>
         </div>
 
-        {/* Team selector */}
-        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', flex: 1 }}>
+        {/* Team pills */}
+        <div style={{ display: 'flex', gap: '0.5rem', flex: 1, flexWrap: 'wrap' }}>
           {teams.map(t => (
             <button key={t.id} onClick={() => setSelectedTeamId(t.id)}
-              style={{ padding: '0.35rem 0.875rem', borderRadius: 20, fontSize: '0.82rem', fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${selectedTeamId === t.id ? t.color : 'var(--court-border)'}`, background: selectedTeamId === t.id ? `${t.color}20` : 'transparent', color: selectedTeamId === t.id ? t.color : 'var(--text-muted)', transition: 'all 0.15s' }}>
-              {t.name}{t.age_group ? ` · ${t.age_group}` : ''}
+              style={{ padding: '0.375rem 1rem', borderRadius: 20, fontSize: '0.9rem', fontWeight: 700, cursor: 'pointer', border: `2px solid ${selectedTeamId === t.id ? YELLOW : 'rgba(255,255,255,0.2)'}`, background: selectedTeamId === t.id ? YELLOW : 'transparent', color: selectedTeamId === t.id ? '#111827' : 'rgba(255,255,255,0.6)', transition: 'all 0.15s' }}>
+              {t.name}{t.age_group ? ` ${t.age_group}` : ''}
             </button>
           ))}
         </div>
 
-        {/* Date + phase */}
+        {/* Date */}
         <div style={{ textAlign: 'right', flexShrink: 0 }}>
-          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+          <div style={{ fontSize: '1rem', fontWeight: 600, color: 'rgba(255,255,255,0.7)' }}>
             {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
           </div>
-          {phaseConfig && (
-            <div style={{ fontSize: '0.72rem', color: phaseConfig.color, fontWeight: 600, letterSpacing: '0.04em' }}>
-              {phaseConfig.label.toUpperCase()} PHASE
-            </div>
-          )}
+          {phaseConfig && <div style={{ fontSize: '0.8rem', color: phaseConfig.color, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>{phaseConfig.label} Phase</div>}
         </div>
 
-        {/* Close / back link */}
-        <a href="/coach/dashboard" style={{ color: 'var(--text-muted)', fontSize: '0.8rem', textDecoration: 'none', flexShrink: 0 }}>✕ Exit</a>
+        {/* Exit */}
+        <a href="/coach/dashboard" style={{ color: 'rgba(255,255,255,0.4)', fontSize: '0.85rem', textDecoration: 'none', flexShrink: 0, padding: '0.25rem 0.5rem' }}>✕</a>
       </div>
 
-      {/* Main content */}
-      <div style={{ flex: 1, padding: '2rem', overflow: 'auto' }}>
-        {loading && <div style={{ color: 'var(--text-muted)', textAlign: 'center', paddingTop: '4rem', fontSize: '1.1rem' }}>Loading…</div>}
+      {/* ── MAIN ── */}
+      <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
 
-        {noWorkout && (
-          <div style={{ textAlign: 'center', paddingTop: '4rem' }}>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '1.25rem', marginBottom: '0.5rem' }}>No workout scheduled for {selectedTeam?.name} today.</p>
-            <p style={{ color: 'var(--text-muted)' }}>Go to Schedule to assign one.</p>
+        {loading && (
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ fontSize: '2rem', color: 'rgba(255,255,255,0.4)' }}>Loading…</div>
           </div>
         )}
 
-        {workout && (
+        {noWorkout && (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '1rem' }}>
+            <div style={{ fontSize: '2.5rem', color: 'rgba(255,255,255,0.3)' }}>No workout scheduled today</div>
+            <div style={{ fontSize: '1.25rem', color: 'rgba(255,255,255,0.2)' }}>for {selectedTeam?.name}</div>
+          </div>
+        )}
+
+        {workout && blocks.length > 0 && (
           <>
-            {/* Workout title + phase message */}
-            <div style={{ marginBottom: '2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            {/* Workout title strip */}
+            <div style={{ padding: '1rem 2rem 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div>
-                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.75rem', fontWeight: 800, letterSpacing: '0.02em', marginBottom: '0.25rem', lineHeight: 1 }}>{workout.name}</h1>
-                {workout.description && <p style={{ color: 'var(--text-muted)', fontSize: '1rem' }}>{workout.description}</p>}
+                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.25rem', fontWeight: 800, letterSpacing: '0.04em', color: '#fff', lineHeight: 1, marginBottom: '0.2rem' }}>
+                  {workout.name}
+                </h1>
+                {workout.description && <div style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.5)' }}>{workout.description}</div>}
               </div>
-              {phaseConfig && (
-                <div style={{ background: `${phaseConfig.color}15`, border: `1px solid ${phaseConfig.color}35`, borderRadius: 10, padding: '0.875rem 1.25rem', maxWidth: 340, textAlign: 'right', flexShrink: 0, marginLeft: '2rem' }}>
-                  <div style={{ fontSize: '0.7rem', color: phaseConfig.color, textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.35rem' }}>{phaseConfig.label} Phase</div>
-                  <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{phaseConfig.intensityNote}</p>
-                </div>
-              )}
+
+              {/* View toggle */}
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button onClick={() => setShowAll(false)}
+                  style={{ padding: '0.5rem 1.25rem', borderRadius: 8, border: `2px solid ${!showAll ? YELLOW : 'rgba(255,255,255,0.2)'}`, background: !showAll ? YELLOW : 'transparent', color: !showAll ? '#111827' : 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', letterSpacing: '0.05em' }}>
+                  ONE BLOCK
+                </button>
+                <button onClick={() => setShowAll(true)}
+                  style={{ padding: '0.5rem 1.25rem', borderRadius: 8, border: `2px solid ${showAll ? CAROLINA : 'rgba(255,255,255,0.2)'}`, background: showAll ? CAROLINA : 'transparent', color: showAll ? '#fff' : 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', letterSpacing: '0.05em' }}>
+                  ALL BLOCKS
+                </button>
+              </div>
             </div>
 
-            {/* Warmup */}
+            {/* Warmup strip */}
             {workout.warmup_notes && (
-              <div style={{ background: 'rgba(74,222,128,0.07)', border: '1px solid rgba(74,222,128,0.2)', borderRadius: 10, padding: '1rem 1.25rem', marginBottom: '1.75rem', display: 'flex', alignItems: 'flex-start', gap: '1rem' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: 'var(--volt)', textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0, marginTop: '0.1rem' }}>WARMUP</div>
-                <p style={{ fontSize: '1rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>{workout.warmup_notes}</p>
+              <div style={{ margin: '0 2rem 0.75rem', background: 'rgba(86,160,211,0.12)', border: `1px solid ${CAROLINA}40`, borderRadius: 10, padding: '0.75rem 1.25rem', display: 'flex', gap: '1rem', alignItems: 'flex-start', flexShrink: 0 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: CAROLINA, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>WARMUP</div>
+                <div style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>{workout.warmup_notes}</div>
               </div>
             )}
 
-            {/* Block tabs */}
-            <div style={{ display: 'flex', gap: '0.625rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
-              {workout.blocks.map((block, idx) => (
-                <button key={block.id} onClick={() => setActiveBlock(activeBlock === idx ? null : idx)}
-                  style={{ padding: '0.5rem 1.25rem', borderRadius: 8, border: `2px solid ${activeBlock === idx ? 'var(--volt)' : 'var(--court-border)'}`, background: activeBlock === idx ? 'rgba(74,222,128,0.12)' : 'var(--court-surface)', color: activeBlock === idx ? 'var(--volt)' : 'var(--text-secondary)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem', letterSpacing: '0.05em', cursor: 'pointer', transition: 'all 0.15s' }}>
-                  BLOCK {block.block_label}
-                </button>
-              ))}
-              {activeBlock !== null && (
-                <button onClick={() => setActiveBlock(null)} style={{ padding: '0.5rem 1rem', borderRadius: 8, border: '1px solid var(--court-border)', background: 'transparent', color: 'var(--text-muted)', fontSize: '0.85rem', cursor: 'pointer' }}>
-                  Show all
-                </button>
-              )}
-            </div>
+            {/* ── SINGLE BLOCK VIEW ── */}
+            {!showAll && activeBlock && (
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 2rem 1rem' }}>
+                {/* Block nav */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexShrink: 0 }}>
+                  <button onClick={() => setBlockIdx(i => Math.max(0, i - 1))} disabled={blockIdx === 0}
+                    style={{ width: 48, height: 48, borderRadius: 10, border: '2px solid rgba(255,255,255,0.2)', background: blockIdx === 0 ? 'transparent' : 'rgba(255,255,255,0.08)', color: blockIdx === 0 ? 'rgba(255,255,255,0.2)' : '#fff', fontSize: '1.5rem', cursor: blockIdx === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    ‹
+                  </button>
 
-            {/* Blocks grid */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.25rem' }}>
-              {workout.blocks.map((block, idx) => {
-                if (activeBlock !== null && activeBlock !== idx) return null
-                return (
-                  <div key={block.id} className="card" style={{ padding: '1.5rem', borderColor: activeBlock === idx ? 'rgba(74,222,128,0.4)' : 'var(--court-border)' }}>
+                  {/* Block label pills */}
+                  <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
+                    {blocks.map((b, i) => (
+                      <button key={b.id} onClick={() => setBlockIdx(i)}
+                        style={{ flex: 1, padding: '0.5rem', borderRadius: 8, border: `2px solid ${i === blockIdx ? YELLOW : 'rgba(255,255,255,0.15)'}`, background: i === blockIdx ? YELLOW : 'rgba(255,255,255,0.05)', color: i === blockIdx ? '#111827' : 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', transition: 'all 0.12s', letterSpacing: '0.06em' }}>
+                        BLOCK {b.block_label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button onClick={() => setBlockIdx(i => Math.min(blocks.length - 1, i + 1))} disabled={blockIdx === blocks.length - 1}
+                    style={{ width: 48, height: 48, borderRadius: 10, border: '2px solid rgba(255,255,255,0.2)', background: blockIdx === blocks.length - 1 ? 'transparent' : 'rgba(255,255,255,0.08)', color: blockIdx === blocks.length - 1 ? 'rgba(255,255,255,0.2)' : '#fff', fontSize: '1.5rem', cursor: blockIdx === blocks.length - 1 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    ›
+                  </button>
+                </div>
+
+                {/* Block header */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem', flexShrink: 0 }}>
+                  <div style={{ width: 64, height: 64, borderRadius: 14, background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2rem', color: '#111827', flexShrink: 0 }}>
+                    {activeBlock.block_label}
+                  </div>
+                  <div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2rem', letterSpacing: '0.04em', lineHeight: 1 }}>BLOCK {activeBlock.block_label}</div>
+                    <div style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.2rem' }}>{activeBlock.sets} sets · superset in order</div>
+                  </div>
+                </div>
+
+                {/* Exercises — big cards */}
+                <div style={{ flex: 1, overflow: 'hidden', display: 'grid', gridTemplateColumns: `repeat(${Math.min(activeBlock.exercises.filter(e => !e.skipped).length, 3)}, 1fr)`, gap: '1.25rem', alignItems: 'stretch' }}>
+                  {activeBlock.exercises.filter(e => !e.skipped).map((ex, ei) => {
+                    const reps = ex.customReps || ex.default_reps || ''
+                    const notes = ex.customNotes || ex.coaching_notes || ''
+                    return (
+                      <div key={ex.id} style={{ background: '#1a2030', border: `2px solid rgba(255,255,255,0.08)`, borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                        {/* Exercise number badge */}
+                        <div style={{ background: CAROLINA, padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.625rem', flexShrink: 0 }}>
+                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', color: '#fff' }}>{ei + 1}</div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: '#fff', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Exercise {ei + 1} of {activeBlock.exercises.filter(e => !e.skipped).length}</div>
+                        </div>
+
+                        {/* Image */}
+                        {ex.demo_image_url ? (
+                          <div style={{ width: '100%', paddingBottom: '56%', position: 'relative', flexShrink: 0 }}>
+                            <img src={ex.demo_image_url} alt={ex.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                          </div>
+                        ) : ex.demo_url ? (
+                          <a href={ex.demo_url} target="_blank" rel="noopener noreferrer" style={{ width: '100%', paddingBottom: '56%', position: 'relative', flexShrink: 0, display: 'block', background: '#0d1117', textDecoration: 'none' }}>
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: CAROLINA }}>
+                              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
+                              <div style={{ fontSize: '1rem', fontWeight: 600 }}>Watch Demo</div>
+                            </div>
+                          </a>
+                        ) : (
+                          <div style={{ width: '100%', paddingBottom: '40%', position: 'relative', flexShrink: 0, background: '#111827' }}>
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.15)', fontSize: '1rem' }}>No image</div>
+                          </div>
+                        )}
+
+                        {/* Exercise info */}
+                        <div style={{ padding: '1.25rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.75rem', lineHeight: 1.1, color: '#fff' }}>{ex.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.5rem', color: YELLOW }}>{activeBlock.sets} × {reps}</span>
+                            {ex.logs_weight && <span style={{ fontSize: '1rem', color: CAROLINA, fontWeight: 600 }}>· Log weight</span>}
+                          </div>
+                          {notes && (
+                            <div style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.5, fontStyle: 'italic', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.625rem', marginTop: 'auto' }}>
+                              {notes}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── ALL BLOCKS VIEW ── */}
+            {showAll && (
+              <div style={{ flex: 1, overflow: 'auto', padding: '0 2rem 1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1.25rem', alignContent: 'start' }}>
+                {blocks.map(block => (
+                  <div key={block.id} style={{ background: '#1a2030', border: '2px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden' }}>
                     {/* Block header */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', marginBottom: '1.25rem' }}>
-                      <div style={{ background: 'var(--volt)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', width: 48, height: 48, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                        {block.block_label.charAt(0)}
+                    <div style={{ background: '#111827', borderBottom: `3px solid ${YELLOW}`, padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
+                      <div style={{ width: 44, height: 44, borderRadius: 10, background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: '#111827', flexShrink: 0 }}>
+                        {block.block_label}
                       </div>
                       <div>
-                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem', letterSpacing: '0.04em' }}>BLOCK {block.block_label}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>{block.sets} sets · superset</div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: '#fff', letterSpacing: '0.04em' }}>BLOCK {block.block_label}</div>
+                        <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)' }}>{block.sets} sets · superset</div>
                       </div>
                     </div>
 
-                    {/* Exercises */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                    {/* Exercise list */}
+                    <div style={{ padding: '0.875rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                       {block.exercises.filter(e => !e.skipped).map((ex, ei) => {
                         const reps = ex.customReps || ex.default_reps || ''
                         const notes = ex.customNotes || ex.coaching_notes || ''
                         return (
-                          <div key={ex.id} style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', paddingBottom: ei < block.exercises.filter(e => !e.skipped).length - 1 ? '1rem' : 0, borderBottom: ei < block.exercises.filter(e => !e.skipped).length - 1 ? '1px solid var(--court-border)' : 'none' }}>
-                            {/* Demo image */}
+                          <div key={ex.id} style={{ display: 'flex', gap: '0.875rem', alignItems: 'flex-start', paddingBottom: ei < block.exercises.filter(e => !e.skipped).length - 1 ? '0.75rem' : 0, borderBottom: ei < block.exercises.filter(e => !e.skipped).length - 1 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
                             {ex.demo_image_url ? (
-                              <img src={ex.demo_image_url} alt={ex.name} style={{ width: 80, height: 80, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
-                            ) : ex.demo_url ? (
-                              <a href={ex.demo_url} target="_blank" rel="noopener noreferrer" style={{ width: 80, height: 80, borderRadius: 8, background: 'var(--court-raised)', border: '1px solid var(--court-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, textDecoration: 'none', color: 'var(--volt)' }}>
-                                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
-                              </a>
+                              <img src={ex.demo_image_url} alt={ex.name} style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
                             ) : (
-                              <div style={{ width: 80, height: 80, borderRadius: 8, background: 'var(--court-raised)', border: '1px solid var(--court-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: 'var(--text-muted)', fontSize: '0.65rem', textAlign: 'center', padding: '0.5rem' }}>
-                                No image
+                              <div style={{ width: 96, height: 72, borderRadius: 8, background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.75rem', color: 'rgba(255,255,255,0.15)' }}>{ei + 1}</div>
                               </div>
                             )}
-
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', marginBottom: '0.2rem' }}>{ex.name}</div>
-                              <div style={{ fontSize: '0.9rem', color: 'var(--volt)', fontWeight: 600, marginBottom: notes ? '0.35rem' : 0 }}>
-                                {block.sets} × {reps} reps
-                                {ex.logs_weight && <span style={{ color: 'var(--text-muted)', fontWeight: 400, marginLeft: '0.5rem' }}>· log weight</span>}
-                              </div>
-                              {notes && <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.5, fontStyle: 'italic' }}>{notes}</div>}
+                              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: '#fff', lineHeight: 1.1, marginBottom: '0.3rem' }}>{ex.name}</div>
+                              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', color: YELLOW }}>{block.sets} × {reps} reps</div>
+                              {notes && <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)', marginTop: '0.3rem', fontStyle: 'italic', lineHeight: 1.4 }}>{notes}</div>}
                             </div>
                           </div>
                         )
                       })}
                     </div>
                   </div>
-                )
-              })}
-            </div>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -221,7 +286,7 @@ function DisplayContent() {
 
 export default function CoachDisplayPage() {
   return (
-    <Suspense fallback={<div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading display…</div>}>
+    <Suspense fallback={<div style={{ height: '100vh', background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.4)', fontSize: '1.5rem' }}>Loading…</div>}>
       <DisplayContent />
     </Suspense>
   )
