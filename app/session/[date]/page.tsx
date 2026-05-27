@@ -7,7 +7,7 @@ interface PlayerRow {
   id: string; name: string; jerseyNumber?: string; teamId: string
   checkedIn: boolean; completed: boolean; sessionId: string | null
   checkedInAt: string | null; totalWeightLbs: number
-  setsCompleted: number; totalSets: number; pct: number
+  setsCompleted: number; totalSets: number; pct: number; avgWeightPerSet: number
 }
 interface LeaderboardData {
   byWeight: PlayerRow[]; bySets: PlayerRow[]; byPct: PlayerRow[]
@@ -461,7 +461,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
           </div>
         </div>
 
-        {/* Leaderboard - always shows all stats */}
+        {/* Leaderboard - three columns always visible */}
         <div style={{ flex: 1, overflow: 'auto', padding: '1rem 1.5rem' }}>
           {roster.filter(p => p.checkedIn).length === 0 ? (
             <div style={{ textAlign: 'center', paddingTop: '4rem', color: 'var(--text-muted)' }}>
@@ -469,72 +469,76 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
               <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>No one has checked in yet.</p>
               <p style={{ fontSize: '0.85rem', marginTop: '0.4rem' }}>Select a team on the left to get players started.</p>
             </div>
-          ) : (
-            <>
-              {/* Column headers */}
-              <div style={{ display: 'grid', gridTemplateColumns: '2rem 2.5rem 1fr 120px 120px 80px', gap: '0.75rem', alignItems: 'center', padding: '0 1rem 0.5rem', borderBottom: '1.5px solid var(--gray-border)', marginBottom: '0.5rem' }}>
-                <div />
-                <div />
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Athlete</div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>⚡ Weight Moved</div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>💪 Sets Done</div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>🎯 Done</div>
-              </div>
+          ) : (() => {
+            const active = [...roster].filter(p => p.checkedIn)
+            const byWeight  = [...active].sort((a, b) => b.totalWeightLbs - a.totalWeightLbs)
+            const bySets    = [...active].sort((a, b) => b.setsCompleted - a.setsCompleted)
 
-              {/* Rows sorted by total weight */}
-              {[...roster]
-                .filter(p => p.checkedIn)
-                .sort((a, b) => b.totalWeightLbs - a.totalWeightLbs)
-                .map((p, i) => {
-                  const team = teams.find(t => t.id === p.teamId)
-                  const isTop3 = i < 3
-                  return (
-                    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '2rem 2.5rem 1fr 120px 120px 80px', gap: '0.75rem', alignItems: 'center', padding: '0.625rem 1rem', borderRadius: 10, marginBottom: '0.375rem', background: p.completed ? 'rgba(22,163,74,0.06)' : isTop3 ? 'var(--white)' : 'rgba(255,255,255,0.6)', border: `1.5px solid ${p.completed ? 'rgba(22,163,74,0.25)' : isTop3 ? 'var(--carolina-border)' : 'var(--gray-border)'}`, borderLeft: `4px solid ${team?.color ?? 'var(--carolina)'}` }}>
-                      {/* Rank */}
-                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: isTop3 ? '1.3rem' : '0.95rem', color: isTop3 ? 'var(--black)' : 'var(--text-muted)', textAlign: 'center' }}>
-                        {i < 3 ? ['🥇','🥈','🥉'][i] : `#${i+1}`}
-                      </div>
+            const boards = [
+              { key: 'weight', icon: '⚡', title: 'Most Weight Moved', sub: 'Total lbs lifted this session', data: byWeight,
+                value: (p: PlayerRow) => p.totalWeightLbs > 0 ? `${p.totalWeightLbs.toLocaleString()} lbs` : '—',
+                bar: (p: PlayerRow) => { const max = byWeight[0]?.totalWeightLbs ?? 1; return max > 0 ? p.totalWeightLbs / max * 100 : 0 },
+                accent: 'var(--carolina)' },
+              { key: 'avg', icon: '🔥', title: 'Heaviest Average', sub: 'Avg lbs per set logged', data: [...active].sort((a,b) => b.avgWeightPerSet - a.avgWeightPerSet),
+                value: (p: PlayerRow) => p.avgWeightPerSet > 0 ? `${p.avgWeightPerSet} lbs` : '—',
+                bar: (p: PlayerRow) => { const max = [...active].sort((a,b) => b.avgWeightPerSet - a.avgWeightPerSet)[0]?.avgWeightPerSet ?? 1; return max > 0 ? p.avgWeightPerSet / max * 100 : 0 },
+                accent: '#8b5cf6' },
+              { key: 'sets', icon: '💪', title: 'Most Sets Done', sub: 'Total sets logged', data: bySets,
+                value: (p: PlayerRow) => `${p.setsCompleted} sets`,
+                bar: (p: PlayerRow) => { const max = bySets[0]?.setsCompleted ?? 1; return max > 0 ? p.setsCompleted / max * 100 : 0 },
+                accent: '#f97316' },
+            ]
 
-                      {/* Avatar */}
-                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: team?.color ?? 'var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.9rem', color: '#fff', flexShrink: 0 }}>
-                        {p.completed ? '✓' : (p.jerseyNumber || p.name.charAt(0))}
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', alignItems: 'start' }}>
+                {boards.map(board => (
+                  <div key={board.key} style={{ background: 'var(--white)', border: '1.5px solid var(--gray-border)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 1px 6px rgba(0,0,0,0.05)' }}>
+                    {/* Board header */}
+                    <div style={{ padding: '0.75rem 1rem', borderBottom: `3px solid ${board.accent}`, background: `${board.accent}08` }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', color: 'var(--black)', letterSpacing: '0.03em' }}>
+                        {board.icon} {board.title}
                       </div>
-
-                      {/* Name + team */}
-                      <div style={{ minWidth: 0 }}>
-                        <div style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{team?.name}{p.completed ? ' · Done ✓' : ''}</div>
-                      </div>
-
-                      {/* Weight */}
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: team?.color ?? 'var(--carolina)', lineHeight: 1 }}>
-                          {p.totalWeightLbs > 0 ? `${p.totalWeightLbs.toLocaleString()}` : '—'}
-                        </div>
-                        {p.totalWeightLbs > 0 && <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>lbs</div>}
-                      </div>
-
-                      {/* Sets */}
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: 'var(--black)', lineHeight: 1 }}>
-                          {p.setsCompleted}
-                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400 }}>/{p.totalSets}</span>
-                        </div>
-                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>sets</div>
-                      </div>
-
-                      {/* Progress bar + % */}
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', color: p.pct === 100 ? 'var(--success)' : 'var(--black)', lineHeight: 1, marginBottom: '0.2rem' }}>{p.pct}%</div>
-                        <div style={{ height: 5, background: 'var(--gray-border)', borderRadius: 3, overflow: 'hidden' }}>
-                          <div style={{ height: '100%', width: `${p.pct}%`, background: p.pct === 100 ? 'var(--success)' : team?.color ?? 'var(--carolina)', borderRadius: 3, transition: 'width 0.6s ease' }} />
-                        </div>
-                      </div>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{board.sub}</div>
                     </div>
-                  )
-                })}
-            </>
-          )}
+
+                    {/* Rows */}
+                    <div style={{ padding: '0.5rem' }}>
+                      {board.data.map((p, i) => {
+                        const team = teams.find(t => t.id === p.teamId)
+                        const medals = ['🥇','🥈','🥉']
+                        return (
+                          <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.5rem 0.5rem', borderRadius: 8, marginBottom: '0.25rem', background: i === 0 ? `${board.accent}08` : 'transparent', borderLeft: i < 3 ? `3px solid ${i === 0 ? board.accent : i === 1 ? board.accent+'80' : board.accent+'40'}` : '3px solid transparent' }}>
+                            {/* Rank */}
+                            <div style={{ width: 24, textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: i < 3 ? '1rem' : '0.8rem', color: i < 3 ? 'var(--black)' : 'var(--text-muted)', flexShrink: 0 }}>
+                              {i < 3 ? medals[i] : `${i+1}`}
+                            </div>
+
+                            {/* Avatar */}
+                            <div style={{ width: 30, height: 30, borderRadius: '50%', background: team?.color ?? board.accent, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.8rem', color: '#fff', flexShrink: 0 }}>
+                              {p.completed ? '✓' : (p.jerseyNumber || p.name.charAt(0))}
+                            </div>
+
+                            {/* Name + bar */}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontWeight: 600, fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginBottom: '0.2rem' }}>{p.name}</div>
+                              <div style={{ height: 4, background: 'var(--gray-border)', borderRadius: 2, overflow: 'hidden' }}>
+                                <div style={{ height: '100%', width: `${board.bar(p)}%`, background: board.accent, borderRadius: 2, transition: 'width 0.6s ease' }} />
+                              </div>
+                            </div>
+
+                            {/* Value */}
+                            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', color: i === 0 ? board.accent : 'var(--black)', flexShrink: 0, textAlign: 'right' }}>
+                              {board.value(p)}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )
+          })()}
         </div>
       </div>
     </div>
