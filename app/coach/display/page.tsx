@@ -207,34 +207,34 @@ function DisplayContent() {
                     return (
                       <div key={ex.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, borderTop: ei > 0 && exs.length <= 2 ? `1px solid ${BORDER}` : 'none', borderLeft: ei > 0 && exs.length > 2 ? `1px solid ${BORDER}` : 'none', overflow: 'hidden' }}>
 
-                        {/* Image */}
-                        <div style={{ flex: '1 1 50%', position: 'relative', overflow: 'hidden', minHeight: 0 }}>
+                        {/* Image — takes the bulk of the card */}
+                        <div style={{ flex: '1 1 0', position: 'relative', overflow: 'hidden', minHeight: 0 }}>
                           {lib.demo_image_url ? (
-                            <img src={lib.demo_image_url} alt={lib.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                            <img src={lib.demo_image_url} alt={lib.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block' }} />
                           ) : lib.demo_url ? (
                             <a href={lib.demo_url} target="_blank" rel="noopener noreferrer" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d1117', textDecoration: 'none', gap: '0.5rem', flexDirection: 'column', color: CAROLINA }}>
-                              <svg width="5vh" height="5vh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
-                              <span style={{ fontSize: '1.6vh', fontWeight: 600 }}>Watch Demo</span>
+                              <svg width="6vh" height="6vh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
+                              <span style={{ fontSize: '2vh', fontWeight: 600 }}>Watch Demo</span>
                             </a>
                           ) : (
                             <div style={{ width: '100%', height: '100%', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '6vh', color: 'rgba(255,255,255,0.06)' }}>{ei + 1}</span>
+                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '8vh', color: 'rgba(255,255,255,0.06)' }}>{ei + 1}</span>
                             </div>
                           )}
-                          {/* Exercise number overlay */}
-                          <div style={{ position: 'absolute', top: '0.5vh', left: '0.5vh', background: CAROLINA, borderRadius: '0.4vh', width: '3vh', height: '3vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.8vh', color: '#fff' }}>
+                          {/* Exercise number badge */}
+                          <div style={{ position: 'absolute', top: '0.6vh', left: '0.6vh', background: CAROLINA, borderRadius: '0.4vh', minWidth: '3.5vh', height: '3.5vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2vh', color: '#fff', padding: '0 0.4vh' }}>
                             {ei + 1}
                           </div>
                         </div>
 
-                        {/* Text info */}
-                        <div style={{ flexShrink: 0, padding: '0.5vh 0.75rem', background: CARD }}>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(0.8rem, 2.2vh, 1.6rem)', color: '#fff', lineHeight: 1.1, marginBottom: '0.2vh' }}>{lib.name}</div>
-                          <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
-                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(0.75rem, 2vh, 1.4rem)', color: YELLOW }}>{block.sets} × {reps} reps</span>
-                            {lib.logs_weight && <span style={{ fontSize: 'clamp(0.6rem, 1.4vh, 0.9rem)', color: CAROLINA, fontWeight: 600 }}>log weight</span>}
+                        {/* Text strip — compact but readable */}
+                        <div style={{ flexShrink: 0, padding: '0.6vh 0.875rem 0.7vh', background: 'rgba(10,15,25,0.97)', borderTop: `2px solid ${BORDER}` }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1rem, 3vh, 2.2rem)', color: '#fff', lineHeight: 1.05, marginBottom: '0.25vh', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{lib.name}</div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(0.9rem, 2.5vh, 1.8rem)', color: YELLOW, lineHeight: 1 }}>{block.sets} × {reps} reps</span>
+                            {lib.logs_weight && <span style={{ fontSize: 'clamp(0.65rem, 1.5vh, 1rem)', color: CAROLINA, fontWeight: 600 }}>· log weight</span>}
                           </div>
-                          {notes && <div style={{ fontSize: 'clamp(0.6rem, 1.3vh, 0.85rem)', color: 'rgba(255,255,255,0.42)', fontStyle: 'italic', lineHeight: 1.3, marginTop: '0.2vh', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{notes}</div>}
+                          {notes && <div style={{ fontSize: 'clamp(0.6rem, 1.3vh, 0.9rem)', color: 'rgba(255,255,255,0.45)', fontStyle: 'italic', lineHeight: 1.2, marginTop: '0.2vh', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>{notes}</div>}
                         </div>
                       </div>
                     )
