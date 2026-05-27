@@ -49,7 +49,6 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   // Get team IDs from URL search params
   const [teamIds, setTeamIds] = useState<string[]>([])
-  const [debugMsg, setDebugMsg] = useState('')
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -95,15 +94,13 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   async function loadWorkout(player: PlayerRow) {
     const teamData = data?.templateByTeam[player.teamId]
-    setDebugMsg(`teamData: ${JSON.stringify(teamData)} | sessionId: ${player.sessionId} | teamId: ${player.teamId}`)
+} | sessionId: ${player.sessionId} | teamId: ${player.teamId}`)
     if (!teamData?.templateId || !player.sessionId) {
-      setDebugMsg(`MISSING: templateId=${teamData?.templateId} sessionId=${player.sessionId}`)
       return
     }
     // Fetch template structure
     const res = await fetch(`/api/workout?sessionId=${player.sessionId}&templateId=${teamData.templateId}`)
     const d = await res.json()
-    setDebugMsg(`workout API: source=${d.source} blocks=${d.template?.blocks?.length} error=${d.error}`)
     if (d.source === 'template' && d.template) {
       // Also fetch existing set logs so player can see what they've already done
       const logsRes = await fetch(`/api/sets?sessionId=${player.sessionId}`)
@@ -474,13 +471,6 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
             ))}
           </div>
         </div>
-
-        {/* Debug panel */}
-        {data && (
-          <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '0.5rem 1.5rem', fontSize: '0.72rem', fontFamily: 'monospace', color: '#92400e' }}>
-            <strong>DEBUG</strong> · date={data.date} · teams={data.teams.map(t=>t.name).join(',')} · roster={data.roster.length} players · checkedIn={data.roster.filter(p=>p.checkedIn).length} · templateByTeam={JSON.stringify(Object.fromEntries(Object.entries(data.templateByTeam).map(([k,v]):[string,string]=>[k,(v as {workoutName:string}).workoutName])))} · {debugMsg && <span>load: {debugMsg}</span>}
-          </div>
-        )}
 
         {/* Leaderboard */}
         <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem 1.5rem' }}>
