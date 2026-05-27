@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
 
   // Get total sets from templates so pct is accurate
   const templateTotalSets: Record<string, number> = {}
-  for (const [teamId, tmpl] of Object.entries(templateByTeam)) {
+  for (const [teamId, tmpl] of Object.entries(templateByTeam) as [string, { templateId: string; workoutName: string }][]) {
     if (!tmpl.templateId) continue
     const { data: blocks } = await db
       .from('template_blocks')
