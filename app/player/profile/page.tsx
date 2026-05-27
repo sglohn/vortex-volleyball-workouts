@@ -22,6 +22,7 @@ const FIELDS: Array<{ key: MeasurementKey; label: string; showFt: boolean }> = [
 export default function PlayerProfilePage() {
   const router = useRouter()
   const [playerName, setPlayerName] = useState('')
+  const [playerId, setPlayerId] = useState('')
   const [measurements, setMeasurements] = useState<Measurement[]>([])
   const [loading, setLoading] = useState(true)
   const [historyModal, setHistoryModal] = useState<{ key: string; label: string } | null>(null)
@@ -31,6 +32,7 @@ export default function PlayerProfilePage() {
     if (!stored) { router.push('/'); return }
     const s = JSON.parse(stored)
     setPlayerName(s.playerName)
+    setPlayerId(s.playerId)
     fetch(`/api/player/measurements?playerId=${s.playerId}`)
       .then(r => r.json())
       .then(d => { setMeasurements(d.measurements ?? []); setLoading(false) })
@@ -114,10 +116,10 @@ export default function PlayerProfilePage() {
           ))}
         </div>
       )}
-      {historyModal && session && (
+      {historyModal && playerId && (
         <MeasurementHistoryModal
-          playerId={session.playerId}
-          playerName={session.playerName}
+          playerId={playerId}
+          playerName={playerName}
           statKey={historyModal.key}
           statLabel={historyModal.label}
           onClose={() => setHistoryModal(null)}
