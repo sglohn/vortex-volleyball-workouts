@@ -1,6 +1,8 @@
 'use client'
+import FeetInchesInput from '@/components/FeetInchesInput'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import FeetInchesInput from '@/components/FeetInchesInput'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface Player {
