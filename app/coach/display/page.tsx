@@ -120,22 +120,22 @@ function DisplayContent() {
         {workout && blocks.length > 0 && (
           <>
             {/* Workout title strip */}
-            <div style={{ padding: '1rem 2rem 0.75rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
+            <div style={{ padding: '0.5vh 2rem 0.5vh', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
               <div>
-                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.25rem', fontWeight: 800, letterSpacing: '0.04em', color: '#fff', lineHeight: 1, marginBottom: '0.2rem' }}>
+                <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '3.5vh', fontWeight: 800, letterSpacing: '0.04em', color: '#fff', lineHeight: 1, marginBottom: '0.2rem' }}>
                   {workout.name}
                 </h1>
-                {workout.description && <div style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.5)' }}>{workout.description}</div>}
+                {workout.description && <div style={{ fontSize: '1.8vh', color: 'rgba(255,255,255,0.5)' }}>{workout.description}</div>}
               </div>
 
               {/* View toggle */}
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <button onClick={() => setShowAll(false)}
-                  style={{ padding: '0.5rem 1.25rem', borderRadius: 8, border: `2px solid ${!showAll ? YELLOW : 'rgba(255,255,255,0.2)'}`, background: !showAll ? YELLOW : 'transparent', color: !showAll ? '#111827' : 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', letterSpacing: '0.05em' }}>
+                  style={{ padding: '0.4vh 1.2rem', borderRadius: 8, border: `2px solid ${!showAll ? YELLOW : 'rgba(255,255,255,0.2)'}`, background: !showAll ? YELLOW : 'transparent', color: !showAll ? '#111827' : 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.8vh', cursor: 'pointer', letterSpacing: '0.05em' }}>
                   ONE BLOCK
                 </button>
                 <button onClick={() => setShowAll(true)}
-                  style={{ padding: '0.5rem 1.25rem', borderRadius: 8, border: `2px solid ${showAll ? CAROLINA : 'rgba(255,255,255,0.2)'}`, background: showAll ? CAROLINA : 'transparent', color: showAll ? '#fff' : 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', letterSpacing: '0.05em' }}>
+                  style={{ padding: '0.4vh 1.2rem', borderRadius: 8, border: `2px solid ${showAll ? CAROLINA : 'rgba(255,255,255,0.2)'}`, background: showAll ? CAROLINA : 'transparent', color: showAll ? '#fff' : 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.8vh', cursor: 'pointer', letterSpacing: '0.05em' }}>
                   ALL BLOCKS
                 </button>
               </div>
@@ -143,89 +143,84 @@ function DisplayContent() {
 
             {/* Warmup strip */}
             {workout.warmup_notes && (
-              <div style={{ margin: '0 2rem 0.75rem', background: 'rgba(86,160,211,0.12)', border: `1px solid ${CAROLINA}40`, borderRadius: 10, padding: '0.75rem 1.25rem', display: 'flex', gap: '1rem', alignItems: 'flex-start', flexShrink: 0 }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: CAROLINA, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>WARMUP</div>
-                <div style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>{workout.warmup_notes}</div>
+              <div style={{ margin: '0 2rem 0.5vh', background: 'rgba(86,160,211,0.12)', border: `1px solid ${CAROLINA}40`, borderRadius: 8, padding: '0.5vh 1.25rem', display: 'flex', gap: '1rem', alignItems: 'flex-start', flexShrink: 0 }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.8vh', color: CAROLINA, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>WARMUP</div>
+                <div style={{ fontSize: '1.8vh', color: 'rgba(255,255,255,0.75)', lineHeight: 1.4 }}>{workout.warmup_notes}</div>
               </div>
             )}
 
             {/* ── SINGLE BLOCK VIEW ── */}
             {!showAll && activeBlock && (
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 2rem 1rem' }}>
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '0 2rem 0.75vh' }}>
                 {/* Block nav */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1rem', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75vh', flexShrink: 0 }}>
                   <button onClick={() => setBlockIdx(i => Math.max(0, i - 1))} disabled={blockIdx === 0}
-                    style={{ width: 48, height: 48, borderRadius: 10, border: '2px solid rgba(255,255,255,0.2)', background: blockIdx === 0 ? 'transparent' : 'rgba(255,255,255,0.08)', color: blockIdx === 0 ? 'rgba(255,255,255,0.2)' : '#fff', fontSize: '1.5rem', cursor: blockIdx === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    style={{ width: '4vh', height: '4vh', minWidth: 36, minHeight: 36, borderRadius: 8, border: '2px solid rgba(255,255,255,0.2)', background: blockIdx === 0 ? 'transparent' : 'rgba(255,255,255,0.08)', color: blockIdx === 0 ? 'rgba(255,255,255,0.2)' : '#fff', fontSize: '2.5vh', cursor: blockIdx === 0 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     ‹
                   </button>
-
-                  {/* Block label pills */}
                   <div style={{ display: 'flex', gap: '0.5rem', flex: 1 }}>
                     {blocks.map((b, i) => (
                       <button key={b.id} onClick={() => setBlockIdx(i)}
-                        style={{ flex: 1, padding: '0.5rem', borderRadius: 8, border: `2px solid ${i === blockIdx ? YELLOW : 'rgba(255,255,255,0.15)'}`, background: i === blockIdx ? YELLOW : 'rgba(255,255,255,0.05)', color: i === blockIdx ? '#111827' : 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', cursor: 'pointer', transition: 'all 0.12s', letterSpacing: '0.06em' }}>
+                        style={{ flex: 1, padding: '0.4vh 0', borderRadius: 6, border: `2px solid ${i === blockIdx ? YELLOW : 'rgba(255,255,255,0.15)'}`, background: i === blockIdx ? YELLOW : 'rgba(255,255,255,0.05)', color: i === blockIdx ? '#111827' : 'rgba(255,255,255,0.5)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.8vh', cursor: 'pointer', transition: 'all 0.12s', letterSpacing: '0.06em' }}>
                         BLOCK {b.block_label}
                       </button>
                     ))}
                   </div>
-
                   <button onClick={() => setBlockIdx(i => Math.min(blocks.length - 1, i + 1))} disabled={blockIdx === blocks.length - 1}
-                    style={{ width: 48, height: 48, borderRadius: 10, border: '2px solid rgba(255,255,255,0.2)', background: blockIdx === blocks.length - 1 ? 'transparent' : 'rgba(255,255,255,0.08)', color: blockIdx === blocks.length - 1 ? 'rgba(255,255,255,0.2)' : '#fff', fontSize: '1.5rem', cursor: blockIdx === blocks.length - 1 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    style={{ width: '4vh', height: '4vh', minWidth: 36, minHeight: 36, borderRadius: 8, border: '2px solid rgba(255,255,255,0.2)', background: blockIdx === blocks.length - 1 ? 'transparent' : 'rgba(255,255,255,0.08)', color: blockIdx === blocks.length - 1 ? 'rgba(255,255,255,0.2)' : '#fff', fontSize: '2.5vh', cursor: blockIdx === blocks.length - 1 ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     ›
                   </button>
                 </div>
 
                 {/* Block header */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem', flexShrink: 0 }}>
-                  <div style={{ width: 64, height: 64, borderRadius: 14, background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2rem', color: '#111827', flexShrink: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', marginBottom: '0.75vh', flexShrink: 0 }}>
+                  <div style={{ width: '6vh', height: '6vh', minWidth: 40, minHeight: 40, borderRadius: 10, background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '3vh', color: '#111827', flexShrink: 0 }}>
                     {activeBlock.block_label}
                   </div>
                   <div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2rem', letterSpacing: '0.04em', lineHeight: 1 }}>BLOCK {activeBlock.block_label}</div>
-                    <div style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.5)', marginTop: '0.2rem' }}>{activeBlock.sets} sets · superset in order</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '3.5vh', letterSpacing: '0.04em', lineHeight: 1 }}>BLOCK {activeBlock.block_label}</div>
+                    <div style={{ fontSize: '1.8vh', color: 'rgba(255,255,255,0.5)', marginTop: '0.2rem' }}>{activeBlock.sets} sets · superset in order</div>
                   </div>
                 </div>
 
-                {/* Exercises — big cards */}
-                <div style={{ flex: 1, overflow: 'hidden', display: 'grid', gridTemplateColumns: `repeat(${Math.min(activeBlock.exercises.filter(e => !e.skipped).length, 3)}, 1fr)`, gap: '1.25rem', alignItems: 'stretch' }}>
+                {/* Exercise cards */}
+                <div style={{ flex: 1, overflow: 'hidden', display: 'grid', gridTemplateColumns: `repeat(${Math.min(activeBlock.exercises.filter(e => !e.skipped).length, 3)}, 1fr)`, gap: '1rem', minHeight: 0 }}>
                   {activeBlock.exercises.filter(e => !e.skipped).map((ex, ei) => {
                     const reps = ex.customReps || ex.default_reps || ''
                     const notes = ex.customNotes || ex.coaching_notes || ''
                     return (
-                      <div key={ex.id} style={{ background: '#1a2030', border: `2px solid rgba(255,255,255,0.08)`, borderRadius: 16, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                        {/* Exercise number badge */}
-                        <div style={{ background: CAROLINA, padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.625rem', flexShrink: 0 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', color: '#fff' }}>{ei + 1}</div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: '#fff', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Exercise {ei + 1} of {activeBlock.exercises.filter(e => !e.skipped).length}</div>
+                      <div key={ex.id} style={{ background: '#1a2030', border: '2px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+                        {/* Badge */}
+                        <div style={{ background: CAROLINA, padding: '0.4vh 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
+                          <div style={{ width: '3.5vh', height: '3.5vh', minWidth: 24, minHeight: 24, borderRadius: '50%', background: 'rgba(0,0,0,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2vh', color: '#fff', flexShrink: 0 }}>{ei + 1}</div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.8vh', color: '#fff', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Exercise {ei + 1} of {activeBlock.exercises.filter(e => !e.skipped).length}</div>
                         </div>
 
-                        {/* Image */}
-                        {ex.demo_image_url ? (
-                          <div style={{ width: '100%', paddingBottom: '56%', position: 'relative', flexShrink: 0 }}>
-                            <img src={ex.demo_image_url} alt={ex.name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-                          </div>
-                        ) : ex.demo_url ? (
-                          <a href={ex.demo_url} target="_blank" rel="noopener noreferrer" style={{ width: '100%', paddingBottom: '56%', position: 'relative', flexShrink: 0, display: 'block', background: '#0d1117', textDecoration: 'none' }}>
-                            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: CAROLINA }}>
-                              <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
-                              <div style={{ fontSize: '1rem', fontWeight: 600 }}>Watch Demo</div>
+                        {/* Image — takes remaining space up to 45% of card */}
+                        <div style={{ flex: '0 0 40%', position: 'relative', overflow: 'hidden', minHeight: 0 }}>
+                          {ex.demo_image_url ? (
+                            <img src={ex.demo_image_url} alt={ex.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          ) : ex.demo_url ? (
+                            <a href={ex.demo_url} target="_blank" rel="noopener noreferrer" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', color: CAROLINA, background: '#0d1117', textDecoration: 'none' }}>
+                              <svg width="8vh" height="8vh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
+                              <div style={{ fontSize: '2vh', fontWeight: 600 }}>Watch Demo</div>
+                            </a>
+                          ) : (
+                            <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#111827' }}>
+                              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '8vh', color: 'rgba(255,255,255,0.07)' }}>{ei + 1}</div>
                             </div>
-                          </a>
-                        ) : (
-                          <div style={{ width: '100%', paddingBottom: '40%', position: 'relative', flexShrink: 0, background: '#111827' }}>
-                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'rgba(255,255,255,0.15)', fontSize: '1rem' }}>No image</div>
-                          </div>
-                        )}
+                          )}
+                        </div>
 
-                        {/* Exercise info */}
-                        <div style={{ padding: '1.25rem', flex: 1, display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.75rem', lineHeight: 1.1, color: '#fff' }}>{ex.name}</div>
+                        {/* Info */}
+                        <div style={{ flex: 1, padding: '1vh 1rem', display: 'flex', flexDirection: 'column', gap: '0.5vh', minHeight: 0, overflow: 'hidden' }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1rem, 2.8vh, 2.2rem)', lineHeight: 1.1, color: '#fff' }}>{ex.name}</div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.5rem', color: YELLOW }}>{activeBlock.sets} × {reps}</span>
-                            {ex.logs_weight && <span style={{ fontSize: '1rem', color: CAROLINA, fontWeight: 600 }}>· Log weight</span>}
+                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(0.9rem, 2.5vh, 2rem)', color: YELLOW }}>{activeBlock.sets} × {reps} reps</span>
+                            {ex.logs_weight && <span style={{ fontSize: 'clamp(0.75rem, 1.6vh, 1.1rem)', color: CAROLINA, fontWeight: 600 }}>· Log weight</span>}
                           </div>
                           {notes && (
-                            <div style={{ fontSize: '1rem', color: 'rgba(255,255,255,0.6)', lineHeight: 1.5, fontStyle: 'italic', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.625rem', marginTop: 'auto' }}>
+                            <div style={{ fontSize: 'clamp(0.7rem, 1.6vh, 1rem)', color: 'rgba(255,255,255,0.55)', lineHeight: 1.4, fontStyle: 'italic', borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.5vh', overflow: 'hidden' }}>
                               {notes}
                             </div>
                           )}
@@ -239,38 +234,35 @@ function DisplayContent() {
 
             {/* ── ALL BLOCKS VIEW ── */}
             {showAll && (
-              <div style={{ flex: 1, overflow: 'auto', padding: '0 2rem 1.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(400px, 1fr))', gap: '1.25rem', alignContent: 'start' }}>
+              <div style={{ flex: 1, overflow: 'auto', padding: '0 2rem 1vh', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '1rem', alignContent: 'start' }}>
                 {blocks.map(block => (
-                  <div key={block.id} style={{ background: '#1a2030', border: '2px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden' }}>
-                    {/* Block header */}
-                    <div style={{ background: '#111827', borderBottom: `3px solid ${YELLOW}`, padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
-                      <div style={{ width: 44, height: 44, borderRadius: 10, background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: '#111827', flexShrink: 0 }}>
+                  <div key={block.id} style={{ background: '#1a2030', border: '2px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden' }}>
+                    <div style={{ background: '#111827', borderBottom: `3px solid ${YELLOW}`, padding: '0.6vh 1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <div style={{ width: '5vh', height: '5vh', minWidth: 36, minHeight: 36, borderRadius: 8, background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2.5vh', color: '#111827', flexShrink: 0 }}>
                         {block.block_label}
                       </div>
                       <div>
-                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: '#fff', letterSpacing: '0.04em' }}>BLOCK {block.block_label}</div>
-                        <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)' }}>{block.sets} sets · superset</div>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2.2vh', color: '#fff', letterSpacing: '0.04em' }}>BLOCK {block.block_label}</div>
+                        <div style={{ fontSize: '1.5vh', color: 'rgba(255,255,255,0.4)' }}>{block.sets} sets · superset</div>
                       </div>
                     </div>
-
-                    {/* Exercise list */}
-                    <div style={{ padding: '0.875rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+                    <div style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
                       {block.exercises.filter(e => !e.skipped).map((ex, ei) => {
                         const reps = ex.customReps || ex.default_reps || ''
                         const notes = ex.customNotes || ex.coaching_notes || ''
                         return (
-                          <div key={ex.id} style={{ display: 'flex', gap: '0.875rem', alignItems: 'flex-start', paddingBottom: ei < block.exercises.filter(e => !e.skipped).length - 1 ? '0.75rem' : 0, borderBottom: ei < block.exercises.filter(e => !e.skipped).length - 1 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
+                          <div key={ex.id} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start', paddingBottom: ei < block.exercises.filter(e => !e.skipped).length - 1 ? '0.625rem' : 0, borderBottom: ei < block.exercises.filter(e => !e.skipped).length - 1 ? '1px solid rgba(255,255,255,0.07)' : 'none' }}>
                             {ex.demo_image_url ? (
-                              <img src={ex.demo_image_url} alt={ex.name} style={{ width: 96, height: 72, objectFit: 'cover', borderRadius: 8, flexShrink: 0 }} />
+                              <img src={ex.demo_image_url} alt={ex.name} style={{ width: '10vh', height: '7.5vh', minWidth: 72, minHeight: 54, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
                             ) : (
-                              <div style={{ width: 96, height: 72, borderRadius: 8, background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.75rem', color: 'rgba(255,255,255,0.15)' }}>{ei + 1}</div>
+                              <div style={{ width: '10vh', height: '7.5vh', minWidth: 72, minHeight: 54, borderRadius: 6, background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '3vh', color: 'rgba(255,255,255,0.12)' }}>{ei + 1}</div>
                               </div>
                             )}
-                            <div style={{ flex: 1 }}>
-                              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: '#fff', lineHeight: 1.1, marginBottom: '0.3rem' }}>{ex.name}</div>
-                              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', color: YELLOW }}>{block.sets} × {reps} reps</div>
-                              {notes && <div style={{ fontSize: '0.85rem', color: 'rgba(255,255,255,0.45)', marginTop: '0.3rem', fontStyle: 'italic', lineHeight: 1.4 }}>{notes}</div>}
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2vh', color: '#fff', lineHeight: 1.1, marginBottom: '0.25rem' }}>{ex.name}</div>
+                              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.8vh', color: YELLOW }}>{block.sets} × {reps} reps</div>
+                              {notes && <div style={{ fontSize: '1.4vh', color: 'rgba(255,255,255,0.4)', marginTop: '0.2rem', fontStyle: 'italic', lineHeight: 1.3 }}>{notes}</div>}
                             </div>
                           </div>
                         )
