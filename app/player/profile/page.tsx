@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { inchesToFeetInches, calcVertical } from '@/lib/fitness'
+import MeasurementHistoryModal from '@/components/MeasurementHistoryModal'
 
 interface Measurement {
   id: string; measured_at: string
@@ -23,6 +24,7 @@ export default function PlayerProfilePage() {
   const [playerName, setPlayerName] = useState('')
   const [measurements, setMeasurements] = useState<Measurement[]>([])
   const [loading, setLoading] = useState(true)
+  const [historyModal, setHistoryModal] = useState<{ key: string; label: string } | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('vx_session')
@@ -111,6 +113,15 @@ export default function PlayerProfilePage() {
             </div>
           ))}
         </div>
+      )}
+      {historyModal && session && (
+        <MeasurementHistoryModal
+          playerId={session.playerId}
+          playerName={session.playerName}
+          statKey={historyModal.key}
+          statLabel={historyModal.label}
+          onClose={() => setHistoryModal(null)}
+        />
       )}
     </div>
   )
