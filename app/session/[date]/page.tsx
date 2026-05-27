@@ -472,7 +472,6 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
           ) : (() => {
             const active = [...roster].filter(p => p.checkedIn)
             const byWeight  = [...active].sort((a, b) => b.totalWeightLbs - a.totalWeightLbs)
-            const bySets    = [...active].sort((a, b) => b.setsCompleted - a.setsCompleted)
 
             const boards = [
               { key: 'weight', icon: '⚡', title: 'Most Weight Moved', sub: 'Total lbs lifted this session', data: byWeight,
@@ -483,9 +482,9 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                 value: (p: PlayerRow) => p.avgWeightPerSet > 0 ? `${p.avgWeightPerSet} lbs` : '—',
                 bar: (p: PlayerRow) => { const max = [...active].sort((a,b) => b.avgWeightPerSet - a.avgWeightPerSet)[0]?.avgWeightPerSet ?? 1; return max > 0 ? p.avgWeightPerSet / max * 100 : 0 },
                 accent: '#8b5cf6' },
-              { key: 'sets', icon: '💪', title: 'Most Sets Done', sub: 'Total sets logged', data: bySets,
-                value: (p: PlayerRow) => `${p.setsCompleted} sets`,
-                bar: (p: PlayerRow) => { const max = bySets[0]?.setsCompleted ?? 1; return max > 0 ? p.setsCompleted / max * 100 : 0 },
+              { key: 'pct', icon: '🎯', title: '% Complete', sub: 'Furthest through the workout', data: [...active].sort((a,b) => b.pct - a.pct || b.setsCompleted - a.setsCompleted),
+                value: (p: PlayerRow) => p.totalSets > 0 ? `${p.pct}%` : '—',
+                bar: (p: PlayerRow) => p.pct,
                 accent: '#f97316' },
             ]
 
