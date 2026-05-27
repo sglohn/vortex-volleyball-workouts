@@ -4,6 +4,7 @@ import { useParams } from 'next/navigation'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { inchesToFeetInches, painLevelColor, painLevelLabel } from '@/lib/fitness'
 import FeetInchesInput from '@/components/FeetInchesInput'
+import MeasurementHistoryModal from '@/components/MeasurementHistoryModal'
 
 const MEASUREMENT_FIELDS = [
   { key: 'height_in', label: 'Height', showFt: true },
@@ -18,6 +19,7 @@ export default function CoachPlayerDetailPage() {
   const [data, setData] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
   const [measForm, setMeasForm] = useState<Record<string, string>>({})
+  const [historyModal, setHistoryModal] = useState<{ key: string; label: string } | null>(null)
   const [showMeasForm, setShowMeasForm] = useState(false)
   const [savingMeas, setSavingMeas] = useState(false)
   const [msg, setMsg] = useState('')
@@ -51,6 +53,7 @@ export default function CoachPlayerDetailPage() {
   const activeHealth = healthReports.filter(r => r.status === 'active' || r.status === 'monitoring')
 
   return (
+    <>
     <div style={{ padding: '2rem', maxWidth: 960 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
@@ -130,10 +133,13 @@ export default function CoachPlayerDetailPage() {
               {MEASUREMENT_FIELDS.map(f => {
                 const val = latestMeas[f.key] as number | undefined
                 return (
-                  <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', borderBottom: '1px solid var(--court-border)' }}>
-                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{f.label}</span>
-                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--volt)', fontSize: '0.95rem' }}>
-                      {val ? `${val}"${f.showFt ? ` (${inchesToFeetInches(val)})` : ''}` : '—'}
+                  <div key={f.key} onClick={() => setHistoryModal({ key: f.key, label: f.label })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid var(--gray-border)', cursor: 'pointer' }}>
+                    <div>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{f.label}</span>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--carolina)', marginLeft: '0.4rem', fontWeight: 500 }}>history →</span>
+                    </div>
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '0.95rem' }}>
+                      {val ? inchesToFeetInches(val) : '—'}
                     </span>
                   </div>
                 )
@@ -193,5 +199,15 @@ export default function CoachPlayerDetailPage() {
         </div>
       )}
     </div>
+      {historyModal && (
+        <MeasurementHistoryModal
+          playerId={id as string}
+          playerName={player?.name ?? ''}
+          statKey={historyModal.key}
+          statLabel={historyModal.label}
+          onClose={() => setHistoryModal(null)}
+        />
+      )}
+    </>
   )
 }
