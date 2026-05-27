@@ -14,8 +14,9 @@ export async function GET(req: NextRequest) {
   if (teamId) query = query.eq('team_id', teamId)
 
   if (weekOf) {
-    const start = new Date(weekOf)
-    const end = new Date(weekOf)
+    // Parse as local date by appending T00:00:00 to avoid UTC offset shifting the day
+    const start = new Date(weekOf + 'T00:00:00')
+    const end = new Date(weekOf + 'T00:00:00')
     end.setDate(end.getDate() + 6)
     query = query
       .gte('scheduled_date', start.toISOString().split('T')[0])
