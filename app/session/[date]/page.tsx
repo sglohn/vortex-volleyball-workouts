@@ -78,7 +78,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     setView('team')
   }
 
-  function selectPlayer(player: PlayerRow) {
+  async function selectPlayer(player: PlayerRow) {
     if (!player.checkedIn && player.completed) return
     setSelectedPlayer(player)
     setPin('')
