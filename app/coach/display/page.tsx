@@ -65,7 +65,7 @@ function DisplayContent() {
   const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
   const allBlocks = workout?.blocks.filter(b => b.exercises.some(e => !e.skipped)) ?? []
   // Warmup block = labeled W, Warmup, or WU (case-insensitive)
-  const isWarmupBlock = (label: string) => /^w(armup|u)?$/i.test(label.trim())
+  const isWarmupBlock = (label: string) => /^w/i.test(label.trim())
   const warmupBlock  = allBlocks.find(b => isWarmupBlock(b.block_label))
   const blocks       = allBlocks.filter(b => !isWarmupBlock(b.block_label))
 
