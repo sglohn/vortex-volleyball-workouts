@@ -88,6 +88,26 @@ export async function GET(req: NextRequest) {
     }])
   )
 
+  // Get total sets from templates so pct is accurate
+  const templateTotalSets: Record<string, number> = {}
+  for (const [teamId, tmpl] of Object.entries(templateByTeam)) {
+    if (!tmpl.templateId) continue
+    const { data: blocks } = await db
+      .from('template_blocks')
+      .select('id, sets')
+      .eq('template_id', tmpl.templateId)
+    if (!blocks) continue
+    let total = 0
+    for (const block of blocks) {
+      const { count } = await db
+        .from('template_block_exercises')
+        .select('*', { count: 'exact', head: true })
+        .eq('block_id', block.id)
+      total += (count ?? 0) * block.sets
+    }
+    templateTotalSets[teamId] = total
+  }
+
   const roster = players.map(p => {
     const session = sessionMap[p.id]
     const playerLogs = session ? (logsBySession[session.id] ?? []) : []
@@ -96,14 +116,19 @@ export async function GET(req: NextRequest) {
     const totalWeight = completedLogs.reduce((sum, l) =>
       sum + (l.weight_lbs ?? 0) * (l.reps_completed ?? 1), 0)
     const setsCompleted = completedLogs.length
-    const totalSets = new Set(playerLogs.map(l => `${l.exercise_id}-${l.set_number}`)).size
+    const totalSets = templateTotalSets[p.teamId] ?? 0
     const pct = totalSets > 0 ? Math.round(setsCompleted / totalSets * 100) : 0
+
+    const weightedSets = completedLogs.filter(l => l.weight_lbs && l.weight_lbs > 0)
+    const avgWeightPerSet = weightedSets.length > 0
+      ? Math.round(weightedSets.reduce((sum, l) => sum + (l.weight_lbs ?? 0), 0) / weightedSets.length)
+      : 0
 
     return {
       id: p.id, name: p.name, jerseyNumber: p.jersey_number, teamId: p.teamId,
       checkedIn: !!session, completed: !!session?.completed_at,
       sessionId: session?.id ?? null, checkedInAt: session?.checked_in_at ?? null,
-      totalWeightLbs: Math.round(totalWeight), setsCompleted, totalSets, pct,
+      totalWeightLbs: Math.round(totalWeight), setsCompleted, totalSets, pct, avgWeightPerSet,
     }
   })
 
