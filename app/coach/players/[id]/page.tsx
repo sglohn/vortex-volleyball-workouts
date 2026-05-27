@@ -111,9 +111,12 @@ export default function CoachPlayerDetailPage() {
           {showMeasForm && (
             <div style={{ marginBottom: '1rem' }}>
               {MEASUREMENT_FIELDS.map(f => (
-                <div key={f.key} style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '0.5rem', alignItems: 'center', marginBottom: '0.4rem' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{f.label} (in)</label>
-                  <input className="input" type="number" step="0.5" placeholder="0" value={measForm[f.key] ?? ''} onChange={e => setMeasForm(p => ({ ...p, [f.key]: e.target.value }))} style={{ padding: '0.4rem', fontSize: '0.85rem', textAlign: 'center' }} />
+                <div key={f.key} style={{ marginBottom: '0.625rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>{f.label}</label>
+                  <FeetInchesInput
+                    value={measForm[f.key] ?? ''}
+                    onChange={val => setMeasForm(p => ({ ...p, [f.key]: val }))}
+                  />
                 </div>
               ))}
               <button className="btn-volt" onClick={saveMeasurement} disabled={savingMeas} style={{ width: '100%', padding: '0.625rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>{savingMeas ? 'Saving…' : 'Save Measurements'}</button>
