@@ -4,10 +4,20 @@ import { useSearchParams } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 
 interface Exercise {
-  id: string; name: string; default_reps?: string; customReps?: string
-  coaching_notes?: string; customNotes?: string
-  demo_image_url?: string; demo_url?: string
-  logs_weight: boolean; skipped: boolean
+  id: string
+  exercise_id: string
+  custom_reps?: string
+  custom_notes?: string
+  skipped?: boolean
+  sort_order?: number
+  exercise_library?: {
+    id: string
+    name: string
+    demo_image_url?: string
+    demo_url?: string
+    coaching_notes?: string
+    logs_weight?: boolean
+  }
 }
 interface Block { id: string; block_label: string; sets: number; exercises: Exercise[] }
 interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[] }
@@ -63,7 +73,7 @@ function DisplayContent() {
   }, [selectedTeamId, today])
 
   const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
-  const allBlocks = workout?.blocks.filter(b => b.exercises.some(e => !e.skipped)) ?? []
+  const allBlocks = workout?.blocks ?? []
   // Warmup block = labeled W, Warmup, or WU (case-insensitive)
   const isWarmupBlock = (label: string) => /^w/i.test(label.trim())
   const warmupBlock  = allBlocks.find(b => isWarmupBlock(b.block_label))
@@ -120,17 +130,21 @@ function DisplayContent() {
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5vh', color: CAROLINA, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>WARMUP</span>
           {warmupBlock && (
             <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              {warmupBlock.exercises.filter(e => !e.skipped).map((ex, ei) => (
-                <span key={ex.id} style={{ fontSize: '1.5vh', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>
-                  {ei > 0 && <span style={{ color: 'rgba(255,255,255,0.25)', marginRight: '1rem' }}>·</span>}
-                  {ex.name}
-                  {(ex.customReps || ex.default_reps) && (
-                    <span style={{ color: YELLOW, marginLeft: '0.35rem', fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-                      {warmupBlock.sets}×{ex.customReps || ex.default_reps}
-                    </span>
-                  )}
-                </span>
-              ))}
+              {warmupBlock.exercises.map((ex, ei) => {
+                const lib = ex.exercise_library
+                if (!lib) return null
+                return (
+                  <span key={ex.id} style={{ fontSize: '1.5vh', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>
+                    {ei > 0 && <span style={{ color: 'rgba(255,255,255,0.25)', marginRight: '1rem' }}>·</span>}
+                    {lib.name}
+                    {(ex.custom_reps) && (
+                      <span style={{ color: YELLOW, marginLeft: '0.35rem', fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                        {warmupBlock.sets}×{ex.custom_reps}
+                      </span>
+                    )}
+                  </span>
+                )
+              })}
             </div>
           )}
           {workout.warmup_notes && (
@@ -186,17 +200,19 @@ function DisplayContent() {
                 {/* Exercises — split space equally */}
                 <div style={{ flex: 1, display: 'flex', flexDirection: exs.length > 2 ? 'row' : 'column', minHeight: 0, overflow: 'hidden', gap: '1px' }}>
                   {exs.map((ex, ei) => {
-                    const reps  = ex.customReps || ex.default_reps || ''
-                    const notes = ex.customNotes || ex.coaching_notes || ''
+                    const lib   = ex.exercise_library
+                    if (!lib) return null
+                    const reps  = ex.custom_reps || ''
+                    const notes = ex.custom_notes || lib.coaching_notes || ''
                     return (
                       <div key={ex.id} style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, borderTop: ei > 0 && exs.length <= 2 ? `1px solid ${BORDER}` : 'none', borderLeft: ei > 0 && exs.length > 2 ? `1px solid ${BORDER}` : 'none', overflow: 'hidden' }}>
 
                         {/* Image */}
                         <div style={{ flex: '1 1 50%', position: 'relative', overflow: 'hidden', minHeight: 0 }}>
-                          {ex.demo_image_url ? (
-                            <img src={ex.demo_image_url} alt={ex.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-                          ) : ex.demo_url ? (
-                            <a href={ex.demo_url} target="_blank" rel="noopener noreferrer" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d1117', textDecoration: 'none', gap: '0.5rem', flexDirection: 'column', color: CAROLINA }}>
+                          {lib.demo_image_url ? (
+                            <img src={lib.demo_image_url} alt={lib.name} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                          ) : lib.demo_url ? (
+                            <a href={lib.demo_url} target="_blank" rel="noopener noreferrer" style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0d1117', textDecoration: 'none', gap: '0.5rem', flexDirection: 'column', color: CAROLINA }}>
                               <svg width="5vh" height="5vh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
                               <span style={{ fontSize: '1.6vh', fontWeight: 600 }}>Watch Demo</span>
                             </a>
@@ -213,10 +229,10 @@ function DisplayContent() {
 
                         {/* Text info */}
                         <div style={{ flexShrink: 0, padding: '0.5vh 0.75rem', background: CARD }}>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(0.8rem, 2.2vh, 1.6rem)', color: '#fff', lineHeight: 1.1, marginBottom: '0.2vh' }}>{ex.name}</div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(0.8rem, 2.2vh, 1.6rem)', color: '#fff', lineHeight: 1.1, marginBottom: '0.2vh' }}>{lib.name}</div>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
                             <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(0.75rem, 2vh, 1.4rem)', color: YELLOW }}>{block.sets} × {reps} reps</span>
-                            {ex.logs_weight && <span style={{ fontSize: 'clamp(0.6rem, 1.4vh, 0.9rem)', color: CAROLINA, fontWeight: 600 }}>log weight</span>}
+                            {lib.logs_weight && <span style={{ fontSize: 'clamp(0.6rem, 1.4vh, 0.9rem)', color: CAROLINA, fontWeight: 600 }}>log weight</span>}
                           </div>
                           {notes && <div style={{ fontSize: 'clamp(0.6rem, 1.3vh, 0.85rem)', color: 'rgba(255,255,255,0.42)', fontStyle: 'italic', lineHeight: 1.3, marginTop: '0.2vh', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{notes}</div>}
                         </div>
