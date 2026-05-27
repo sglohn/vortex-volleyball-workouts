@@ -1,7 +1,9 @@
 'use client'
 import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
+import FeetInchesInput from '@/components/FeetInchesInput'
 import { inchesToFeetInches, calcVertical, painLevelColor, painLevelLabel } from '@/lib/fitness'
+import FeetInchesInput from '@/components/FeetInchesInput'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 
 interface Measurement { height_in?: number; wingspan_in?: number; standing_reach_in?: number; standing_vertical_in?: number; approach_vertical_in?: number; measured_at?: string }
@@ -397,7 +399,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                 ))}
               </div>
-              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem', fontStyle: 'italic' }}>Placeholder shows current value. Fill in to update — blank fields are ignored.</p>
+              <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem', fontStyle: 'italic' }}>Enter feet and inches. Blank fields are ignored — only filled fields update.</p>
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
