@@ -105,16 +105,18 @@ function DisplayContent() {
           </div>
         </div>
 
-        <a href="/coach/dashboard" style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1.8vh', textDecoration: 'none', flexShrink: 0 }}>✕</a>
+        {/* Warmup inline */}
+        {workout?.warmup_notes && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: `${CAROLINA}20`, border: `1px solid ${CAROLINA}35`, borderRadius: '0.4vh', padding: '0.2vh 0.7rem', maxWidth: '28vw', flexShrink: 0 }}>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3vh', color: CAROLINA, textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>WU</span>
+            <span style={{ fontSize: '1.3vh', color: 'rgba(255,255,255,0.55)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{workout.warmup_notes}</span>
+          </div>
+        )}
+
+        <a href="/coach/dashboard" style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1.8vh', textDecoration: 'none', flexShrink: 0, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.4vh', padding: '0.3vh 0.75rem', fontWeight: 600 }}>✕ Exit TV</a>
       </div>
 
-      {/* ── WARMUP strip — one line ── */}
-      {workout?.warmup_notes && (
-        <div style={{ background: `${CAROLINA}18`, borderBottom: `1px solid ${CAROLINA}30`, padding: '0.35vh 1.5rem', display: 'flex', gap: '0.75rem', alignItems: 'center', flexShrink: 0 }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.6vh', color: CAROLINA, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>WARMUP</span>
-          <span style={{ fontSize: '1.6vh', color: 'rgba(255,255,255,0.65)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{workout.warmup_notes}</span>
-        </div>
-      )}
+
 
       {/* ── STATES ── */}
       {loading && (
