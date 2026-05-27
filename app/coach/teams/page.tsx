@@ -17,6 +17,8 @@ export default function CoachTeamsPage() {
   const [msg, setMsg] = useState('')
   const [msgErr, setMsgErr] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [sessionTeams, setSessionTeams] = useState<string[]>([])
+  const [sessionUrl, setSessionUrl] = useState('')
 
   useEffect(() => {
     fetch('/api/coach/teams').then(r => r.json()).then(d => { setTeams(d.teams ?? []); setLoading(false) })
@@ -46,6 +48,14 @@ export default function CoachTeamsPage() {
     await fetch('/api/coach/teams/delete', { method:'DELETE', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ id: deleteConfirm.id }) })
     setTeams(prev => prev.filter(t => t.id !== deleteConfirm.id))
     setDeleteConfirm(null); setMsg('Team removed'); setMsgErr(false); setTimeout(()=>setMsg(''),3000)
+  }
+
+  function buildSessionUrl() {
+    if (!sessionTeams.length) return
+    const date = new Date()
+    const d = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
+    const url = `${window.location.origin}/session/${d}?teams=${sessionTeams.join(',')}`
+    setSessionUrl(url)
   }
 
   if (loading) return <div style={{ padding:'2rem', color:'var(--text-muted)' }}>Loading…</div>
@@ -94,7 +104,33 @@ export default function CoachTeamsPage() {
         ))}
       </div>
 
-      {/* Add/Edit Modal */}
+      {/* ── SESSION LAUNCHER ── */}
+      <div className="card" style={{ padding:'1.25rem', marginTop:'1.5rem', borderLeft:'4px solid var(--carolina)' }}>
+        <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.1rem', marginBottom:'0.5rem' }}>Start Weight Room Session</h2>
+        <p style={{ color:'var(--text-muted)', fontSize:'0.82rem', marginBottom:'0.875rem' }}>Pick the teams coming in today. Copy the URL and open it on your wall tablets.</p>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom:'0.875rem' }}>
+          {teams.map(t => (
+            <button key={t.id} onClick={() => setSessionTeams(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id])}
+              style={{ padding:'0.35rem 0.875rem', borderRadius:20, border:`2px solid ${sessionTeams.includes(t.id) ? t.color : 'var(--gray-border)'}`, background: sessionTeams.includes(t.id) ? `${t.color}18` : 'transparent', color: sessionTeams.includes(t.id) ? t.color : 'var(--text-muted)', fontSize:'0.82rem', fontWeight:600, cursor:'pointer' }}>
+              {t.name}{t.age_group ? ` ${t.age_group}` : ''}
+            </button>
+          ))}
+        </div>
+        <div style={{ display:'flex', gap:'0.625rem', alignItems:'center', flexWrap:'wrap' }}>
+          <button className="btn-volt" onClick={buildSessionUrl} disabled={!sessionTeams.length} style={{ padding:'0.5rem 1.25rem', fontSize:'0.85rem' }}>
+            Generate URL
+          </button>
+          {sessionUrl && (
+            <>
+              <input value={sessionUrl} readOnly style={{ flex:1, padding:'0.5rem 0.75rem', border:'1.5px solid var(--carolina-border)', borderRadius:7, fontSize:'0.78rem', background:'var(--carolina-light)', color:'var(--carolina-deep)', minWidth:200, fontFamily:'monospace' }} onClick={e => (e.target as HTMLInputElement).select()} />
+              <button onClick={() => { navigator.clipboard.writeText(sessionUrl); }} className="btn-ghost" style={{ padding:'0.5rem 0.875rem', fontSize:'0.82rem', flexShrink:0 }}>Copy</button>
+              <a href={sessionUrl} target="_blank" rel="noopener noreferrer" className="btn-black" style={{ padding:'0.5rem 0.875rem', fontSize:'0.82rem', textDecoration:'none', flexShrink:0 }}>Open →</a>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Add/Edit Modal */}}
       {modal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:'1rem' }}
           onClick={e => { if (e.target===e.currentTarget) closeModal() }}>
