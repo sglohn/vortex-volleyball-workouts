@@ -9,13 +9,11 @@ export async function GET(req: NextRequest) {
 
   const db = createServerClient()
 
-  // Get teams
   const { data: teams } = await db
     .from('teams')
     .select('id, name, age_group, color')
     .in('id', teamIds)
 
-  // Get all players on these teams
   const { data: playerTeams } = await db
     .from('player_teams')
     .select('player_id, team_id, players(id, name, jersey_number, is_active)')
@@ -31,28 +29,52 @@ export async function GET(req: NextRequest) {
 
   const playerIds = players.map(p => p.id)
 
-  // Get today's sessions
-  const { data: sessions } = playerIds.length
+  // Fetch sessions for a wide window (+/- 1 day) to handle any timezone offset
+  // then filter by local date string on checked_in_at
+  const dayBefore = new Date(date + 'T00:00:00Z')
+  dayBefore.setDate(dayBefore.getDate() - 1)
+  const dayAfter  = new Date(date + 'T00:00:00Z')
+  dayAfter.setDate(dayAfter.getDate() + 2)
+
+  const { data: allSessions } = playerIds.length
     ? await db
         .from('sessions')
         .select('id, player_id, checked_in_at, completed_at')
         .in('player_id', playerIds)
-        .gte('checked_in_at', `${date}T00:00:00.000Z`)
-        .lte('checked_in_at', `${date}T23:59:59.999Z`)
+        .gte('checked_in_at', dayBefore.toISOString())
+        .lte('checked_in_at', dayAfter.toISOString())
     : { data: [] }
 
-  const sessionMap = Object.fromEntries((sessions ?? []).map(s => [s.player_id, s]))
-  const sessionIds = (sessions ?? []).map(s => s.id)
+  // Keep only sessions whose local date matches
+  const sessions = (allSessions ?? []).filter(s => {
+    const local = new Date(s.checked_in_at)
+    const localDate = `${local.getFullYear()}-${String(local.getMonth()+1).padStart(2,'0')}-${String(local.getDate()).padStart(2,'0')}`
+    return localDate === date
+  })
 
-  // Get set logs for today
-  const { data: logs } = sessionIds.length
+  const sessionMap = Object.fromEntries(sessions.map(s => [s.player_id, s]))
+  const sessionIds = sessions.map(s => s.id)
+
+  type LogRow = {
+    session_id: string; exercise_id: string; set_number: number
+    weight_lbs: number | null; reps_completed: number | null; completed: boolean
+  }
+
+  const { data: logsRaw } = sessionIds.length
     ? await db
         .from('set_logs')
-        .select('session_id, exercise_id, set_number, weight_lbs, reps_completed, completed, exercise_library:exercise_id(name)')
+        .select('session_id, exercise_id, set_number, weight_lbs, reps_completed, completed')
         .in('session_id', sessionIds)
     : { data: [] }
 
-  // Get scheduled templates for each team
+  const logs = (logsRaw ?? []) as LogRow[]
+
+  const logsBySession: Record<string, LogRow[]> = Object.fromEntries(sessionIds.map(id => [id, []]))
+  for (const log of logs) {
+    const arr = logsBySession[log.session_id]
+    if (arr) arr.push(log)
+  }
+
   const { data: schedules } = await db
     .from('team_schedule')
     .select('team_id, template_id, workout_templates(name)')
@@ -66,15 +88,6 @@ export async function GET(req: NextRequest) {
     }])
   )
 
-  // Build per-player stats
-  type LogRow = { session_id: string; exercise_id: string; set_number: number; weight_lbs: number | null; reps_completed: number | null; completed: boolean }
-  const logsBySession: Record<string, LogRow[]> = Object.fromEntries(sessionIds.map(id => [id, []]))
-  for (const log of (logs ?? [])) {
-    if (logsBySession[log.session_id]) {
-      logsBySession[log.session_id].push(log)
-    }
-  }
-
   const roster = players.map(p => {
     const session = sessionMap[p.id]
     const playerLogs = session ? (logsBySession[session.id] ?? []) : []
@@ -83,38 +96,21 @@ export async function GET(req: NextRequest) {
     const totalWeight = completedLogs.reduce((sum, l) =>
       sum + (l.weight_lbs ?? 0) * (l.reps_completed ?? 1), 0)
     const setsCompleted = completedLogs.length
-
-    // Get total sets expected (count distinct exercise+set combos in logs including incomplete)
     const totalSets = new Set(playerLogs.map(l => `${l.exercise_id}-${l.set_number}`)).size
     const pct = totalSets > 0 ? Math.round(setsCompleted / totalSets * 100) : 0
 
     return {
-      id: p.id,
-      name: p.name,
-      jerseyNumber: p.jersey_number,
-      teamId: p.teamId,
-      checkedIn: !!session,
-      completed: !!session?.completed_at,
-      sessionId: session?.id ?? null,
-      checkedInAt: session?.checked_in_at ?? null,
-      totalWeightLbs: Math.round(totalWeight),
-      setsCompleted,
-      totalSets,
-      pct,
+      id: p.id, name: p.name, jerseyNumber: p.jersey_number, teamId: p.teamId,
+      checkedIn: !!session, completed: !!session?.completed_at,
+      sessionId: session?.id ?? null, checkedInAt: session?.checked_in_at ?? null,
+      totalWeightLbs: Math.round(totalWeight), setsCompleted, totalSets, pct,
     }
   })
 
-  // Build leaderboard (only checked-in players)
   const active = roster.filter(p => p.checkedIn)
   const byWeight = [...active].sort((a, b) => b.totalWeightLbs - a.totalWeightLbs)
   const bySets   = [...active].sort((a, b) => b.setsCompleted - a.setsCompleted)
   const byPct    = [...active].sort((a, b) => b.pct - a.pct)
 
-  return NextResponse.json({
-    teams: teams ?? [],
-    templateByTeam,
-    roster,
-    leaderboard: { byWeight, bySets, byPct },
-    date,
-  })
+  return NextResponse.json({ teams: teams ?? [], templateByTeam, roster, leaderboard: { byWeight, bySets, byPct }, date })
 }
