@@ -130,7 +130,7 @@ export default function CoachTeamsPage() {
         </div>
       </div>
 
-      {/* Add/Edit Modal */}}
+      {/* Add/Edit Modal */}
       {modal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:'1rem' }}
           onClick={e => { if (e.target===e.currentTarget) closeModal() }}>
