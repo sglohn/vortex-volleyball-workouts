@@ -475,6 +475,13 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
           </div>
         </div>
 
+        {/* Debug panel */}
+        {data && (
+          <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '0.5rem 1.5rem', fontSize: '0.72rem', fontFamily: 'monospace', color: '#92400e' }}>
+            <strong>DEBUG</strong> · date={data.date} · teams={data.teams.map(t=>t.name).join(',')} · roster={data.roster.length} players · checkedIn={data.roster.filter(p=>p.checkedIn).length} · templateByTeam={JSON.stringify(Object.fromEntries(Object.entries(data.templateByTeam).map(([k,v]):[string,string]=>[k,(v as {workoutName:string}).workoutName])))} · {debugMsg && <span>load: {debugMsg}</span>}
+          </div>
+        )}
+
         {/* Leaderboard */}
         <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem 1.5rem' }}>
           {roster.filter(p => p.checkedIn).length === 0 ? (
