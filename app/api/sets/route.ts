@@ -97,3 +97,14 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ id: logId, newOneRepMax, recommendation })
 }
+
+export async function GET(req: NextRequest) {
+  const sessionId = req.nextUrl.searchParams.get('sessionId')
+  if (!sessionId) return NextResponse.json({ logs: [] })
+  const db = createServerClient()
+  const { data: logs } = await db
+    .from('set_logs')
+    .select('exercise_id, set_number, weight_lbs, reps_completed, completed')
+    .eq('session_id', sessionId)
+  return NextResponse.json({ logs: logs ?? [] })
+}
