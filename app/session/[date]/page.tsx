@@ -69,7 +69,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   // Poll every 20s
   useEffect(() => {
-    const t = setInterval(loadData, 20000)
+    const t = setInterval(loadData, 5000)
     return () => clearInterval(t)
   }, [loadData])
 
@@ -151,16 +151,14 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     })
 
     if (completed) {
-      // Advance to next set/exercise
-      const totalEx = block.exercises.length
-      if (activeExIdx < totalEx - 1) {
-        setActiveExIdx(i => i + 1)
-        const nextEx = block.exercises[activeExIdx + 1]
-        setRepsInput(nextEx?.default_reps ?? ''); setWeightInput('')
-      } else if (activeSetNum < block.sets) {
-        setActiveSetNum(s => s + 1); setActiveExIdx(0)
-        setRepsInput(block.exercises[0]?.default_reps ?? ''); setWeightInput('')
-      }
+      // Return to leaderboard immediately so next player can step up
+      setSavingSet(false)
+      await loadData()
+      setView('leaderboard')
+      setSelectedPlayer(null)
+      setWorkout(null)
+      setSessionInfo(null)
+      return
     }
     setSavingSet(false)
     loadData()
@@ -169,11 +167,18 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   async function finishWorkout() {
     if (!sessionInfo) return
     await fetch('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionInfo.sessionId }) })
-    setView('team'); setSelectedPlayer(null); setWorkout(null); setSessionInfo(null)
-    loadData()
+    await loadData()
+    setView('leaderboard'); setSelectedPlayer(null); setWorkout(null); setSessionInfo(null)
   }
 
   const keys = ['1','2','3','4','5','6','7','8','9','←','0','✓']
+  // Inject pulse animation once
+  if (typeof document !== 'undefined' && !document.getElementById('session-styles')) {
+    const style = document.createElement('style')
+    style.id = 'session-styles'
+    style.textContent = '@keyframes pulse-dot { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.4)} }'
+    document.head.appendChild(style)
+  }
 
   if (loading || !data) return (
     <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)' }}>
@@ -288,8 +293,8 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                     </div>
                   </div>
 
-                  <button className="btn-volt" onClick={() => saveSet(true)} disabled={savingSet} style={{ width: '100%', padding: '0.875rem', fontSize: '1rem' }}>
-                    {savingSet ? 'Saving…' : 'Done ✓'}
+                  <button className="btn-volt" onClick={() => saveSet(true)} disabled={savingSet} style={{ width: '100%', padding: '0.875rem', fontSize: '1.1rem', letterSpacing: '0.04em' }}>
+                    {savingSet ? 'Saving…' : '✓ Log Set & Return to Board'}
                   </button>
 
                   {/* Previous sets */}
@@ -377,9 +382,15 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
         {/* Header */}
         <div style={{ background: 'var(--white)', borderBottom: '1.5px solid var(--gray-border)', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 800, flex: 1 }}>
-            {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-          </h1>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 800 }}>
+              {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)', borderRadius: 20, padding: '0.15rem 0.625rem' }}>
+              <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--success)', animation: 'pulse-dot 1.5s infinite' }} />
+              <span style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 600 }}>LIVE</span>
+            </div>
+          </div>
           <div style={{ display: 'flex', gap: '0.4rem' }}>
             {([['byWeight','⚡ Most Weight'],['bySets','💪 Most Sets'],['byPct','🎯 % Complete']] as const).map(([key, label]) => (
               <button key={key} onClick={() => setActiveLeader(key)}
