@@ -1,5 +1,4 @@
 'use client'
-import FeetInchesInput from '@/components/FeetInchesInput'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
