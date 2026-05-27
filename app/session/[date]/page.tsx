@@ -190,11 +190,11 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     if (!sessionInfo || !workout || !activeBlock) return
     setSavingSet(true)
     const block = workout.blocks.find(b => b.id === activeBlock)
-    if (!block) return
+    if (!block) { setSavingSet(false); return }
     const ex = block.exercises[activeExIdx]
-    if (!ex) return
+    if (!ex) { setSavingSet(false); return }
 
-    await fetch('/api/sets', {
+    const res = await fetch('/api/sets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -203,6 +203,14 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
         repsCompleted: repsInput ? parseInt(repsInput) : null, completed,
       }),
     })
+
+    const result = await res.json()
+
+    if (!res.ok || result.error) {
+      alert(`Save failed: ${result.error ?? res.status} | sessionId=${sessionInfo.sessionId} exId=${ex.id}`)
+      setSavingSet(false)
+      return
+    }
 
     // Update local workout state
     setWorkout(prev => {
