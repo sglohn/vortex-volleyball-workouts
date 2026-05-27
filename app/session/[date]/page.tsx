@@ -19,8 +19,6 @@ interface SessionData {
 
 type View = 'leaderboard' | 'team' | 'player_pin' | 'player_workout'
 
-const MEDAL = ['🥇','🥈','🥉']
-
 export default function SessionPage({ params }: { params: Promise<{ date: string }> }) {
   const { date } = use(params)
   const router = useRouter()
@@ -29,7 +27,6 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   const [loading, setLoading] = useState(true)
   const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
   const [view, setView] = useState<View>('leaderboard')
-  const [activeLeader, setActiveLeader] = useState<'byWeight'|'bySets'|'byPct'>('byWeight')
 
   // Player check-in flow
   const [selectedPlayer, setSelectedPlayer] = useState<PlayerRow | null>(null)
@@ -258,14 +255,6 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   )
 
   const { teams, roster, leaderboard } = data
-  // Show all checked-in players, even those with 0 sets logged
-  const leaderData = (data?.roster ?? [])
-    .filter(p => p.checkedIn)
-    .sort((a, b) => {
-      if (activeLeader === 'byWeight') return b.totalWeightLbs - a.totalWeightLbs
-      if (activeLeader === 'bySets') return b.setsCompleted - a.setsCompleted
-      return b.pct - a.pct
-    })
   const activeTeam = teams.find(t => t.id === activeTeamId)
   const teamRoster = roster.filter(p => p.teamId === activeTeamId)
 
@@ -374,9 +363,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                   <button className="btn-volt" onClick={() => saveSet(true)} disabled={savingSet} style={{ width: '100%', padding: '0.875rem', fontSize: '1.1rem', letterSpacing: '0.04em' }}>
                     {savingSet ? 'Saving…' : '✓ Log Set & Return to Board'}
                   </button>
-                  <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: 'var(--text-muted)', marginTop: '0.3rem', wordBreak: 'break-all' }}>
-                    sessionId={sessionInfo.sessionId.slice(0,8)} · exId={ex.id.slice(0,8)} · set={activeSetNum}
-                  </div>
+
 
                   {/* Previous sets */}
                   {ex.setLogs.filter(l => l.completed).length > 0 && (
@@ -465,87 +452,88 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
         <div style={{ background: 'var(--white)', borderBottom: '1.5px solid var(--gray-border)', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 800 }}>
-              {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              Weight Room Leaderboard
             </h1>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', background: 'rgba(22,163,74,0.1)', border: '1px solid rgba(22,163,74,0.3)', borderRadius: 20, padding: '0.15rem 0.625rem' }}>
               <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--success)', animation: 'pulse-dot 1.5s infinite' }} />
               <span style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 600 }}>LIVE</span>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: '0.4rem' }}>
-            {([['byWeight','⚡ Most Weight'],['bySets','💪 Most Sets'],['byPct','🎯 % Complete']] as const).map(([key, label]) => (
-              <button key={key} onClick={() => setActiveLeader(key)}
-                style={{ padding: '0.35rem 0.875rem', borderRadius: 20, border: `1.5px solid ${activeLeader === key ? 'var(--carolina)' : 'var(--gray-border)'}`, background: activeLeader === key ? 'var(--carolina)' : 'transparent', color: activeLeader === key ? 'var(--white)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>
-                {label}
-              </button>
-            ))}
-          </div>
         </div>
 
-        {/* Debug bar */}
-        {data && (
-          <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '0.3rem 1.5rem', fontSize: '0.68rem', fontFamily: 'monospace', color: '#92400e' }}>
-            URL teams: [{teamIds.join(', ')}] | Found teams: [{data.teams.map(t => `${t.name}(${t.id.slice(0,8)})`).join(', ')}] | Schedule keys: [{Object.keys(data.templateByTeam).map(k => k.slice(0,8)).join(', ')}]
-          </div>
-        )}
-
-        {/* Leaderboard */}
-        <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem 1.5rem' }}>
+        {/* Leaderboard - always shows all stats */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '1rem 1.5rem' }}>
           {roster.filter(p => p.checkedIn).length === 0 ? (
             <div style={{ textAlign: 'center', paddingTop: '4rem', color: 'var(--text-muted)' }}>
               <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏋️</div>
-              <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>No one has checked in yet today.</p>
+              <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>No one has checked in yet.</p>
               <p style={{ fontSize: '0.85rem', marginTop: '0.4rem' }}>Select a team on the left to get players started.</p>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-              {leaderData.map((p, i) => {
-                const team = teams.find(t => t.id === p.teamId)
-                const isTop3 = i < 3
-                const value = activeLeader === 'byWeight'
-                  ? `${p.totalWeightLbs.toLocaleString()} lbs`
-                  : activeLeader === 'bySets'
-                  ? `${p.setsCompleted} sets`
-                  : `${p.pct}%`
+            <>
+              {/* Column headers */}
+              <div style={{ display: 'grid', gridTemplateColumns: '2rem 2.5rem 1fr 120px 120px 80px', gap: '0.75rem', alignItems: 'center', padding: '0 1rem 0.5rem', borderBottom: '1.5px solid var(--gray-border)', marginBottom: '0.5rem' }}>
+                <div />
+                <div />
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Athlete</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>⚡ Weight Moved</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>💪 Sets Done</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', textAlign: 'center' }}>🎯 Done</div>
+              </div>
 
-                return (
-                  <div key={p.id} className="card" style={{ padding: '0.875rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: `4px solid ${team?.color ?? 'var(--carolina)'}`, background: isTop3 ? 'var(--white)' : 'rgba(255,255,255,0.6)' }}>
-                    {/* Rank */}
-                    <div style={{ width: 36, textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: isTop3 ? '1.5rem' : '1rem', color: isTop3 ? 'var(--black)' : 'var(--text-muted)', flexShrink: 0 }}>
-                      {isTop3 ? MEDAL[i] : `#${i+1}`}
-                    </div>
-
-                    {/* Avatar */}
-                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: team?.color ?? 'var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: '#fff', flexShrink: 0 }}>
-                      {p.jerseyNumber || p.name.charAt(0)}
-                    </div>
-
-                    {/* Info */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 700, fontSize: '1rem' }}>{p.name}</div>
-                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{team?.name}</div>
-                    </div>
-
-                    {/* Progress bar */}
-                    <div style={{ flex: 2, minWidth: 0 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{p.setsCompleted}/{p.totalSets} sets</span>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{p.pct}%</span>
+              {/* Rows sorted by total weight */}
+              {[...roster]
+                .filter(p => p.checkedIn)
+                .sort((a, b) => b.totalWeightLbs - a.totalWeightLbs)
+                .map((p, i) => {
+                  const team = teams.find(t => t.id === p.teamId)
+                  const isTop3 = i < 3
+                  return (
+                    <div key={p.id} style={{ display: 'grid', gridTemplateColumns: '2rem 2.5rem 1fr 120px 120px 80px', gap: '0.75rem', alignItems: 'center', padding: '0.625rem 1rem', borderRadius: 10, marginBottom: '0.375rem', background: p.completed ? 'rgba(22,163,74,0.06)' : isTop3 ? 'var(--white)' : 'rgba(255,255,255,0.6)', border: `1.5px solid ${p.completed ? 'rgba(22,163,74,0.25)' : isTop3 ? 'var(--carolina-border)' : 'var(--gray-border)'}`, borderLeft: `4px solid ${team?.color ?? 'var(--carolina)'}` }}>
+                      {/* Rank */}
+                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: isTop3 ? '1.3rem' : '0.95rem', color: isTop3 ? 'var(--black)' : 'var(--text-muted)', textAlign: 'center' }}>
+                        {i < 3 ? ['🥇','🥈','🥉'][i] : `#${i+1}`}
                       </div>
-                      <div style={{ height: 6, background: 'var(--gray-border)', borderRadius: 3, overflow: 'hidden' }}>
-                        <div style={{ height: '100%', width: `${p.pct}%`, background: team?.color ?? 'var(--carolina)', borderRadius: 3, transition: 'width 0.4s' }} />
+
+                      {/* Avatar */}
+                      <div style={{ width: 36, height: 36, borderRadius: '50%', background: team?.color ?? 'var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.9rem', color: '#fff', flexShrink: 0 }}>
+                        {p.completed ? '✓' : (p.jerseyNumber || p.name.charAt(0))}
+                      </div>
+
+                      {/* Name + team */}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontWeight: 700, fontSize: '1rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{team?.name}{p.completed ? ' · Done ✓' : ''}</div>
+                      </div>
+
+                      {/* Weight */}
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: team?.color ?? 'var(--carolina)', lineHeight: 1 }}>
+                          {p.totalWeightLbs > 0 ? `${p.totalWeightLbs.toLocaleString()}` : '—'}
+                        </div>
+                        {p.totalWeightLbs > 0 && <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>lbs</div>}
+                      </div>
+
+                      {/* Sets */}
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem', color: 'var(--black)', lineHeight: 1 }}>
+                          {p.setsCompleted}
+                          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 400 }}>/{p.totalSets}</span>
+                        </div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 600 }}>sets</div>
+                      </div>
+
+                      {/* Progress bar + % */}
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', color: p.pct === 100 ? 'var(--success)' : 'var(--black)', lineHeight: 1, marginBottom: '0.2rem' }}>{p.pct}%</div>
+                        <div style={{ height: 5, background: 'var(--gray-border)', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${p.pct}%`, background: p.pct === 100 ? 'var(--success)' : team?.color ?? 'var(--carolina)', borderRadius: 3, transition: 'width 0.6s ease' }} />
+                        </div>
                       </div>
                     </div>
-
-                    {/* Value */}
-                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: team?.color ?? 'var(--carolina)', lineHeight: 1 }}>{value}</div>
-                      {p.completed && <div style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 600, marginTop: '0.1rem' }}>Complete ✓</div>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+                  )
+                })}
+            </>
           )}
         </div>
       </div>
