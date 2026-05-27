@@ -1,0 +1,455 @@
+'use client'
+import { useState, useEffect, useCallback, use } from 'react'
+import { useRouter } from 'next/navigation'
+
+interface Team { id: string; name: string; age_group?: string; color: string }
+interface PlayerRow {
+  id: string; name: string; jerseyNumber?: string; teamId: string
+  checkedIn: boolean; completed: boolean; sessionId: string | null
+  checkedInAt: string | null; totalWeightLbs: number
+  setsCompleted: number; totalSets: number; pct: number
+}
+interface LeaderboardData {
+  byWeight: PlayerRow[]; bySets: PlayerRow[]; byPct: PlayerRow[]
+}
+interface SessionData {
+  teams: Team[]; roster: PlayerRow[]
+  leaderboard: LeaderboardData; templateByTeam: Record<string, { templateId: string; workoutName: string }>; date: string
+}
+
+type View = 'leaderboard' | 'team' | 'player_pin' | 'player_workout'
+
+const MEDAL = ['🥇','🥈','🥉']
+
+export default function SessionPage({ params }: { params: Promise<{ date: string }> }) {
+  const { date } = use(params)
+  const router = useRouter()
+
+  const [data, setData] = useState<SessionData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [activeTeamId, setActiveTeamId] = useState<string | null>(null)
+  const [view, setView] = useState<View>('leaderboard')
+  const [activeLeader, setActiveLeader] = useState<'byWeight'|'bySets'|'byPct'>('byWeight')
+
+  // Player check-in flow
+  const [selectedPlayer, setSelectedPlayer] = useState<PlayerRow | null>(null)
+  const [pin, setPin] = useState('')
+  const [pinError, setPinError] = useState('')
+  const [checkingIn, setCheckingIn] = useState(false)
+
+  // Player workout state
+  const [workout, setWorkout] = useState<{ blocks: Array<{ id: string; block_label: string; sets: number; exercises: Array<{ id: string; name: string; logs_weight: boolean; default_reps?: string; setLogs: Array<{ set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean }> }> }> } | null>(null)
+  const [sessionInfo, setSessionInfo] = useState<{ sessionId: string; playerId: string; playerName: string; templateId?: string } | null>(null)
+  const [activeBlock, setActiveBlock] = useState<string | null>(null)
+  const [activeExIdx, setActiveExIdx] = useState(0)
+  const [activeSetNum, setActiveSetNum] = useState(1)
+  const [weightInput, setWeightInput] = useState('')
+  const [repsInput, setRepsInput] = useState('')
+  const [savingSet, setSavingSet] = useState(false)
+
+  // Get team IDs from URL search params
+  const [teamIds, setTeamIds] = useState<string[]>([])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ids = params.get('teams')?.split(',').filter(Boolean) ?? []
+    setTeamIds(ids)
+  }, [])
+
+  const loadData = useCallback(async () => {
+    if (!teamIds.length) return
+    const res = await fetch(`/api/session?teams=${teamIds.join(',')}&date=${date}`)
+    const d = await res.json()
+    setData(d)
+    if (!activeTeamId && d.teams?.length) setActiveTeamId(d.teams[0].id)
+    setLoading(false)
+  }, [teamIds, date, activeTeamId])
+
+  useEffect(() => { if (teamIds.length) loadData() }, [teamIds, loadData])
+
+  // Poll every 20s
+  useEffect(() => {
+    const t = setInterval(loadData, 20000)
+    return () => clearInterval(t)
+  }, [loadData])
+
+  function selectTeam(teamId: string) {
+    setActiveTeamId(teamId)
+    setView('team')
+  }
+
+  function selectPlayer(player: PlayerRow) {
+    if (!player.checkedIn && player.completed) return
+    setSelectedPlayer(player)
+    setPin('')
+    setPinError('')
+    if (player.checkedIn && player.sessionId) {
+      // Already checked in — go straight to workout
+      loadWorkout(player)
+    } else {
+      setView('player_pin')
+    }
+  }
+
+  async function loadWorkout(player: PlayerRow) {
+    const teamData = data?.templateByTeam[player.teamId]
+    if (!teamData?.templateId) return
+    const res = await fetch(`/api/workout?sessionId=${player.sessionId}&templateId=${teamData.templateId}`)
+    const d = await res.json()
+    if (d.source === 'template') {
+      setWorkout(d.template)
+      setSessionInfo({ sessionId: player.sessionId!, playerId: player.id, playerName: player.name, templateId: teamData.templateId })
+      setActiveBlock(d.template.blocks[0]?.id ?? null)
+      setActiveExIdx(0); setActiveSetNum(1); setWeightInput(''); setRepsInput('')
+      setView('player_workout')
+    }
+  }
+
+  async function handleCheckin() {
+    if (!selectedPlayer || pin.length !== 4) return
+    setCheckingIn(true); setPinError('')
+    const res = await fetch('/api/checkin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: selectedPlayer.id, pin }),
+    })
+    const d = await res.json()
+    if (!res.ok) { setPinError(d.error || 'Incorrect PIN'); setPin(''); setCheckingIn(false); return }
+    const updatedPlayer = { ...selectedPlayer, checkedIn: true, sessionId: d.sessionId }
+    setSelectedPlayer(updatedPlayer)
+    setCheckingIn(false)
+    await loadWorkout(updatedPlayer)
+    loadData()
+  }
+
+  async function saveSet(completed: boolean) {
+    if (!sessionInfo || !workout || !activeBlock) return
+    setSavingSet(true)
+    const block = workout.blocks.find(b => b.id === activeBlock)
+    if (!block) return
+    const ex = block.exercises[activeExIdx]
+    if (!ex) return
+
+    await fetch('/api/sets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: sessionInfo.sessionId, exerciseId: ex.id, setNumber: activeSetNum,
+        weightLbs: weightInput ? parseFloat(weightInput) : null,
+        repsCompleted: repsInput ? parseInt(repsInput) : null, completed,
+      }),
+    })
+
+    // Update local workout state
+    setWorkout(prev => {
+      if (!prev) return prev
+      return { ...prev, blocks: prev.blocks.map(b => b.id !== activeBlock ? b : {
+        ...b, exercises: b.exercises.map((e, ei) => ei !== activeExIdx ? e : {
+          ...e, setLogs: e.setLogs.map(l => l.set_number === activeSetNum ? { ...l, weight_lbs: weightInput ? parseFloat(weightInput) : undefined, reps_completed: repsInput ? parseInt(repsInput) : undefined, completed } : l)
+        })
+      })}
+    })
+
+    if (completed) {
+      // Advance to next set/exercise
+      const totalEx = block.exercises.length
+      if (activeExIdx < totalEx - 1) {
+        setActiveExIdx(i => i + 1)
+        const nextEx = block.exercises[activeExIdx + 1]
+        setRepsInput(nextEx?.default_reps ?? ''); setWeightInput('')
+      } else if (activeSetNum < block.sets) {
+        setActiveSetNum(s => s + 1); setActiveExIdx(0)
+        setRepsInput(block.exercises[0]?.default_reps ?? ''); setWeightInput('')
+      }
+    }
+    setSavingSet(false)
+    loadData()
+  }
+
+  async function finishWorkout() {
+    if (!sessionInfo) return
+    await fetch('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionInfo.sessionId }) })
+    setView('team'); setSelectedPlayer(null); setWorkout(null); setSessionInfo(null)
+    loadData()
+  }
+
+  const keys = ['1','2','3','4','5','6','7','8','9','←','0','✓']
+
+  if (loading || !data) return (
+    <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)' }}>
+      <div style={{ color: 'var(--text-muted)' }}>Loading session…</div>
+    </div>
+  )
+
+  const { teams, roster, leaderboard } = data
+  const leaderData = leaderboard[activeLeader]
+  const activeTeam = teams.find(t => t.id === activeTeamId)
+  const teamRoster = roster.filter(p => p.teamId === activeTeamId)
+
+  // ── PLAYER PIN ──
+  if (view === 'player_pin' && selectedPlayer) return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)', padding: '2rem' }}>
+      <div style={{ width: '100%', maxWidth: 360 }}>
+        <button onClick={() => setView('team')} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', marginBottom: '1.5rem', fontSize: '0.85rem', fontWeight: 500 }}>← Back</button>
+        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
+          <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', color: 'var(--yellow)' }}>
+            {selectedPlayer.jerseyNumber || selectedPlayer.name.charAt(0)}
+          </div>
+          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800 }}>{selectedPlayer.name}</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Enter your PIN to check in</p>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginBottom: '1.75rem' }}>
+          {[0,1,2,3].map(i => <div key={i} className={`pin-digit ${i < pin.length ? 'filled' : ''}`}>{i < pin.length ? '●' : ''}</div>)}
+        </div>
+        {pinError && <div style={{ background: 'var(--danger-light)', border: '1.5px solid #fecaca', borderRadius: 8, padding: '0.625rem', marginBottom: '1rem', color: 'var(--danger)', textAlign: 'center', fontSize: '0.9rem' }}>{pinError}</div>}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
+          {keys.map(k => (
+            <button key={k} className="pin-key" onClick={() => {
+              if (k === '✓') { handleCheckin(); return }
+              if (k === '←') { setPin(p => p.slice(0,-1)); return }
+              if (pin.length < 4) setPin(p => p + k)
+            }} style={{ width: '100%', background: k === '✓' ? 'var(--carolina)' : 'var(--white)', color: k === '✓' ? 'var(--white)' : 'var(--black)', opacity: k === '✓' && pin.length !== 4 ? 0.4 : 1 }} disabled={checkingIn}>{k}</button>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+
+  // ── PLAYER WORKOUT ──
+  if (view === 'player_workout' && workout && sessionInfo) {
+    const block = workout.blocks.find(b => b.id === activeBlock)
+    const ex = block?.exercises[activeExIdx]
+    const totalSets = workout.blocks.reduce((s, b) => s + b.exercises.length * b.sets, 0)
+    const doneSets = workout.blocks.reduce((s, b) => s + b.exercises.reduce((s2, e) => s2 + e.setLogs.filter(l => l.completed).length, 0), 0)
+    const allDone = doneSets >= totalSets
+
+    return (
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--page-bg)' }}>
+        {/* Header */}
+        <div style={{ background: 'var(--black)', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+          <button onClick={() => setView('team')} style={{ background: 'none', border: 'none', color: 'var(--yellow)', cursor: 'pointer', fontSize: '1rem' }}>←</button>
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: 'var(--yellow)', letterSpacing: '0.06em' }}>{sessionInfo.playerName}</div>
+          <div style={{ flex: 1 }} />
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina-light)', fontSize: '0.9rem' }}>{doneSets}/{totalSets} sets</div>
+        </div>
+
+        <div style={{ flex: 1, overflow: 'auto', padding: '1rem' }}>
+          {allDone ? (
+            <div style={{ textAlign: 'center', paddingTop: '3rem' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🎉</div>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '0.5rem' }}>Workout Done!</h2>
+              <button className="btn-black" onClick={finishWorkout} style={{ padding: '0.875rem 2rem', fontSize: '1rem', marginTop: '1.5rem' }}>✓ I'm Done</button>
+            </div>
+          ) : (
+            <>
+              {/* Block tabs */}
+              <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                {workout.blocks.map(b => {
+                  const done = b.exercises.reduce((s, e) => s + e.setLogs.filter(l => l.completed).length, 0)
+                  const total = b.exercises.length * b.sets
+                  const isActive = b.id === activeBlock
+                  return (
+                    <button key={b.id} onClick={() => { setActiveBlock(b.id); setActiveExIdx(0); setActiveSetNum(1); setWeightInput(''); setRepsInput(b.exercises[0]?.default_reps ?? '') }}
+                      style={{ padding: '0.4rem 0.875rem', borderRadius: 8, border: `1.5px solid ${isActive ? 'var(--carolina)' : done === total ? 'var(--success)' : 'var(--gray-border)'}`, background: isActive ? 'var(--carolina)' : 'var(--white)', color: isActive ? 'var(--white)' : done === total ? 'var(--success)' : 'var(--black)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
+                      {b.block_label} {done === total && '✓'}
+                    </button>
+                  )
+                })}
+              </div>
+
+              {/* Current exercise */}
+              {block && ex && (
+                <div className="card" style={{ padding: '1.25rem' }}>
+                  <div style={{ marginBottom: '0.75rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: '0.2rem' }}>Block {block.block_label} · Set {activeSetNum}/{block.sets} · Ex {activeExIdx+1}/{block.exercises.length}</div>
+                    <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800 }}>{ex.name}</h2>
+                  </div>
+
+                  {/* Exercise list in this block */}
+                  <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
+                    {block.exercises.map((e, i) => (
+                      <button key={e.id} onClick={() => { setActiveExIdx(i); setWeightInput(''); setRepsInput(e.default_reps ?? '') }}
+                        style={{ padding: '0.3rem 0.75rem', borderRadius: 6, border: `1.5px solid ${i === activeExIdx ? 'var(--carolina)' : 'var(--gray-border)'}`, background: i === activeExIdx ? 'var(--carolina-light)' : 'var(--white)', color: i === activeExIdx ? 'var(--carolina-deep)' : 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>{e.name}</button>
+                    ))}
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                    {ex.logs_weight && (
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Weight (lbs)</label>
+                        <input className="input" type="number" inputMode="decimal" placeholder="0" value={weightInput} onChange={e => setWeightInput(e.target.value)}
+                          style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700 }} autoFocus />
+                      </div>
+                    )}
+                    <div>
+                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Reps</label>
+                      <input className="input" type="number" inputMode="numeric" placeholder={ex.default_reps ?? '—'} value={repsInput} onChange={e => setRepsInput(e.target.value)}
+                        style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700 }} />
+                    </div>
+                  </div>
+
+                  <button className="btn-volt" onClick={() => saveSet(true)} disabled={savingSet} style={{ width: '100%', padding: '0.875rem', fontSize: '1rem' }}>
+                    {savingSet ? 'Saving…' : 'Done ✓'}
+                  </button>
+
+                  {/* Previous sets */}
+                  {ex.setLogs.filter(l => l.completed).length > 0 && (
+                    <div style={{ marginTop: '0.875rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {ex.setLogs.filter(l => l.completed).map((log, i) => (
+                        <div key={i} style={{ background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 6, padding: '0.25rem 0.625rem', fontSize: '0.78rem', color: 'var(--carolina-deep)', fontWeight: 600 }}>
+                          Set {log.set_number}: {log.weight_lbs ? `${log.weight_lbs}lbs × ` : ''}{log.reps_completed}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    )
+  }
+
+  // ── MAIN LAYOUT ──
+  return (
+    <div style={{ height: '100vh', display: 'flex', overflow: 'hidden', background: 'var(--page-bg)' }}>
+
+      {/* ── LEFT SIDEBAR — teams + player roster ── */}
+      <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--black)', borderRight: '2px solid rgba(255,255,255,0.08)' }}>
+        {/* Logo */}
+        <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--yellow)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--black)" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          </div>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.08em', color: 'var(--yellow)' }}>WEIGHT ROOM</span>
+        </div>
+
+        {/* Team tabs */}
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
+          <button onClick={() => setView('leaderboard')}
+            style={{ flex: 1, padding: '0.5rem', background: view === 'leaderboard' ? 'rgba(251,191,36,0.12)' : 'transparent', border: 'none', borderBottom: view === 'leaderboard' ? '2px solid var(--yellow)' : '2px solid transparent', color: view === 'leaderboard' ? 'var(--yellow)' : 'rgba(255,255,255,0.4)', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+            🏆 Board
+          </button>
+          {teams.map(t => (
+            <button key={t.id} onClick={() => selectTeam(t.id)}
+              style={{ flex: 1, padding: '0.5rem', background: activeTeamId === t.id && view === 'team' ? `${t.color}22` : 'transparent', border: 'none', borderBottom: activeTeamId === t.id && view === 'team' ? `2px solid ${t.color}` : '2px solid transparent', color: activeTeamId === t.id && view === 'team' ? t.color : 'rgba(255,255,255,0.4)', fontSize: '0.68rem', fontWeight: 700, cursor: 'pointer', letterSpacing: '0.04em', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {t.name}
+            </button>
+          ))}
+        </div>
+
+        {/* Player list */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0.5rem' }}>
+          {view === 'leaderboard' && (
+            <div style={{ padding: '0.5rem', color: 'rgba(255,255,255,0.3)', fontSize: '0.8rem', textAlign: 'center' }}>Select a team to see players</div>
+          )}
+          {view === 'team' && activeTeam && (
+            <>
+              <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, padding: '0.25rem 0.5rem 0.5rem' }}>
+                {teamRoster.filter(p => p.checkedIn).length}/{teamRoster.length} checked in
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                {teamRoster.sort((a, b) => (b.checkedIn ? 1 : 0) - (a.checkedIn ? 1 : 0) || a.name.localeCompare(b.name)).map(p => (
+                  <button key={p.id} onClick={() => selectPlayer(p)}
+                    style={{ background: p.completed ? `${activeTeam.color}22` : p.checkedIn ? 'rgba(255,255,255,0.06)' : 'transparent', border: `1px solid ${p.completed ? activeTeam.color : p.checkedIn ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)'}`, borderRadius: 8, padding: '0.5rem 0.625rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', textAlign: 'left', width: '100%' }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: p.checkedIn ? activeTeam.color : 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.8rem', color: p.checkedIn ? '#fff' : 'rgba(255,255,255,0.3)', flexShrink: 0 }}>
+                      {p.completed ? '✓' : (p.jerseyNumber || p.name.charAt(0))}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: p.checkedIn ? '#fff' : 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
+                      {p.checkedIn && (
+                        <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
+                          {p.pct}% · {p.totalWeightLbs > 0 ? `${p.totalWeightLbs.toLocaleString()} lbs` : `${p.setsCompleted} sets`}
+                        </div>
+                      )}
+                    </div>
+                    {p.checkedIn && !p.completed && <div style={{ fontSize: '0.7rem', color: activeTeam.color, fontWeight: 700 }}>→</div>}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── MAIN AREA — leaderboard ── */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {/* Header */}
+        <div style={{ background: 'var(--white)', borderBottom: '1.5px solid var(--gray-border)', padding: '0.75rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.4rem', fontWeight: 800, flex: 1 }}>
+            {new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+          </h1>
+          <div style={{ display: 'flex', gap: '0.4rem' }}>
+            {([['byWeight','⚡ Most Weight'],['bySets','💪 Most Sets'],['byPct','🎯 % Complete']] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setActiveLeader(key)}
+                style={{ padding: '0.35rem 0.875rem', borderRadius: 20, border: `1.5px solid ${activeLeader === key ? 'var(--carolina)' : 'var(--gray-border)'}`, background: activeLeader === key ? 'var(--carolina)' : 'transparent', color: activeLeader === key ? 'var(--white)' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Leaderboard */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem 1.5rem' }}>
+          {leaderData.length === 0 ? (
+            <div style={{ textAlign: 'center', paddingTop: '4rem', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏋️</div>
+              <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>No one has checked in yet today.</p>
+              <p style={{ fontSize: '0.85rem', marginTop: '0.4rem' }}>Select a team on the left to get players started.</p>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
+              {leaderData.map((p, i) => {
+                const team = teams.find(t => t.id === p.teamId)
+                const isTop3 = i < 3
+                const value = activeLeader === 'byWeight'
+                  ? `${p.totalWeightLbs.toLocaleString()} lbs`
+                  : activeLeader === 'bySets'
+                  ? `${p.setsCompleted} sets`
+                  : `${p.pct}%`
+
+                return (
+                  <div key={p.id} className="card" style={{ padding: '0.875rem 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', borderLeft: `4px solid ${team?.color ?? 'var(--carolina)'}`, background: isTop3 ? 'var(--white)' : 'rgba(255,255,255,0.6)' }}>
+                    {/* Rank */}
+                    <div style={{ width: 36, textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: isTop3 ? '1.5rem' : '1rem', color: isTop3 ? 'var(--black)' : 'var(--text-muted)', flexShrink: 0 }}>
+                      {isTop3 ? MEDAL[i] : `#${i+1}`}
+                    </div>
+
+                    {/* Avatar */}
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: team?.color ?? 'var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: '#fff', flexShrink: 0 }}>
+                      {p.jerseyNumber || p.name.charAt(0)}
+                    </div>
+
+                    {/* Info */}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: '1rem' }}>{p.name}</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{team?.name}</div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div style={{ flex: 2, minWidth: 0 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.3rem' }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{p.setsCompleted}/{p.totalSets} sets</span>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{p.pct}%</span>
+                      </div>
+                      <div style={{ height: 6, background: 'var(--gray-border)', borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: `${p.pct}%`, background: team?.color ?? 'var(--carolina)', borderRadius: 3, transition: 'width 0.4s' }} />
+                      </div>
+                    </div>
+
+                    {/* Value */}
+                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: team?.color ?? 'var(--carolina)', lineHeight: 1 }}>{value}</div>
+                      {p.completed && <div style={{ fontSize: '0.7rem', color: 'var(--success)', fontWeight: 600, marginTop: '0.1rem' }}>Complete ✓</div>}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
