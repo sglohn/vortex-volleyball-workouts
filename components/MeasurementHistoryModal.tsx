@@ -59,7 +59,7 @@ export default function MeasurementHistoryModal({ playerId, playerName, statKey,
       if (isDerived) {
         val = DERIVED[statKey].compute(row)
       } else {
-        val = (row as Record<string, number | undefined>)[statKey] ?? null
+        val = (row as unknown as Record<string, number | undefined>)[statKey] ?? null
       }
       return val !== null ? { date: fmtDate(row.measured_at), raw: row.measured_at, val } : null
     })
