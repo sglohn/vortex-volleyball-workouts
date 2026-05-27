@@ -24,7 +24,10 @@ function DisplayContent() {
   const [blockIdx, setBlockIdx] = useState(0)
   const [showAll, setShowAll] = useState(false)
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = (() => {
+    const d = new Date()
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  })()
 
   useEffect(() => {
     fetch('/api/coach/teams').then(r => r.json()).then(d => {
