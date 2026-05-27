@@ -3,7 +3,6 @@ import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
 import { inchesToFeetInches, calcVertical, painLevelColor, painLevelLabel } from '@/lib/fitness'
-import FeetInchesInput from '@/components/FeetInchesInput'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 
 interface Measurement { height_in?: number; wingspan_in?: number; standing_reach_in?: number; standing_vertical_in?: number; approach_vertical_in?: number; measured_at?: string }
