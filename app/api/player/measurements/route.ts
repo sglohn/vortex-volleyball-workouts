@@ -21,38 +21,70 @@ export async function POST(req: NextRequest) {
   const db = createServerClient()
   const today = new Date().toISOString().split('T')[0]
 
-  // Parse incoming values — only include fields that were actually provided
-  const numeric: Record<string, number | null> = {}
-  for (const key of ['height_in','wingspan_in','standing_reach_in','standing_vertical_in','approach_vertical_in']) {
+  const KEYS = ['height_in','wingspan_in','standing_reach_in','standing_vertical_in','approach_vertical_in']
+
+  // Parse only the fields that were provided
+  const incoming: Record<string, number | null> = {}
+  for (const key of KEYS) {
     if (fields[key] !== undefined && fields[key] !== '') {
-      numeric[key] = parseFloat(fields[key])
+      incoming[key] = parseFloat(fields[key])
     }
   }
 
-  // Find the most recent measurement row for this player
-  const { data: existing } = await db
+  if (Object.keys(incoming).length === 0) {
+    return NextResponse.json({ ok: true, skipped: true })
+  }
+
+  // Get the most recent row to (a) merge missing fields and (b) check if anything changed
+  const { data: latest } = await db
     .from('measurements')
-    .select('id')
+    .select('*')
     .eq('player_id', playerId)
     .order('measured_at', { ascending: false })
     .limit(1)
     .single()
 
+  // Merge: start from latest values, overlay with incoming
+  const merged: Record<string, number | null> = {}
+  for (const key of KEYS) {
+    merged[key] = incoming[key] !== undefined ? incoming[key] : (latest?.[key] ?? null)
+  }
+
+  // Check if anything actually changed vs the latest row
+  const changed = !latest || KEYS.some(key => {
+    const prev = latest[key] ?? null
+    const next = merged[key] ?? null
+    return prev !== next
+  })
+
+  if (!changed) {
+    // Nothing changed — just return the existing row
+    return NextResponse.json({ measurement: latest, skipped: true })
+  }
+
+  // Check if there's already a row for today — update it rather than adding a duplicate
+  const { data: todayRow } = await db
+    .from('measurements')
+    .select('id')
+    .eq('player_id', playerId)
+    .eq('measured_at', today)
+    .single()
+
   let data, error
 
-  if (existing?.id) {
-    // Update the existing row — only overwrite fields that were provided
+  if (todayRow?.id) {
+    // Update today's row
     ;({ data, error } = await db
       .from('measurements')
-      .update({ ...numeric, measured_at: today })
-      .eq('id', existing.id)
+      .update(merged)
+      .eq('id', todayRow.id)
       .select()
       .single())
   } else {
-    // No existing row — insert a new one
+    // Insert a new dated snapshot
     ;({ data, error } = await db
       .from('measurements')
-      .insert({ player_id: playerId, ...numeric, measured_at: today })
+      .insert({ player_id: playerId, ...merged, measured_at: today })
       .select()
       .single())
   }
