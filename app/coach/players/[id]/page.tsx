@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { inchesToFeetInches, painLevelColor, painLevelLabel } from '@/lib/fitness'
+import FeetInchesInput from '@/components/FeetInchesInput'
 
 const MEASUREMENT_FIELDS = [
   { key: 'height_in', label: 'Height', showFt: true },
