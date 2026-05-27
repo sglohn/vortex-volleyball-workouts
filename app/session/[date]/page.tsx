@@ -366,6 +366,9 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                   <button className="btn-volt" onClick={() => saveSet(true)} disabled={savingSet} style={{ width: '100%', padding: '0.875rem', fontSize: '1.1rem', letterSpacing: '0.04em' }}>
                     {savingSet ? 'Saving…' : '✓ Log Set & Return to Board'}
                   </button>
+                  <div style={{ fontSize: '0.65rem', fontFamily: 'monospace', color: 'var(--text-muted)', marginTop: '0.3rem', wordBreak: 'break-all' }}>
+                    sessionId={sessionInfo.sessionId.slice(0,8)} · exId={ex.id.slice(0,8)} · set={activeSetNum}
+                  </div>
 
                   {/* Previous sets */}
                   {ex.setLogs.filter(l => l.completed).length > 0 && (
