@@ -37,7 +37,7 @@ function DisplayContent() {
     if (!selectedTeamId) return
     setLoading(true); setNoWorkout(false); setWorkout(null); setBlockIdx(0); setShowAll(false)
 
-    fetch(`/api/coach/schedule?teamId=${selectedTeamId}&weekOf=${today}`)
+    fetch(`/api/coach/schedule?teamId=${selectedTeamId}`)
       .then(r => r.json())
       .then(async data => {
         const todayEntry = (data.schedule ?? []).find((s: { scheduled_date: string; template_id?: string }) => s.scheduled_date === today)
