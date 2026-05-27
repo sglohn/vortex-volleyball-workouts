@@ -94,8 +94,8 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   async function loadWorkout(player: PlayerRow) {
     const teamData = data?.templateByTeam[player.teamId]
-} | sessionId: ${player.sessionId} | teamId: ${player.teamId}`)
     if (!teamData?.templateId || !player.sessionId) {
+      alert(`No workout scheduled today for this team. Please assign one in Coach → Schedule.`)
       return
     }
     // Fetch template structure
@@ -266,7 +266,6 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)', padding: '2rem' }}>
       <div style={{ width: '100%', maxWidth: 360 }}>
         <button onClick={() => setView('team')} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', marginBottom: '1.5rem', fontSize: '0.85rem', fontWeight: 500 }}>← Back</button>
-        {debugMsg && <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 6, padding: '0.5rem', marginBottom: '1rem', fontSize: '0.7rem', fontFamily: 'monospace', color: '#92400e', wordBreak: 'break-all' }}>{debugMsg}</div>}
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
           <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', color: 'var(--yellow)' }}>
             {selectedPlayer.jerseyNumber || selectedPlayer.name.charAt(0)}
@@ -471,6 +470,13 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
             ))}
           </div>
         </div>
+
+        {/* Debug bar */}
+        {data && (
+          <div style={{ background: '#fef3c7', borderBottom: '1px solid #fde68a', padding: '0.3rem 1.5rem', fontSize: '0.68rem', fontFamily: 'monospace', color: '#92400e' }}>
+            URL teams: [{teamIds.join(', ')}] | Found teams: [{data.teams.map(t => `${t.name}(${t.id.slice(0,8)})`).join(', ')}] | Schedule keys: [{Object.keys(data.templateByTeam).map(k => k.slice(0,8)).join(', ')}]
+          </div>
+        )}
 
         {/* Leaderboard */}
         <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem 1.5rem' }}>
