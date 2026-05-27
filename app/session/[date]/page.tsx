@@ -58,12 +58,13 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   const loadData = useCallback(async () => {
     if (!teamIds.length) return
-    const res = await fetch(`/api/session?teams=${teamIds.join(',')}&date=${date}`)
+    const localDate = (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` })()
+    const res = await fetch(`/api/session?teams=${teamIds.join(',')}&date=${localDate}`)
     const d = await res.json()
     setData(d)
     if (!activeTeamId && d.teams?.length) setActiveTeamId(d.teams[0].id)
     setLoading(false)
-  }, [teamIds, date, activeTeamId])
+  }, [teamIds, activeTeamId])
 
   useEffect(() => { if (teamIds.length) loadData() }, [teamIds, loadData])
 
@@ -120,22 +121,47 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
       setWorkout(templateWithLogs)
       setSessionInfo({ sessionId: player.sessionId, playerId: player.id, playerName: player.name, templateId: teamData.templateId })
-      // Find first incomplete set
+      // Find first incomplete set — superset order: set1-ex1, set1-ex2, set2-ex1, set2-ex2...
+      // But respect block order — if they started block C, stay in block C
       let startBlock = templateWithLogs.blocks[0]?.id ?? null
       let startEx = 0
       let startSet = 1
-      outer: for (const block of templateWithLogs.blocks) {
-        for (let si = 0; si < block.sets; si++) {
-          for (let ei = 0; ei < block.exercises.length; ei++) {
-            if (!block.exercises[ei].setLogs[si]?.completed) {
-              startBlock = block.id; startEx = ei; startSet = si + 1
-              break outer
+      let found = false
+
+      // First: find the block they've started but not finished
+      for (const block of templateWithLogs.blocks) {
+        const hasStarted = block.exercises.some((e: {setLogs: Array<{completed: boolean}>}) => e.setLogs.some(l => l.completed))
+        const isFinished = block.exercises.every((e: {setLogs: Array<{completed: boolean}>}) => e.setLogs.every(l => l.completed))
+        if (hasStarted && !isFinished) {
+          startBlock = block.id
+          // Find next incomplete step in superset order
+          outerLoop: for (let si = 0; si < block.sets; si++) {
+            for (let ei = 0; ei < block.exercises.length; ei++) {
+              if (!block.exercises[ei].setLogs[si]?.completed) {
+                startEx = ei; startSet = si + 1; found = true; break outerLoop
+              }
+            }
+          }
+          break
+        }
+      }
+
+      // If no block started, find first incomplete anywhere
+      if (!found) {
+        outerLoop2: for (const block of templateWithLogs.blocks) {
+          for (let si = 0; si < block.sets; si++) {
+            for (let ei = 0; ei < block.exercises.length; ei++) {
+              if (!block.exercises[ei].setLogs[si]?.completed) {
+                startBlock = block.id; startEx = ei; startSet = si + 1; found = true; break outerLoop2
+              }
             }
           }
         }
       }
+
       setActiveBlock(startBlock); setActiveExIdx(startEx); setActiveSetNum(startSet)
-      setWeightInput(''); setRepsInput(templateWithLogs.blocks.find((b: {id: string; exercises: Array<{default_reps?: string}>}) => b.id === startBlock)?.exercises[startEx]?.default_reps ?? '')
+      const startBlockData = templateWithLogs.blocks.find((b: {id: string; exercises: Array<{default_reps?: string}>}) => b.id === startBlock)
+      setWeightInput(''); setRepsInput(startBlockData?.exercises[startEx]?.default_reps ?? '')
       setView('player_workout')
     }
   }
@@ -221,7 +247,14 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   )
 
   const { teams, roster, leaderboard } = data
-  const leaderData = leaderboard[activeLeader]
+  // Show all checked-in players, even those with 0 sets logged
+  const leaderData = (data?.roster ?? [])
+    .filter(p => p.checkedIn)
+    .sort((a, b) => {
+      if (activeLeader === 'byWeight') return b.totalWeightLbs - a.totalWeightLbs
+      if (activeLeader === 'bySets') return b.setsCompleted - a.setsCompleted
+      return b.pct - a.pct
+    })
   const activeTeam = teams.find(t => t.id === activeTeamId)
   const teamRoster = roster.filter(p => p.teamId === activeTeamId)
 
@@ -437,7 +470,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
         {/* Leaderboard */}
         <div style={{ flex: 1, overflow: 'auto', padding: '1.25rem 1.5rem' }}>
-          {leaderData.length === 0 ? (
+          {roster.filter(p => p.checkedIn).length === 0 ? (
             <div style={{ textAlign: 'center', paddingTop: '4rem', color: 'var(--text-muted)' }}>
               <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🏋️</div>
               <p style={{ fontSize: '1.1rem', fontWeight: 500 }}>No one has checked in yet today.</p>
