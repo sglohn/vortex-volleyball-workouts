@@ -27,6 +27,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
   function signOut() { localStorage.removeItem('vx_coach'); router.push('/') }
 
   if (path === '/coach') return <>{children}</>
+  if (path === '/coach/display') return <>{children}</>
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex' }}>
