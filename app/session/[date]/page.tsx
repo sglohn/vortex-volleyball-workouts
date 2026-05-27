@@ -49,6 +49,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   // Get team IDs from URL search params
   const [teamIds, setTeamIds] = useState<string[]>([])
+  const [debugMsg, setDebugMsg] = useState('')
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -94,10 +95,15 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   async function loadWorkout(player: PlayerRow) {
     const teamData = data?.templateByTeam[player.teamId]
-    if (!teamData?.templateId || !player.sessionId) return
+    setDebugMsg(`teamData: ${JSON.stringify(teamData)} | sessionId: ${player.sessionId} | teamId: ${player.teamId}`)
+    if (!teamData?.templateId || !player.sessionId) {
+      setDebugMsg(`MISSING: templateId=${teamData?.templateId} sessionId=${player.sessionId}`)
+      return
+    }
     // Fetch template structure
     const res = await fetch(`/api/workout?sessionId=${player.sessionId}&templateId=${teamData.templateId}`)
     const d = await res.json()
+    setDebugMsg(`workout API: source=${d.source} blocks=${d.template?.blocks?.length} error=${d.error}`)
     if (d.source === 'template' && d.template) {
       // Also fetch existing set logs so player can see what they've already done
       const logsRes = await fetch(`/api/sets?sessionId=${player.sessionId}`)
@@ -263,6 +269,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)', padding: '2rem' }}>
       <div style={{ width: '100%', maxWidth: 360 }}>
         <button onClick={() => setView('team')} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', marginBottom: '1.5rem', fontSize: '0.85rem', fontWeight: 500 }}>← Back</button>
+        {debugMsg && <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 6, padding: '0.5rem', marginBottom: '1rem', fontSize: '0.7rem', fontFamily: 'monospace', color: '#92400e', wordBreak: 'break-all' }}>{debugMsg}</div>}
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
           <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 0.75rem', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', color: 'var(--yellow)' }}>
             {selectedPlayer.jerseyNumber || selectedPlayer.name.charAt(0)}
