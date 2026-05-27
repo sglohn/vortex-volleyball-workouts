@@ -63,7 +63,11 @@ function DisplayContent() {
   }, [selectedTeamId, today])
 
   const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
-  const blocks = workout?.blocks.filter(b => b.exercises.some(e => !e.skipped)) ?? []
+  const allBlocks = workout?.blocks.filter(b => b.exercises.some(e => !e.skipped)) ?? []
+  // Warmup block = labeled W, Warmup, or WU (case-insensitive)
+  const isWarmupBlock = (label: string) => /^w(armup|u)?$/i.test(label.trim())
+  const warmupBlock  = allBlocks.find(b => isWarmupBlock(b.block_label))
+  const blocks       = allBlocks.filter(b => !isWarmupBlock(b.block_label))
 
   // Grid layout: 1–2 blocks = side by side, 3–4 = 2×2
   const cols = blocks.length <= 2 ? blocks.length : 2
@@ -105,18 +109,37 @@ function DisplayContent() {
           </div>
         </div>
 
-        {/* Warmup inline */}
-        {workout?.warmup_notes && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', background: `${CAROLINA}20`, border: `1px solid ${CAROLINA}35`, borderRadius: '0.4vh', padding: '0.2vh 0.7rem', maxWidth: '28vw', flexShrink: 0 }}>
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3vh', color: CAROLINA, textTransform: 'uppercase', letterSpacing: '0.06em', flexShrink: 0 }}>WU</span>
-            <span style={{ fontSize: '1.3vh', color: 'rgba(255,255,255,0.55)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{workout.warmup_notes}</span>
-          </div>
-        )}
-
         <a href="/coach/dashboard" style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1.8vh', textDecoration: 'none', flexShrink: 0, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.4vh', padding: '0.3vh 0.75rem', fontWeight: 600 }}>✕ Exit TV</a>
       </div>
 
 
+
+      {/* ── WARMUP BLOCK STRIP ── */}
+      {(warmupBlock || workout?.warmup_notes) && !loading && !noWorkout && workout && (
+        <div style={{ background: `${CAROLINA}15`, borderBottom: `1px solid ${CAROLINA}25`, padding: '0.4vh 1.5rem', display: 'flex', alignItems: 'center', gap: '1.25rem', flexShrink: 0, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5vh', color: CAROLINA, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>WARMUP</span>
+          {warmupBlock && (
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+              {warmupBlock.exercises.filter(e => !e.skipped).map((ex, ei) => (
+                <span key={ex.id} style={{ fontSize: '1.5vh', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>
+                  {ei > 0 && <span style={{ color: 'rgba(255,255,255,0.25)', marginRight: '1rem' }}>·</span>}
+                  {ex.name}
+                  {(ex.customReps || ex.default_reps) && (
+                    <span style={{ color: YELLOW, marginLeft: '0.35rem', fontFamily: 'var(--font-display)', fontWeight: 700 }}>
+                      {warmupBlock.sets}×{ex.customReps || ex.default_reps}
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          )}
+          {workout.warmup_notes && (
+            <span style={{ fontSize: '1.4vh', color: 'rgba(255,255,255,0.45)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '30vw' }}>
+              {workout.warmup_notes}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* ── STATES ── */}
       {loading && (
