@@ -188,17 +188,14 @@ function DisplayContent() {
           {blocks.map(block => {
             const exs = block.exercises.filter(e => !e.skipped)
             return (
-              <div key={block.id} style={{ background: CARD, border: `1.5px solid ${BORDER}`, borderRadius: '0.8vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+              <div key={block.id} style={{ background: CARD, border: `2px solid ${YELLOW}30`, borderRadius: '0.8vh', overflow: 'hidden', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
 
-                {/* Block header */}
-                <div style={{ background: SURFACE, borderBottom: `2.5px solid ${YELLOW}`, padding: '0.5vh 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
-                  <div style={{ width: '4.5vh', height: '4.5vh', borderRadius: '0.5vh', background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2.8vh', color: '#111827', flexShrink: 0, lineHeight: 1 }}>
-                    {block.block_label}
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2.5vh', color: '#fff', letterSpacing: '0.04em', lineHeight: 1 }}>
+                {/* Block header — yellow background, very distinct */}
+                <div style={{ background: YELLOW, padding: '0.6vh 1rem', display: 'flex', alignItems: 'center', gap: '0.875rem', flexShrink: 0 }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '3.5vh', color: '#111827', letterSpacing: '0.06em', lineHeight: 1 }}>
                     BLOCK {block.block_label}
-                    <span style={{ fontFamily: 'var(--font-body)', fontWeight: 400, fontSize: '1.6vh', color: 'rgba(255,255,255,0.4)', marginLeft: '0.75rem' }}>{block.sets} sets · superset</span>
                   </div>
+                  <div style={{ fontFamily: 'var(--font-body)', fontWeight: 600, fontSize: '1.8vh', color: '#111827', opacity: 0.65, marginLeft: 'auto' }}>{block.sets} sets · superset</div>
                 </div>
 
                 {/* Exercises — split space equally */}
@@ -212,21 +209,21 @@ function DisplayContent() {
                       <div key={ex.id} style={{ flex: 1, display: 'flex', flexDirection: 'row', minHeight: 0, minWidth: 0, borderTop: ei > 0 && exs.length <= 2 ? `1px solid ${BORDER}` : 'none', borderLeft: ei > 0 && exs.length > 2 ? `1px solid ${BORDER}` : 'none', overflow: 'hidden' }}>
 
                         {/* Left — number badge + name + reps + notes */}
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0.75vh 1vh', minWidth: 0, overflow: 'hidden', gap: '0.4vh' }}>
-                          <div style={{ display: 'inline-flex', alignSelf: 'flex-start', background: CAROLINA, borderRadius: '0.4vh', minWidth: '3vh', height: '3vh', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.8vh', color: '#fff', padding: '0 0.5vh', marginBottom: '0.3vh' }}>
+                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0.75vh 1.25vh', minWidth: 0, overflow: 'hidden', gap: '0.5vh' }}>
+                          <div style={{ display: 'inline-flex', alignSelf: 'flex-start', background: CAROLINA, borderRadius: '0.4vh', minWidth: '3.2vh', height: '3.2vh', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2vh', color: '#fff', padding: '0 0.6vh', marginBottom: '0.2vh' }}>
                             {ei + 1}
                           </div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1rem, 3.2vh, 2.4rem)', color: '#fff', lineHeight: 1.05, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.1rem, 4vh, 3rem)', color: '#fff', lineHeight: 1.0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
                             {lib.name}
                           </div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(0.9rem, 2.8vh, 2rem)', color: YELLOW, lineHeight: 1 }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1rem, 3.5vh, 2.5rem)', color: YELLOW, lineHeight: 1 }}>
                             {block.sets} × {reps} reps
                           </div>
                           {lib.logs_weight && (
-                            <div style={{ fontSize: 'clamp(0.65rem, 1.5vh, 1rem)', color: CAROLINA, fontWeight: 600 }}>Log weight</div>
+                            <div style={{ fontSize: 'clamp(0.65rem, 1.6vh, 1rem)', color: CAROLINA, fontWeight: 600 }}>Log weight</div>
                           )}
                           {notes && (
-                            <div style={{ fontSize: 'clamp(0.6rem, 1.3vh, 0.9rem)', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginTop: '0.2vh' }}>
+                            <div style={{ fontSize: 'clamp(0.6rem, 1.4vh, 0.9rem)', color: 'rgba(255,255,255,0.45)', fontStyle: 'italic', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginTop: '0.1vh' }}>
                               {notes}
                             </div>
                           )}
