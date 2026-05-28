@@ -213,17 +213,17 @@ function DisplayContent() {
                           <div style={{ display: 'inline-flex', alignSelf: 'flex-start', background: CAROLINA, borderRadius: '0.4vh', minWidth: '3.2vh', height: '3.2vh', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2vh', color: '#fff', padding: '0 0.6vh', marginBottom: '0.2vh' }}>
                             {ei + 1}
                           </div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.1rem, 4vh, 3rem)', color: '#fff', lineHeight: 1.0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.2rem, 5vh, 3.8rem)', color: '#fff', lineHeight: 1.0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
                             {lib.name}
                           </div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1rem, 3.5vh, 2.5rem)', color: YELLOW, lineHeight: 1 }}>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.1rem, 4.2vh, 3rem)', color: YELLOW, lineHeight: 1 }}>
                             {block.sets} × {reps} reps
                           </div>
                           {lib.logs_weight && (
-                            <div style={{ fontSize: 'clamp(0.65rem, 1.6vh, 1rem)', color: CAROLINA, fontWeight: 600 }}>Log weight</div>
+                            <div style={{ fontSize: 'clamp(0.7rem, 1.8vh, 1.1rem)', color: CAROLINA, fontWeight: 600 }}>Log weight</div>
                           )}
                           {notes && (
-                            <div style={{ fontSize: 'clamp(0.6rem, 1.4vh, 0.9rem)', color: 'rgba(255,255,255,0.45)', fontStyle: 'italic', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginTop: '0.1vh' }}>
+                            <div style={{ fontSize: 'clamp(0.65rem, 1.5vh, 1rem)', color: 'rgba(255,255,255,0.45)', fontStyle: 'italic', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginTop: '0.1vh' }}>
                               {notes}
                             </div>
                           )}
@@ -249,16 +249,22 @@ function DisplayContent() {
                           return (
                             <div style={{ flexShrink: 0, height: '100%', display: 'flex', gap: '2px' }}>
                               {startUrl && (
-                                <div style={{ position: 'relative', height: '100%', aspectRatio: '1/1', overflow: 'hidden' }}>
+                                <div style={{ position: 'relative', height: '100%', aspectRatio: '4/5', overflow: 'hidden' }}>
                                   <img src={startUrl} alt="start" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: lib.start_image_position ?? '50% 50%', display: 'block' }} />
-                                  <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.15vh 0.5vh', fontSize: '1.2vh', color: 'rgba(255,255,255,0.85)', fontWeight: 600, whiteSpace: 'nowrap' }}>Start</div>
+                                  <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.2vh 0.6vh', fontSize: '1.4vh', color: 'rgba(255,255,255,0.9)', fontWeight: 700, whiteSpace: 'nowrap' }}>Start</div>
                                 </div>
                               )}
                               {endUrl && (
-                                <div style={{ position: 'relative', height: '100%', aspectRatio: '1/1', overflow: 'hidden' }}>
+                                <div style={{ position: 'relative', height: '100%', aspectRatio: '4/5', overflow: 'hidden' }}>
                                   <img src={endUrl} alt="end" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: lib.end_image_position ?? '50% 50%', display: 'block' }} />
-                                  <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.15vh 0.5vh', fontSize: '1.2vh', color: 'rgba(255,255,255,0.85)', fontWeight: 600, whiteSpace: 'nowrap' }}>Finish</div>
+                                  <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.2vh 0.6vh', fontSize: '1.4vh', color: 'rgba(255,255,255,0.9)', fontWeight: 700, whiteSpace: 'nowrap' }}>Finish</div>
                                 </div>
+                              )}
+                              {!startUrl && !endUrl && lib.demo_url && (
+                                <a href={lib.demo_url} target="_blank" rel="noopener noreferrer" style={{ height: '100%', aspectRatio: '4/5', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0d1117', textDecoration: 'none', color: CAROLINA, gap: '0.5vh' }}>
+                                  <svg width="6vh" height="6vh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
+                                  <span style={{ fontSize: '1.6vh', fontWeight: 600 }}>Demo</span>
+                                </a>
                               )}
                             </div>
                           )
