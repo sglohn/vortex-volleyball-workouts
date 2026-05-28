@@ -35,7 +35,8 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   const [checkingIn, setCheckingIn] = useState(false)
 
   // Player workout state
-  const [workout, setWorkout] = useState<{ blocks: Array<{ id: string; block_label: string; sets: number; exercises: Array<{ id: string; name: string; logs_weight: boolean; default_reps?: string; recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number } | null; setLogs: Array<{ set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean }> }> }> } | null>(null)  const [sessionInfo, setSessionInfo] = useState<{ sessionId: string; playerId: string; playerName: string; templateId?: string } | null>(null)
+  const [workout, setWorkout] = useState<{ blocks: Array<{ id: string; block_label: string; sets: number; exercises: Array<{ id: string; name: string; logs_weight: boolean; default_reps?: string; recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number } | null; setLogs: Array<{ set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean }> }> }> } | null>(null)
+  const [sessionInfo, setSessionInfo] = useState<{ sessionId: string; playerId: string; playerName: string; templateId?: string } | null>(null)
   const [activeBlock, setActiveBlock] = useState<string | null>(null)
   const [activeExIdx, setActiveExIdx] = useState(0)
   const [activeSetNum, setActiveSetNum] = useState(1)
