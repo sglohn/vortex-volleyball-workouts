@@ -181,7 +181,7 @@ export default function ExercisesPage() {
     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>{children}</label>
   )
 
-  const PhotoUpload = ({ which, preview, uploading, inputRef }: { which: 'start' | 'end'; preview: string; uploading: boolean; inputRef: React.RefObject<HTMLInputElement> }) => (
+  const PhotoUpload = ({ which, preview, uploading, inputRef }: { which: 'start' | 'end'; preview: string; uploading: boolean; inputRef: React.RefObject<HTMLInputElement | null> }) => (
     <div>
       <Label>{which === 'start' ? 'Start Position Photo' : 'End Position Photo'}</Label>
       <div
