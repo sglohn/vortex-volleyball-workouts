@@ -5,7 +5,7 @@ export async function GET(req: NextRequest) {
   const db = createServerClient()
   const category = req.nextUrl.searchParams.get('category')
 
-  let query = db.from('exercise_library').select('*').eq('is_active', true).order('name')
+  let query = db.from('exercise_library').select('id, name, category, default_sets, default_reps, coaching_notes, demo_url, demo_image_url, start_image_url, end_image_url, logs_weight, logs_velocity, is_active').eq('is_active', true).order('name')
   if (category) query = query.eq('category', category)
 
   const { data: exercises, error } = await query
