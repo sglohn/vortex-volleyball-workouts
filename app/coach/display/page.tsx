@@ -251,13 +251,13 @@ function DisplayContent() {
                             <div style={{ flexShrink: 0, height: '100%', display: 'flex', gap: '2px' }}>
                               {startUrl && (
                                 <div style={{ position: 'relative', height: '100%', aspectRatio: '1/1', overflow: 'hidden' }}>
-                                  <img src={startUrl} alt="start" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                                  <img src={startUrl} alt="start" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block', imageRendering: 'auto' }} />
                                   <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.15vh 0.5vh', fontSize: '1.2vh', color: 'rgba(255,255,255,0.85)', fontWeight: 600, whiteSpace: 'nowrap' }}>Start</div>
                                 </div>
                               )}
                               {endUrl && (
                                 <div style={{ position: 'relative', height: '100%', aspectRatio: '1/1', overflow: 'hidden' }}>
-                                  <img src={endUrl} alt="end" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                                  <img src={endUrl} alt="end" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center top', display: 'block', imageRendering: 'auto' }} />
                                   <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.15vh 0.5vh', fontSize: '1.2vh', color: 'rgba(255,255,255,0.85)', fontWeight: 600, whiteSpace: 'nowrap' }}>Finish</div>
                                 </div>
                               )}
