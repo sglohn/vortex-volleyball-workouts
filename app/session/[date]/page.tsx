@@ -35,7 +35,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   const [checkingIn, setCheckingIn] = useState(false)
 
   // Player workout state
-  const [workout, setWorkout] = useState<{ blocks: Array<{ id: string; block_label: string; sets: number; exercises: Array<{ id: string; name: string; logs_weight: boolean; default_reps?: string; setLogs: Array<{ set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean }> }> }> } | null>(null)
+  const [workout, setWorkout] = useState<{ blocks: Array<{ id: string; block_label: string; sets: number; exercises: Array<{ id: string; name: string; logs_weight: boolean; default_reps?: string; recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number } | null; setLogs: Array<{ set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean }> }> }> } | null>(null)
   const [sessionInfo, setSessionInfo] = useState<{ sessionId: string; playerId: string; playerName: string; templateId?: string } | null>(null)
   const [activeBlock, setActiveBlock] = useState<string | null>(null)
   const [activeExIdx, setActiveExIdx] = useState(0)
@@ -111,6 +111,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
           ...block,
           exercises: block.exercises.map(ex => ({
             ...ex,
+            recommendation: ex.recommendation ?? null,
             setLogs: Array.from({ length: block.sets }, (_, i) => {
               const existing = existingLogs.find(l => l.exercise_id === ex.id && l.set_number === i + 1)
               return existing ?? { set_number: i + 1, completed: false }
@@ -334,7 +335,24 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                 <div className="card" style={{ padding: '1.25rem' }}>
                   <div style={{ marginBottom: '0.75rem' }}>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: '0.2rem' }}>Block {block.block_label} · Set {activeSetNum}/{block.sets} · Ex {activeExIdx+1}/{block.exercises.length}</div>
-                    <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800 }}>{ex.name}</h2>
+                    <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.35rem' }}>{ex.name}</h2>
+                    {ex.recommendation && ex.recommendation.best1RM > 0 && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.5rem 0.875rem' }}>
+                        <div>
+                          <div style={{ fontSize: '0.65rem', color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Suggested weight</div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: 'var(--carolina)', lineHeight: 1 }}>{ex.recommendation.weight} lbs</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ex.recommendation.percent}% of your best</div>
+                        </div>
+                        <div style={{ flex: 1, fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.4, fontStyle: 'italic' }}>
+                          {ex.recommendation.label}
+                        </div>
+                      </div>
+                    )}
+                    {ex.recommendation && ex.recommendation.best1RM === 0 && ex.logs_weight && (
+                      <div style={{ background: 'var(--yellow-mid)', border: '1px solid var(--yellow-border)', borderRadius: 8, padding: '0.4rem 0.875rem', fontSize: '0.75rem', color: 'var(--black)' }}>
+                        No history yet — log this set to start tracking your progress.
+                      </div>
+                    )}
                   </div>
 
                   {/* Exercise list in this block */}
