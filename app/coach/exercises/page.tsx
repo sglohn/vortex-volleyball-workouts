@@ -90,11 +90,34 @@ export default function ExercisesPage() {
     else { setEndImg(file); setEndPreview(url) }
   }
 
+  async function resizeImage(file: File, maxSize = 1800): Promise<Blob> {
+    return new Promise((resolve) => {
+      const img = new Image()
+      const url = URL.createObjectURL(file)
+      img.onload = () => {
+        URL.revokeObjectURL(url)
+        const { width, height } = img
+        const scale = Math.min(1, maxSize / Math.max(width, height))
+        const w = Math.round(width * scale)
+        const h = Math.round(height * scale)
+        const canvas = document.createElement('canvas')
+        canvas.width = w; canvas.height = h
+        const ctx = canvas.getContext('2d')!
+        ctx.imageSmoothingEnabled = true
+        ctx.imageSmoothingQuality = 'high'
+        ctx.drawImage(img, 0, 0, w, h)
+        canvas.toBlob(blob => resolve(blob!), 'image/jpeg', 0.92)
+      }
+      img.src = url
+    })
+  }
+
   async function uploadPhoto(file: File, exerciseId: string, which: 'start' | 'end'): Promise<string | null> {
-    const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `exercises/${exerciseId}/${which}_${Date.now()}.${ext}`
+    const path = `exercises/${exerciseId}/${which}_${Date.now()}.jpg`
     const { supabase } = await import('@/lib/supabase')
-    const { error } = await supabase.storage.from('exercise-media').upload(path, file, { upsert: true })
+    // Resize to max 1800px on longest side at 92% JPEG quality before uploading
+    const blob = await resizeImage(file, 1800)
+    const { error } = await supabase.storage.from('exercise-media').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
     if (error) { console.error('Upload error:', error); return null }
     const { data } = supabase.storage.from('exercise-media').getPublicUrl(path)
     return data.publicUrl
@@ -121,12 +144,14 @@ export default function ExercisesPage() {
         setUploadingStart(true)
         const url = await uploadPhoto(startImg, exerciseId, 'start')
         if (url) startUrl = url
+        else alert('Start photo upload failed — check Supabase storage bucket permissions')
         setUploadingStart(false)
       }
       if (endImg && exerciseId) {
         setUploadingEnd(true)
         const url = await uploadPhoto(endImg, exerciseId, 'end')
         if (url) endUrl = url
+        else alert('End photo upload failed — check Supabase storage bucket permissions')
         setUploadingEnd(false)
       }
 
