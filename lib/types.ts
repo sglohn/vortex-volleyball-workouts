@@ -205,37 +205,42 @@ export const PHASE_CONFIG: Record<PhaseType, {
   build: {
     label: 'Build',
     color: '#56a0d3',
-    weightMultiplier: 1.0,
-    playerMessage: 'Build phase — push a little heavier each session. Focus on adding weight while keeping good form.',
-    intensityNote: 'Try to beat your last weight by 5 lbs if form was solid.',
+    weightMultiplier: 0.82,
+    // Between tournaments: hypertrophy focus — moderate-heavy weight, higher reps
+    // 0.82 multiplier puts sets in the 70–80% 1RM range, ideal for muscle building
+    playerMessage: 'Build phase — this is your hypertrophy window. Moderate weight, higher reps, controlled tempo. Focus on feeling the muscle work, not just moving weight.',
+    intensityNote: 'Aim for 70–80% of your best. Slow and controlled — earn every rep.',
   },
   peak: {
     label: 'Peak',
     color: '#111827',
-    weightMultiplier: 1.0,
-    playerMessage: 'Peak phase — you\'re at your strongest. Maintain your best weights and focus on speed and explosiveness.',
-    intensityNote: 'Hold your best weight. Move it fast.',
+    weightMultiplier: 0.92,
+    // Maintaining peak strength — heavy but not maximal, fast movement
+    playerMessage: 'Peak phase — maintain the strength you built. Keep weights heavy but move them fast. No grinding, no failing.',
+    intensityNote: 'Stay at 85–92% of your best. Move it with intent.',
   },
   pre_tournament: {
     label: 'Pre-Tournament',
     color: '#d97706',
-    weightMultiplier: 0.8,
-    playerMessage: 'Tournament is coming — back off the load slightly and stay fresh. Quality over quantity today.',
-    intensityNote: 'Use about 80% of your best. Stay sharp, not tired.',
+    weightMultiplier: 0.72,
+    // Week before tournament: lighter load, faster movement, stay fresh
+    playerMessage: 'Tournament week — protect your body and sharpen your speed. Lighter weight moved explosively. You should leave feeling better than when you came in.',
+    intensityNote: 'Use 65–75% of your best. Fast and sharp — not heavy.',
   },
   recovery: {
     label: 'Recovery',
     color: '#dc2626',
-    weightMultiplier: 0.6,
-    playerMessage: 'Recovery week — your body needs to recharge. Light weight, perfect movement, no grinding.',
-    intensityNote: 'Use about 60% of your best. This is intentional.',
+    weightMultiplier: 0.55,
+    // Post-tournament or deload: light, perfect movement, flush fatigue
+    playerMessage: 'Recovery week — your job is to flush fatigue and move well. Light weight, perfect form, no ego. This is what keeps you healthy all season.',
+    intensityNote: 'Use about 55% of your best. This is intentional and important.',
   },
   general: {
     label: 'General',
     color: '#6b7280',
-    weightMultiplier: 0.85,
-    playerMessage: 'Good training day — focus on quality movement and steady effort.',
-    intensityNote: 'Work at a solid, sustainable pace.',
+    weightMultiplier: 0.80,
+    playerMessage: 'Focus on quality movement and steady effort today.',
+    intensityNote: 'Work at a solid, repeatable pace.',
   },
 }
 
