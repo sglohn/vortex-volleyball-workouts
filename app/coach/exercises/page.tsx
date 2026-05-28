@@ -203,7 +203,7 @@ export default function ExercisesPage() {
           <div style={{ position: 'absolute', bottom: 6, right: 6, background: 'var(--carolina)', borderRadius: 6, padding: '0.2rem 0.5rem', fontSize: '0.65rem', color: '#fff', fontWeight: 700 }}>Change</div>
         )}
       </div>
-      <input ref={inputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={e => pickFile(e, which)} />
+      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => pickFile(e, which)} />
     </div>
   )
 
