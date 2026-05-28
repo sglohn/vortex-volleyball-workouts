@@ -31,6 +31,8 @@ interface Exercise {
   demo_image_url?: string
   start_image_url?: string
   end_image_url?: string
+  start_image_position?: string
+  end_image_position?: string
   logs_weight: boolean
   logs_velocity: boolean
 }
