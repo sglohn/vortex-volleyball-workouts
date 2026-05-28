@@ -295,15 +295,21 @@ export default function PlayerWorkoutPage() {
             </div>
             {ex.recommendation && ex.recommendation.best1RM > 0 && (
               <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '0.75rem' }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--volt)', fontSize: '1.25rem' }}>{ex.recommendation.weight} lbs</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '1.25rem' }}>{ex.recommendation.weight} lbs</div>
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{ex.recommendation.percent}% · suggested</div>
+              </div>
+            )}
+            {ex.recommendation && ex.recommendation.best1RM === 0 && ex.logs_weight && (
+              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '0.75rem', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 100 }}>
+                Log first set to get recommendations
               </div>
             )}
           </div>
 
           {ex.recommendation?.label && ex.recommendation.best1RM > 0 && phaseConfig && (
-            <div style={{ background: `${phaseConfig.color}12`, border: `1px solid ${phaseConfig.color}25`, borderRadius: 8, padding: '0.5rem 0.75rem', marginBottom: '0.875rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-              {ex.recommendation.label}
+            <div style={{ background: `${phaseConfig.color}10`, border: `1px solid ${phaseConfig.color}25`, borderRadius: 8, padding: '0.5rem 0.875rem', marginBottom: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+              <div style={{ width: 8, height: 8, borderRadius: '50%', background: phaseConfig.color, flexShrink: 0 }} />
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{ex.recommendation.label}</div>
             </div>
           )}
 
@@ -312,7 +318,7 @@ export default function PlayerWorkoutPage() {
             {ex.logs_weight && (
               <div>
                 <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Weight (lbs)</label>
-                <input className="input" type="number" inputMode="decimal" placeholder="0" value={weightInput} onChange={e => setWeightInput(e.target.value)}
+                <input className="input" type="number" inputMode="decimal" placeholder={ex.recommendation?.best1RM ? String(ex.recommendation.weight) : '0'} value={weightInput} onChange={e => setWeightInput(e.target.value)}
                   style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, padding: '0.75rem' }} autoFocus />
               </div>
             )}
