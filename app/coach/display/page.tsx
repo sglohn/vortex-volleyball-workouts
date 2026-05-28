@@ -15,6 +15,8 @@ interface Exercise {
     name: string
     demo_image_url?: string
     demo_url?: string
+    start_image_url?: string
+    end_image_url?: string
     coaching_notes?: string
     logs_weight?: boolean
   }
@@ -209,15 +211,12 @@ function DisplayContent() {
 
                         {/* Left — number badge + name + reps + notes */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0.75vh 1vh', minWidth: 0, overflow: 'hidden', gap: '0.4vh' }}>
-                          {/* Exercise number */}
                           <div style={{ display: 'inline-flex', alignSelf: 'flex-start', background: CAROLINA, borderRadius: '0.4vh', minWidth: '3vh', height: '3vh', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.8vh', color: '#fff', padding: '0 0.5vh', marginBottom: '0.3vh' }}>
                             {ei + 1}
                           </div>
-                          {/* Exercise name */}
                           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1rem, 3.2vh, 2.4rem)', color: '#fff', lineHeight: 1.05, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
                             {lib.name}
                           </div>
-                          {/* Sets × reps */}
                           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 'clamp(0.9rem, 2.8vh, 2rem)', color: YELLOW, lineHeight: 1 }}>
                             {block.sets} × {reps} reps
                           </div>
@@ -231,21 +230,40 @@ function DisplayContent() {
                           )}
                         </div>
 
-                        {/* Right — square image */}
-                        <div style={{ flexShrink: 0, aspectRatio: '1 / 1', height: '100%', position: 'relative', overflow: 'hidden' }}>
-                          {lib.demo_image_url ? (
-                            <img src={lib.demo_image_url} alt={lib.name} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
-                          ) : lib.demo_url ? (
-                            <a href={lib.demo_url} target="_blank" rel="noopener noreferrer" style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0d1117', textDecoration: 'none', color: CAROLINA, gap: '0.5vh' }}>
+                        {/* Right — start + end images side by side */}
+                        {(() => {
+                          const startUrl = lib.start_image_url || lib.demo_image_url
+                          const endUrl   = lib.end_image_url
+                          const hasTwo   = !!(startUrl && endUrl)
+                          const hasOne   = !!(startUrl || endUrl)
+                          if (!hasOne && !lib.demo_url) return (
+                            <div style={{ flexShrink: 0, aspectRatio: '1/1', height: '100%', background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '6vh', color: 'rgba(255,255,255,0.05)' }}>{ei + 1}</span>
+                            </div>
+                          )
+                          if (!hasOne && lib.demo_url) return (
+                            <a href={lib.demo_url} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0, aspectRatio: '1/1', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0d1117', textDecoration: 'none', color: CAROLINA, gap: '0.5vh' }}>
                               <svg width="5vh" height="5vh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
                               <span style={{ fontSize: '1.5vh', fontWeight: 600 }}>Demo</span>
                             </a>
-                          ) : (
-                            <div style={{ width: '100%', height: '100%', background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '6vh', color: 'rgba(255,255,255,0.05)' }}>{ei + 1}</span>
+                          )
+                          return (
+                            <div style={{ flexShrink: 0, height: '100%', display: 'flex', gap: '2px' }}>
+                              {startUrl && (
+                                <div style={{ position: 'relative', height: '100%', aspectRatio: '1/1', overflow: 'hidden' }}>
+                                  <img src={startUrl} alt="start" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                                  <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.15vh 0.5vh', fontSize: '1.2vh', color: 'rgba(255,255,255,0.85)', fontWeight: 600, whiteSpace: 'nowrap' }}>Start</div>
+                                </div>
+                              )}
+                              {endUrl && (
+                                <div style={{ position: 'relative', height: '100%', aspectRatio: '1/1', overflow: 'hidden' }}>
+                                  <img src={endUrl} alt="end" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'center', display: 'block' }} />
+                                  <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.15vh 0.5vh', fontSize: '1.2vh', color: 'rgba(255,255,255,0.85)', fontWeight: 600, whiteSpace: 'nowrap' }}>Finish</div>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
+                          )
+                        })()}
                       </div>
                     )
                   })}
