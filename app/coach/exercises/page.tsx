@@ -57,6 +57,8 @@ export default function ExercisesPage() {
   const [endImg, setEndImg] = useState<File | null>(null)
   const [startPreview, setStartPreview] = useState('')
   const [endPreview, setEndPreview] = useState('')
+  const [startPos, setStartPos] = useState('50% 50%')
+  const [endPos, setEndPos] = useState('50% 50%')
   const [uploadingStart, setUploadingStart] = useState(false)
   const [uploadingEnd, setUploadingEnd] = useState(false)
   const startRef = useRef<HTMLInputElement>(null)
@@ -69,6 +71,7 @@ export default function ExercisesPage() {
   function openAdd() {
     setForm(BLANK); setEditTarget(null)
     setStartImg(null); setEndImg(null); setStartPreview(''); setEndPreview('')
+    setStartPos('50% 50%'); setEndPos('50% 50%')
     setModal('add'); setMsg('')
   }
 
@@ -77,6 +80,8 @@ export default function ExercisesPage() {
     setStartImg(null); setEndImg(null)
     setStartPreview(ex.start_image_url ?? ex.demo_image_url ?? '')
     setEndPreview(ex.end_image_url ?? '')
+    setStartPos(ex.start_image_position ?? '50% 50%')
+    setEndPos(ex.end_image_position ?? '50% 50%')
     setEditTarget(ex); setModal('edit'); setMsg('')
   }
 
@@ -160,7 +165,7 @@ export default function ExercisesPage() {
         await fetch('/api/coach/exercises', {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: exerciseId, start_image_url: startUrl, end_image_url: endUrl, demo_image_url: startUrl || '' }),
+          body: JSON.stringify({ id: exerciseId, start_image_url: startUrl, end_image_url: endUrl, demo_image_url: startUrl || '', start_image_position: startPos, end_image_position: endPos }),
         })
       }
 
@@ -206,31 +211,47 @@ export default function ExercisesPage() {
     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>{children}</label>
   )
 
-  const PhotoUpload = ({ which, preview, uploading, inputRef }: { which: 'start' | 'end'; preview: string; uploading: boolean; inputRef: React.RefObject<HTMLInputElement | null> }) => (
-    <div>
-      <Label>{which === 'start' ? 'Start Position Photo' : 'End Position Photo'}</Label>
-      <div
-        onClick={() => inputRef.current?.click()}
-        style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10, overflow: 'hidden', border: `2px dashed ${preview ? 'var(--carolina)' : 'var(--gray-border)'}`, cursor: 'pointer', position: 'relative', background: 'var(--carolina-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color 0.15s' }}>
-        {preview ? (
-          <img src={preview} alt={which} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
-        ) : (
-          <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-            <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>📷</div>
-            <div style={{ fontSize: '0.75rem', fontWeight: 500 }}>Tap to add photo</div>
-            <div style={{ fontSize: '0.65rem', marginTop: '0.2rem' }}>from camera or files</div>
-          </div>
-        )}
-        {uploading && (
-          <div style={{ position: 'absolute', inset: 0, background: 'rgba(86,160,211,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: '0.85rem' }}>Uploading…</div>
-        )}
-        {preview && !uploading && (
-          <div style={{ position: 'absolute', bottom: 6, right: 6, background: 'var(--carolina)', borderRadius: 6, padding: '0.2rem 0.5rem', fontSize: '0.65rem', color: '#fff', fontWeight: 700 }}>Change</div>
-        )}
+  const PhotoUpload = ({ which, preview, uploading, inputRef, pos, onPosChange }: { which: 'start' | 'end'; preview: string; uploading: boolean; inputRef: React.RefObject<HTMLInputElement | null>; pos: string; onPosChange: (p: string) => void }) => {
+    function handleClick(e: React.MouseEvent<HTMLDivElement>) {
+      if (!preview) { inputRef.current?.click(); return }
+      const rect = e.currentTarget.getBoundingClientRect()
+      const x = Math.round(((e.clientX - rect.left) / rect.width) * 100)
+      const y = Math.round(((e.clientY - rect.top) / rect.height) * 100)
+      onPosChange(`${x}% ${y}%`)
+    }
+    return (
+      <div>
+        <Label>{which === 'start' ? 'Start Position Photo' : 'End Position Photo'}</Label>
+        <div onClick={handleClick}
+          style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10, overflow: 'hidden', border: `2px dashed ${preview ? 'var(--carolina)' : 'var(--gray-border)'}`, cursor: preview ? 'crosshair' : 'pointer', position: 'relative', background: 'var(--carolina-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color 0.15s' }}>
+          {preview ? (
+            <img src={preview} alt={which} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: pos, display: 'block', pointerEvents: 'none' }} />
+          ) : (
+            <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
+              <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>📷</div>
+              <div style={{ fontSize: '0.75rem', fontWeight: 500 }}>Tap to add photo</div>
+              <div style={{ fontSize: '0.65rem', marginTop: '0.2rem' }}>from camera or files</div>
+            </div>
+          )}
+          {/* Focus point indicator */}
+          {preview && (() => {
+            const [px, py] = pos.split(' ').map(p => parseFloat(p))
+            return <div style={{ position: 'absolute', width: 18, height: 18, borderRadius: '50%', border: '2.5px solid white', boxShadow: '0 0 0 1.5px var(--carolina)', pointerEvents: 'none', left: `${px}%`, top: `${py}%`, transform: 'translate(-50%,-50%)', transition: 'left 0.1s, top 0.1s' }} />
+          })()}
+          {uploading && (
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(86,160,211,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: '0.85rem' }}>Uploading…</div>
+          )}
+          {preview && !uploading && (
+            <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4 }}>
+              <div style={{ background: 'rgba(0,0,0,0.55)', borderRadius: 5, padding: '0.15rem 0.4rem', fontSize: '0.6rem', color: 'rgba(255,255,255,0.7)' }}>Tap to reframe</div>
+              <button onClick={e => { e.stopPropagation(); inputRef.current?.click() }} style={{ background: 'var(--carolina)', border: 'none', borderRadius: 5, padding: '0.15rem 0.4rem', fontSize: '0.6rem', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Change</button>
+            </div>
+          )}
+        </div>
+        <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => pickFile(e, which)} />
       </div>
-      <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => pickFile(e, which)} />
-    </div>
-  )
+    )
+  }
 
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading…</div>
 
@@ -361,8 +382,8 @@ export default function ExercisesPage() {
               <div style={{ fontSize: '0.75rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.75rem' }}>Exercise Photos</div>
               <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.875rem' }}>Add a start and end position photo. Tap a square to take a photo or choose from your camera roll.</p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
-                <PhotoUpload which="start" preview={startPreview} uploading={uploadingStart} inputRef={startRef} />
-                <PhotoUpload which="end" preview={endPreview} uploading={uploadingEnd} inputRef={endRef} />
+                <PhotoUpload which="start" preview={startPreview} uploading={uploadingStart} inputRef={startRef} pos={startPos} onPosChange={setStartPos} />
+                <PhotoUpload which="end" preview={endPreview} uploading={uploadingEnd} inputRef={endRef} pos={endPos} onPosChange={setEndPos} />
               </div>
             </div>
 
