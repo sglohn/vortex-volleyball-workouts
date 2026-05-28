@@ -335,3 +335,51 @@ textarea.input { resize: vertical; }
   background: linear-gradient(90deg, var(--black) 0%, var(--carolina) 60%, var(--yellow) 100%);
   border-radius: 2px 2px 0 0;
 }
+
+/* ── Mobile responsive ── */
+@media (max-width: 768px) {
+  /* Reduce padding on coach pages */
+  div[style*="padding: '2rem'"],
+  div[style*='padding: 2rem'] {
+    padding: 1rem !important;
+  }
+
+  /* Tables scroll horizontally */
+  table {
+    font-size: 0.82rem;
+  }
+
+  /* Cards full width */
+  .card {
+    border-radius: 8px;
+  }
+
+  /* Inputs bigger touch targets */
+  .input {
+    font-size: 16px !important; /* prevents iOS zoom */
+    padding: 0.75rem 0.875rem;
+  }
+
+  .pin-key {
+    height: 52px;
+  }
+
+  /* Modals full screen on mobile */
+  .modal-full {
+    position: fixed !important;
+    inset: 0 !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    overflow-y: auto;
+  }
+}
+
+/* Prevent horizontal overflow everywhere */
+* {
+  max-width: 100%;
+}
+img, video {
+  max-width: 100%;
+  height: auto;
+}
