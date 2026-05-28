@@ -92,17 +92,12 @@ export default function ExercisesPage() {
 
   async function uploadPhoto(file: File, exerciseId: string, which: 'start' | 'end'): Promise<string | null> {
     const ext = file.name.split('.').pop() ?? 'jpg'
-    const path = `exercises/${exerciseId}/${which}.${ext}`
-    const { createBrowserClient } = await import('@supabase/ssr')
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const path = `exercises/${exerciseId}/${which}_${Date.now()}.${ext}`
+    const { supabase } = await import('@/lib/supabase')
     const { error } = await supabase.storage.from('exercise-media').upload(path, file, { upsert: true })
     if (error) { console.error('Upload error:', error); return null }
     const { data } = supabase.storage.from('exercise-media').getPublicUrl(path)
-    // Add cache-busting param so re-uploads show immediately
-    return `${data.publicUrl}?t=${Date.now()}`
+    return data.publicUrl
   }
 
   async function save() {
