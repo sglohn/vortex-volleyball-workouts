@@ -202,7 +202,7 @@ export default function HomePage() {
         )}
 
         {/* ── STEP 3: PIN ── */}
-        {step === 'pin' && selectedPlayer && selectedTeam && (
+        {step === 'pin' && selectedPlayer && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.75rem' }}>
               <button onClick={() => { setStep('player'); setSelectedPlayer(null); setPin(''); setError('') }}
