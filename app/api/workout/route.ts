@@ -37,15 +37,20 @@ export async function GET(req: NextRequest) {
 
   const phaseType: PhaseType = (phase?.phase_type as PhaseType) ?? 'general'
 
-  // Get exercises to skip for this player
+  // Get exercises to skip/replace for this player
   const { data: skips } = await db
     .from('player_exercise_skips')
-    .select('exercise_id')
+    .select('exercise_id, replacement_exercise_id, skip_type')
     .eq('player_id', session.player_id)
     .eq('is_active', true)
     .or(`ends_on.is.null,ends_on.gte.${today}`)
 
   const skippedIds = new Set(skips?.map(s => s.exercise_id) ?? [])
+  const replacements = Object.fromEntries(
+    (skips ?? [])
+      .filter(s => s.replacement_exercise_id)
+      .map(s => [s.exercise_id, s.replacement_exercise_id])
+  )
 
   // ----- Try new template system first -----
   const resolvedTemplateId = templateId
@@ -79,18 +84,33 @@ export async function GET(req: NextRequest) {
             .single()
 
           if (!ex) return null
-          const skipped = skippedIds.has(ex.id)
+
+          // Check if this exercise is skipped and has a replacement
+          const replacementId = replacements[ex.id]
+          const skipped = skippedIds.has(ex.id) && !replacementId
+
+          // Use replacement exercise if one is set
+          let activeEx = ex
+          let isReplaced = false
+          if (replacementId) {
+            const { data: repEx } = await db
+              .from('exercise_library')
+              .select('*')
+              .eq('id', replacementId)
+              .single()
+            if (repEx) { activeEx = repEx; isReplaced = true }
+          }
 
           // Get today's set logs
           const { data: todayLogs } = await db
             .from('set_logs')
             .select('*')
             .eq('session_id', sessionId)
-            .eq('exercise_id', ex.id)
+            .eq('exercise_id', activeEx.id)
 
           // Get historical best for 1RM
           let recommendation = null
-          if (ex.logs_weight) {
+          if (activeEx.logs_weight) {
             const { data: playerSessions } = await db
               .from('sessions')
               .select('id')
@@ -99,12 +119,12 @@ export async function GET(req: NextRequest) {
             const { data: allLogs } = await db
               .from('set_logs')
               .select('weight_lbs, reps_completed')
-              .eq('exercise_id', ex.id)
+              .eq('exercise_id', activeEx.id)
               .in('session_id', playerSessions?.map(s => s.id) ?? ['none'])
               .eq('completed', true)
 
             const best1RM = getBestOneRepMax(allLogs ?? [])
-            recommendation = recommendWeightForPhase(best1RM, be.custom_reps ?? ex.default_reps ?? '8', phaseType)
+            recommendation = recommendWeightForPhase(best1RM, be.custom_reps ?? activeEx.default_reps ?? '8', phaseType)
             recommendation = { ...recommendation, best1RM }
           }
 
@@ -114,11 +134,13 @@ export async function GET(req: NextRequest) {
           })
 
           return {
-            ...ex,
+            ...activeEx,
             blockExerciseId: be.id,
             customReps: be.custom_reps,
             customNotes: be.custom_notes,
             skipped,
+            isReplaced,
+            originalExerciseName: isReplaced ? ex.name : undefined,
             setLogs,
             recommendation,
           }
