@@ -26,6 +26,12 @@ export default function CoachPlayerDetailPage() {
 
   useEffect(() => {
     fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(d => { setData(d); setLoading(false) })
+    fetch(`/api/coach/overrides?playerId=${id}`).then(r => r.json()).then(d => {
+      setOverrides(d.overrides ?? [])
+      setSkips(d.skips ?? [])
+      setAllTemplates(d.templates ?? [])
+    })
+    fetch('/api/coach/exercises').then(r => r.json()).then(d => setAllExercises(d.exercises ?? []))
   }, [id])
 
   async function saveMeasurement() {
@@ -199,6 +205,132 @@ export default function CoachPlayerDetailPage() {
         </div>
       )}
     </div>
+    </div>
+
+      {/* ── WORKOUT ADJUSTMENTS ── */}
+      <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showOverrides ? '1.25rem' : 0 }}>
+          <div>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem' }}>Workout Adjustments</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem' }}>
+              {skips.length > 0 && `${skips.length} exercise skip${skips.length > 1 ? 's' : ''} active · `}
+              {overrides.length > 0 && `${overrides.length} date override${overrides.length > 1 ? 's' : ''}`}
+              {skips.length === 0 && overrides.length === 0 && 'No adjustments — player follows team workout'}
+            </p>
+          </div>
+          <button onClick={() => setShowOverrides(o => !o)} className="btn-ghost" style={{ padding: '0.4rem 0.875rem', fontSize: '0.82rem' }}>
+            {showOverrides ? 'Collapse' : 'Manage'}
+          </button>
+        </div>
+
+        {showOverrides && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+
+            {/* Exercise Skips */}
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--carolina-deep)', marginBottom: '0.625rem' }}>
+                Skip Exercises (Injury / Limitation)
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                These exercises will be automatically removed from this player's workout. Other players are unaffected.
+              </p>
+
+              {skips.map(skip => (
+                <div key={skip.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', background: 'var(--danger-light)', border: '1px solid #fecaca', borderRadius: 8, marginBottom: '0.4rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{skip.exercise_library?.name ?? skip.exercise_id}</div>
+                    {skip.reason && <div style={{ fontSize: '0.72rem', color: 'var(--danger)', fontStyle: 'italic' }}>{skip.reason}</div>}
+                    {skip.ends_on && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Until {new Date(skip.ends_on + 'T12:00:00').toLocaleDateString()}</div>}
+                  </div>
+                  <button onClick={async () => {
+                    await fetch('/api/coach/overrides', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_skip', id: skip.id }) })
+                    setSkips(prev => prev.filter(s => s.id !== skip.id))
+                  }} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}>Remove</button>
+                </div>
+              ))}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Exercise to skip</label>
+                  <input className="input" placeholder="Search exercises…" value={skipSearch} onChange={e => setSkipSearch(e.target.value)} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                  {skipSearch && (
+                    <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, maxHeight: 160, overflowY: 'auto', background: 'var(--white)', marginTop: '0.25rem' }}>
+                      {allExercises.filter(e => e.name.toLowerCase().includes(skipSearch.toLowerCase())).map(e => (
+                        <button key={e.id} onClick={() => { setNewSkip(p => ({ ...p, exerciseId: e.id })); setSkipSearch(e.name) }}
+                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', border: 'none', background: newSkip.exerciseId === e.id ? 'var(--carolina-light)' : 'transparent', cursor: 'pointer', fontSize: '0.82rem' }}>
+                          {e.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{e.category}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Reason</label>
+                  <input className="input" placeholder="e.g. Shoulder injury" value={newSkip.reason} onChange={e => setNewSkip(p => ({ ...p, reason: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Remove skip after (optional)</label>
+                  <input type="date" className="input" value={newSkip.endsOn} onChange={e => setNewSkip(p => ({ ...p, endsOn: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
+                  <button className="btn-volt" disabled={!newSkip.exerciseId} onClick={async () => {
+                    const res = await fetch('/api/coach/overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_skip', playerId: id, exerciseId: newSkip.exerciseId, reason: newSkip.reason, endsOn: newSkip.endsOn || null }) })
+                    const d = await res.json()
+                    if (d.skip) { setSkips(prev => [...prev, d.skip]); setNewSkip({ exerciseId: '', reason: '', endsOn: '' }); setSkipSearch('') }
+                  }} style={{ width: '100%', padding: '0.5rem' }}>Add Skip</button>
+                </div>
+              </div>
+            </div>
+
+            {/* Date Overrides */}
+            <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1.25rem' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--carolina-deep)', marginBottom: '0.625rem' }}>
+                Date Overrides (Different Workout)
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                Give this player a completely different workout template on a specific date. Useful for 2x/week players or returning from injury.
+              </p>
+
+              {overrides.map(ov => (
+                <div key={ov.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, marginBottom: '0.4rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{new Date(ov.override_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{allTemplates.find(t => t.id === ov.template_id)?.name ?? 'Custom template'}</div>
+                    {ov.notes && <div style={{ fontSize: '0.7rem', color: 'var(--carolina-dark)', fontStyle: 'italic' }}>{ov.notes}</div>}
+                  </div>
+                  <button onClick={async () => {
+                    await fetch('/api/coach/overrides', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_template', id: ov.id }) })
+                    setOverrides(prev => prev.filter(o => o.id !== ov.id))
+                  }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}>Remove</button>
+                </div>
+              ))}
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Date</label>
+                  <input type="date" className="input" value={newOverride.date} onChange={e => setNewOverride(p => ({ ...p, date: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Template</label>
+                  <select className="input" value={newOverride.templateId} onChange={e => setNewOverride(p => ({ ...p, templateId: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
+                    <option value="">Select template…</option>
+                    {allTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+                <div style={{ gridColumn: '1/-1', display: 'flex', gap: '0.5rem' }}>
+                  <input className="input" placeholder="Notes (optional)" value={newOverride.notes} onChange={e => setNewOverride(p => ({ ...p, notes: e.target.value }))} style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                  <button className="btn-volt" disabled={!newOverride.date || !newOverride.templateId} onClick={async () => {
+                    const res = await fetch('/api/coach/overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_template', playerId: id, date: newOverride.date, templateId: newOverride.templateId, notes: newOverride.notes }) })
+                    const d = await res.json()
+                    if (d.override) { setOverrides(prev => [...prev, d.override]); setNewOverride({ date: '', templateId: '', notes: '' }) }
+                  }} style={{ padding: '0.5rem 1.25rem', flexShrink: 0 }}>Add Override</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
       {historyModal && (
         <MeasurementHistoryModal
           playerId={id as string}
