@@ -41,7 +41,7 @@ export async function POST(req: NextRequest) {
     .limit(1)
     .single()
 
-  // Find today's template
+  // Find today's template — priority: date override → player program → team schedule
   let templateId: string | null = null
   const { data: override } = await db
     .from('player_overrides')
@@ -52,14 +52,40 @@ export async function POST(req: NextRequest) {
 
   if (override?.template_id) {
     templateId = override.template_id
-  } else if (teamId) {
-    const { data: schedule } = await db
-      .from('team_schedule')
-      .select('template_id')
-      .eq('team_id', teamId)
-      .eq('scheduled_date', today)
+  } else {
+    // Check for active player program
+    const { data: program } = await db
+      .from('player_programs')
+      .select('*')
+      .eq('player_id', playerId)
+      .eq('is_active', true)
+      .lte('started_on', today)
+      .or('ended_on.is.null,ended_on.gte.' + today)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single()
-    templateId = schedule?.template_id ?? null
+
+    if (program) {
+      // Cycle through template sequence based on session count since program start
+      const sequence = program.template_sequence as string[]
+      if (sequence.length) {
+        const { count } = await db
+          .from('sessions')
+          .select('*', { count: 'exact', head: true })
+          .eq('player_id', playerId)
+          .gte('checked_in_at', program.started_on)
+        const idx = (count ?? 0) % sequence.length
+        templateId = sequence[idx] ?? null
+      }
+    } else if (teamId) {
+      const { data: schedule } = await db
+        .from('team_schedule')
+        .select('template_id')
+        .eq('team_id', teamId)
+        .eq('scheduled_date', today)
+        .single()
+      templateId = schedule?.template_id ?? null
+    }
   }
 
   // Fallback legacy
