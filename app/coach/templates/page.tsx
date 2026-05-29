@@ -225,7 +225,7 @@ export default function TemplatesPage() {
                   // Map exercise_library nested object to exercise field the editor expects
                   const mapped = {
                     ...tmpl,
-                    blocks: (tmpl.blocks ?? []).map((b: Block & { exercises: Array<BlockExercise & { exercise_library?: ExerciseLib }> }) => ({
+                    blocks: (tmpl.blocks ?? []).map((b: { block_label: string; sets: number; exercises: Array<{ exercise_id: string; custom_reps?: string; custom_notes?: string; exercise?: ExerciseLib; exercise_library?: ExerciseLib }> }) => ({
                       ...b,
                       exercises: (b.exercises ?? []).map(e => ({
                         exercise_id: e.exercise_id,
