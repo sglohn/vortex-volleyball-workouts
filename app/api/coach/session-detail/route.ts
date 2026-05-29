@@ -18,9 +18,9 @@ export async function GET(req: NextRequest) {
   // Fetch logs without the broken FK join
   const { data: logs } = await db
     .from('set_logs')
-    .select('id, exercise_id, set_number, weight_lbs, reps_completed, completed, created_at')
+    .select('id, exercise_id, set_number, weight_lbs, reps_completed, completed, logged_at')
     .eq('session_id', sessionId)
-    .order('created_at', { ascending: true })
+    .order('logged_at', { ascending: true })
 
   if (!logs?.length) {
     return NextResponse.json({
@@ -64,14 +64,14 @@ export async function GET(req: NextRequest) {
     const exInfo = exMap[exId] ?? { name: 'Unknown Exercise', category: '', logsWeight: false }
     if (!byExercise[exId]) {
       exerciseOrder.push(exId)
-      byExercise[exId] = { exerciseId: exId, ...exInfo, firstLoggedAt: log.created_at, sets: [] }
+      byExercise[exId] = { exerciseId: exId, ...exInfo, firstLoggedAt: log.logged_at, sets: [] }
     }
     byExercise[exId].sets.push({
       setNumber: log.set_number,
       weightLbs: log.weight_lbs,
       repsCompleted: log.reps_completed,
       completed: log.completed,
-      loggedAt: log.created_at,
+      loggedAt: log.logged_at,
     })
   }
 
