@@ -23,6 +23,14 @@ export default function CoachPlayerDetailPage() {
   const [showMeasForm, setShowMeasForm] = useState(false)
   const [savingMeas, setSavingMeas] = useState(false)
   const [msg, setMsg] = useState('')
+  const [overrides, setOverrides] = useState<Array<{ id: string; override_date: string; template_id: string; notes?: string }>>([])
+  const [skips, setSkips] = useState<Array<{ id: string; exercise_id: string; reason?: string; ends_on?: string; exercise_library?: { name: string } }>>([])
+  const [allTemplates, setAllTemplates] = useState<Array<{ id: string; name: string }>>([])
+  const [allExercises, setAllExercises] = useState<Array<{ id: string; name: string; category: string }>>([])
+  const [showOverrides, setShowOverrides] = useState(false)
+  const [newOverride, setNewOverride] = useState({ date: '', templateId: '', notes: '' })
+  const [newSkip, setNewSkip] = useState({ exerciseId: '', reason: '', endsOn: '' })
+  const [skipSearch, setSkipSearch] = useState('')
 
   useEffect(() => {
     fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(d => { setData(d); setLoading(false) })
