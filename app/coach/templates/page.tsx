@@ -115,10 +115,15 @@ export default function TemplatesPage() {
 
       {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--volt)', fontSize: '0.9rem' }}>{msg}</div>}
 
-      {/* Editor */}
+      {/* Editor — modal overlay */}
       {editing && (
-        <div className="card" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, marginBottom: '1.25rem', fontSize: '1.1rem' }}>{editing.id ? 'Edit Template' : 'New Template'}</h2>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 50, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '1.5rem 1rem', overflowY: 'auto' }}
+          onClick={e => { if (e.target === e.currentTarget) setEditing(null) }}>
+          <div className="card" style={{ width: '100%', maxWidth: 680, padding: '1.75rem', margin: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.25rem' }}>{editing.id ? 'Edit Template' : 'New Template'}</h2>
+              <button onClick={() => setEditing(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1 }}>✕</button>
+            </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
             <div>
@@ -138,7 +143,7 @@ export default function TemplatesPage() {
             <input className="input" placeholder="Brief description of this workout" value={editing.description} onChange={e => setEditing(p => p ? { ...p, description: e.target.value } : p)} />
           </div>
 
-          <div style={{ marginBottom: '1.5rem' }}>
+          <div style={{ marginBottom: '1.25rem' }}>
             <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Warmup Notes</label>
             <textarea className="input" rows={2} placeholder="e.g. 5 min row / bike, dynamic mobility…" value={editing.warmup_notes} onChange={e => setEditing(p => p ? { ...p, warmup_notes: e.target.value } : p)} style={{ resize: 'vertical' }} />
           </div>
@@ -200,6 +205,7 @@ export default function TemplatesPage() {
             <button className="btn-ghost" onClick={() => setEditing(null)} style={{ flex: 1, padding: '0.75rem' }}>Cancel</button>
             <button className="btn-volt" onClick={save} disabled={saving || !editing.name} style={{ flex: 2, padding: '0.75rem' }}>{saving ? 'Saving…' : 'Save Template'}</button>
           </div>
+          </div>
         </div>
       )}
 
@@ -222,7 +228,7 @@ export default function TemplatesPage() {
               <button onClick={() => {
                 fetch(`/api/coach/templates?id=${t.id}`).then(r => r.json()).then(d => {
                   const tmpl = d.template
-                  // Map exercise_library nested object to exercise field the editor expects
+                  if (!tmpl) { alert('Could not load template — try again'); return }
                   const mapped = {
                     ...tmpl,
                     blocks: (tmpl.blocks ?? []).map((b: { block_label: string; sets: number; exercises: Array<{ exercise_id: string; custom_reps?: string; custom_notes?: string; exercise?: ExerciseLib; exercise_library?: ExerciseLib }> }) => ({
@@ -236,7 +242,9 @@ export default function TemplatesPage() {
                     }))
                   }
                   setEditing(mapped)
-                })
+                  // Scroll to editor
+                  setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 50)
+                }).catch(err => { console.error('Edit load error:', err); alert('Error loading template') })
               }} className="btn-ghost" style={{ padding: '0.4rem 0.875rem', fontSize: '0.85rem', flexShrink: 0 }}>Edit</button>
             </div>
           )
