@@ -28,9 +28,9 @@ export default function HomePage() {
       fetch('/api/player/list').then(r => r.json()),
     ]).then(([teamData, playerData]) => {
       setTeams(teamData.teams ?? [])
-      // player/list doesn't return teamId — fetch from player_teams via teams API
-      // We'll match using the player_teams join we already have
-      setPlayers(playerData.players ?? [])
+      setPlayers((playerData.players ?? []).map((p: { id: string; name: string; jersey_number?: string }) => ({
+        id: p.id, name: p.name, jersey_number: p.jersey_number, teamId: '',
+      })))
       setLoading(false)
     }).catch(() => setLoading(false))
   }, [])
@@ -130,24 +130,38 @@ export default function HomePage() {
                 </button>
               ))}
             </div>
-            <div style={{ marginTop: '1.75rem', textAlign: 'center' }}>
+
+            {/* Option for players not on a team */}
+            <div style={{ marginTop: '1.25rem', paddingTop: '1.25rem', borderTop: '1px solid var(--gray-border)', textAlign: 'center' }}>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.625rem' }}>Not on a team roster?</p>
+              <button onClick={() => { setSelectedTeam(null); setSearch(''); setTeamPlayers([]); setStep('player') }}
+                style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 10, padding: '0.625rem 1.25rem', cursor: 'pointer', color: 'var(--carolina-dark)', fontSize: '0.85rem', fontWeight: 600 }}>
+                Search all players →
+              </button>
+            </div>
+
+            <div style={{ marginTop: '1.25rem', textAlign: 'center' }}>
               <a href="/coach" style={{ color: 'var(--carolina-dark)', fontSize: '0.8rem', textDecoration: 'none', letterSpacing: '0.05em', fontWeight: 500 }}>Coach Dashboard →</a>
             </div>
           </div>
         )}
 
         {/* ── STEP 2: PLAYER ── */}
-        {step === 'player' && selectedTeam && (
+        {step === 'player' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
               <button onClick={() => { setStep('team'); setSelectedTeam(null); setTeamPlayers([]) }}
-                style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', padding: '0.35rem 0.875rem', fontSize: '0.85rem', fontWeight: 600, flexShrink: 0 }}>← Teams</button>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <div style={{ width: 28, height: 28, borderRadius: 6, background: selectedTeam.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.9rem', color: '#fff', flexShrink: 0 }}>
-                  {selectedTeam.name.charAt(0)}
+                style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', padding: '0.35rem 0.875rem', fontSize: '0.85rem', fontWeight: 600, flexShrink: 0 }}>← Back</button>
+              {selectedTeam ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <div style={{ width: 28, height: 28, borderRadius: 6, background: selectedTeam.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.9rem', color: '#fff', flexShrink: 0 }}>
+                    {selectedTeam.name.charAt(0)}
+                  </div>
+                  <span style={{ fontWeight: 700, color: 'var(--black)' }}>{selectedTeam.name}</span>
                 </div>
-                <span style={{ fontWeight: 700, color: 'var(--black)' }}>{selectedTeam.name}</span>
-              </div>
+              ) : (
+                <span style={{ fontWeight: 600, color: 'var(--text-secondary)', fontSize: '0.9rem' }}>All Players</span>
+              )}
             </div>
 
             <p style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.95rem', marginBottom: '0.875rem' }}>Who are you?</p>
@@ -155,22 +169,34 @@ export default function HomePage() {
               onChange={e => setSearch(e.target.value)} style={{ marginBottom: '0.75rem' }} autoComplete="off" autoFocus />
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', maxHeight: 380, overflowY: 'auto' }}>
-              {loadingTeamPlayers && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Loading roster…</div>}
-              {!loadingTeamPlayers && filteredPlayers.length === 0 && (
-                <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', fontSize: '0.85rem' }}>No players found</div>
-              )}
-              {filteredPlayers.sort((a, b) => a.name.localeCompare(b.name)).map(p => (
-                <button key={p.id} onClick={() => selectPlayer(p)}
-                  style={{ background: 'var(--white)', border: `1.5px solid ${selectedTeam.color}30`, borderRadius: 10, padding: '0.75rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--black)', textAlign: 'left', transition: 'all 0.15s' }}
-                  onMouseEnter={e => { e.currentTarget.style.borderColor = selectedTeam.color; e.currentTarget.style.background = `${selectedTeam.color}08` }}
-                  onMouseLeave={e => { e.currentTarget.style.borderColor = `${selectedTeam.color}30`; e.currentTarget.style.background = 'var(--white)' }}>
-                  <div style={{ width: 36, height: 36, borderRadius: '50%', background: selectedTeam.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
-                    {(p as unknown as { jersey_number?: string }).jersey_number || p.name.charAt(0).toUpperCase()}
-                  </div>
-                  <span style={{ fontWeight: 500 }}>{p.name}</span>
-                  <div style={{ marginLeft: 'auto', color: selectedTeam.color, fontSize: '1.1rem' }}>›</div>
-                </button>
-              ))}
+              {loadingTeamPlayers && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '2rem' }}>Loading…</div>}
+              {!loadingTeamPlayers && (() => {
+                // Show team players if a team was selected, otherwise show all players filtered by search
+                const displayList = selectedTeam
+                  ? filteredPlayers
+                  : players.filter(p => search.length >= 2 && p.name.toLowerCase().includes(search.toLowerCase()))
+                const noResults = selectedTeam ? (!loadingTeamPlayers && filteredPlayers.length === 0) : (search.length >= 2 && displayList.length === 0)
+                return (
+                  <>
+                    {!selectedTeam && search.length < 2 && (
+                      <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', fontSize: '0.85rem' }}>Type at least 2 letters to search</div>
+                    )}
+                    {noResults && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', fontSize: '0.85rem' }}>No players found</div>}
+                    {displayList.sort((a, b) => a.name.localeCompare(b.name)).map(p => (
+                      <button key={p.id} onClick={() => selectPlayer(p)}
+                        style={{ background: 'var(--white)', border: `1.5px solid ${selectedTeam ? `${selectedTeam.color}30` : 'var(--gray-border)'}`, borderRadius: 10, padding: '0.75rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--black)', textAlign: 'left', transition: 'all 0.15s' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = selectedTeam?.color ?? 'var(--carolina)'; e.currentTarget.style.background = selectedTeam ? `${selectedTeam.color}08` : 'var(--carolina-light)' }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = selectedTeam ? `${selectedTeam.color}30` : 'var(--gray-border)'; e.currentTarget.style.background = 'var(--white)' }}>
+                        <div style={{ width: 36, height: 36, borderRadius: '50%', background: selectedTeam?.color ?? 'var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+                          {(p as unknown as { jersey_number?: string }).jersey_number || p.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span style={{ fontWeight: 500 }}>{p.name}</span>
+                        <div style={{ marginLeft: 'auto', color: selectedTeam?.color ?? 'var(--carolina)', fontSize: '1.1rem' }}>›</div>
+                      </button>
+                    ))}
+                  </>
+                )
+              })()}
             </div>
           </div>
         )}
@@ -188,11 +214,11 @@ export default function HomePage() {
 
             {/* Player avatar */}
             <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: selectedTeam.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.75rem', color: '#fff', margin: '0 auto 0.625rem' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: selectedTeam?.color ?? 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.75rem', color: '#fff', margin: '0 auto 0.625rem' }}>
                 {(selectedPlayer as unknown as { jersey_number?: string }).jersey_number || selectedPlayer.name.charAt(0).toUpperCase()}
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.2rem', color: 'var(--black)' }}>{selectedPlayer.name}</div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{selectedTeam.name}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{selectedTeam?.name ?? 'Individual Program'}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginBottom: '1.75rem' }}>
@@ -209,7 +235,7 @@ export default function HomePage() {
               {keys.map(k => (
                 <button key={k} className="pin-key"
                   onClick={() => k === '✓' ? handleCheckin() : handleKey(k)}
-                  style={{ width: '100%', background: k === '✓' ? selectedTeam.color : 'var(--white)', color: k === '✓' ? '#fff' : 'var(--black)', fontWeight: k === '✓' ? 700 : 600, opacity: k === '✓' && pin.length !== 4 ? 0.4 : 1 }}
+                  style={{ width: '100%', background: k === '✓' ? (selectedTeam?.color ?? 'var(--carolina)') : 'var(--white)', color: k === '✓' ? '#fff' : 'var(--black)', fontWeight: k === '✓' ? 700 : 600, opacity: k === '✓' && pin.length !== 4 ? 0.4 : 1 }}
                   disabled={checkingIn}>{k}</button>
               ))}
             </div>
