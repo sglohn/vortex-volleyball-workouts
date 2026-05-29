@@ -550,11 +550,17 @@ export default function CoachPlayerDetailPage() {
                   <button className="btn-volt" disabled={savingProgram || !newProgram.templateSequence.length || !newProgram.name}
                     onClick={async () => {
                       setSavingProgram(true)
-                      const res = await fetch('/api/coach/player-programs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: id, name: newProgram.name, templateSequence: newProgram.templateSequence, periodizationMode: newProgram.periodizationMode, phaseCycle: newProgram.phaseCycle, startedOn: newProgram.startedOn, notes: newProgram.notes }) })
-                      const d = await res.json()
-                      if (d.program) {
-                        setPrograms(prev => [d.program, ...prev])
-                        setNewProgram({ name: '3x/Week Individual Program', templateSequence: [], periodizationMode: 'auto', phaseCycle: [{ phase: 'build', weeks: 4 }, { phase: 'pre_tournament', weeks: 2 }, { phase: 'recovery', weeks: 1 }], startedOn: new Date().toISOString().split('T')[0], notes: '' })
+                      try {
+                        const res = await fetch('/api/coach/player-programs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: id, name: newProgram.name, templateSequence: newProgram.templateSequence, periodizationMode: newProgram.periodizationMode, phaseCycle: newProgram.phaseCycle, startedOn: newProgram.startedOn, notes: newProgram.notes }) })
+                        const d = await res.json()
+                        if (d.program) {
+                          setPrograms(prev => [d.program, ...prev])
+                          setNewProgram({ name: '3x/Week Individual Program', templateSequence: [], periodizationMode: 'auto', phaseCycle: [{ phase: 'build', weeks: 4 }, { phase: 'pre_tournament', weeks: 2 }, { phase: 'recovery', weeks: 1 }], startedOn: new Date().toISOString().split('T')[0], notes: '' })
+                        } else {
+                          alert(`Failed to start program: ${d.error ?? 'Unknown error'}`)
+                        }
+                      } catch (e) {
+                        alert(`Error: ${e}`)
                       }
                       setSavingProgram(false)
                     }} style={{ padding: '0.625rem 1.75rem' }}>
