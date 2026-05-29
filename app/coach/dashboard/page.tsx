@@ -3,6 +3,13 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 
+interface SessionDetail {
+  session: { id: string; playerName: string; jerseyNumber?: string; checkedInAt: string; completedAt?: string; durationMin?: number }
+  exercises: Array<{ exerciseId: string; name: string; category: string; logsWeight: boolean; firstLoggedAt: string; sets: Array<{ setNumber: number; weightLbs: number | null; repsCompleted: number | null; completed: boolean; loggedAt: string }> }>
+  stats: { totalWeightMoved: number; totalSetsCompleted: number; exercisesHit: number }
+  topLifts: Array<{ name: string; heaviest: number; repsAtHeaviest: number | null }>
+}
+
 interface DashboardData {
   todaySessions: Array<{ id: string; playerName: string; teamName?: string; checkedInAt: string; completedAt?: string; completionPct: number; hasHealthFlag: boolean }>
   unconfirmedHealth: Array<{ id: string; playerName: string; bodyPart: string; reportType: string; painLevel?: number }>
@@ -16,6 +23,17 @@ interface DashboardData {
 export default function CoachDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sessionModal, setSessionModal] = useState<SessionDetail | null>(null)
+  const [loadingSession, setLoadingSession] = useState(false)
+
+  async function openSession(sessionId: string) {
+    setLoadingSession(true)
+    setSessionModal(null)
+    const res = await fetch(`/api/coach/session-detail?sessionId=${sessionId}`)
+    const d = await res.json()
+    setSessionModal(d)
+    setLoadingSession(false)
+  }
 
   useEffect(() => {
     fetch('/api/coach/dashboard')
@@ -61,7 +79,10 @@ export default function CoachDashboardPage() {
             ? <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No check-ins yet.</p>
             : <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 320, overflowY: 'auto' }}>
                 {data.todaySessions.map(s => (
-                  <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0', borderBottom: '1px solid var(--court-border)' }}>
+                  <div key={s.id} onClick={() => openSession(s.id)}
+                    style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.375rem', borderBottom: '1px solid var(--court-border)', cursor: 'pointer', borderRadius: 6, transition: 'background 0.12s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--carolina-light)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                     <div style={{ width: 30, height: 30, borderRadius: '50%', background: s.hasHealthFlag ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: s.hasHealthFlag ? '#f87171' : 'var(--volt)', flexShrink: 0 }}>
                       {s.playerName.charAt(0)}
                     </div>
@@ -72,10 +93,11 @@ export default function CoachDashboardPage() {
                       </div>
                       {s.teamName && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{s.teamName}</div>}
                     </div>
-                    <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       {s.completedAt
                         ? <span className="tag tag-volt">Done</span>
                         : <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{s.completionPct}%</span>}
+                      <span style={{ fontSize: '0.7rem', color: 'var(--carolina-dark)' }}>→</span>
                     </div>
                   </div>
                 ))}
@@ -140,6 +162,103 @@ export default function CoachDashboardPage() {
                 </Link>
               )
             })}
+          </div>
+        </div>
+      )}
+
+      {/* ── SESSION DETAIL MODAL ── */}
+      {(loadingSession || sessionModal) && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 50, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '1.5rem 1rem', overflowY: 'auto' }}
+          onClick={e => { if (e.target === e.currentTarget) { setSessionModal(null) } }}>
+          <div className="card" style={{ width: '100%', maxWidth: 580, padding: '1.75rem', margin: 'auto' }}>
+
+            {loadingSession && (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>Loading session…</div>
+            )}
+
+            {sessionModal && !loadingSession && (() => {
+              const { session, exercises, stats, topLifts } = sessionModal
+              const checkedIn = new Date(session.checkedInAt)
+              const timeIn = checkedIn.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+              const timeOut = session.completedAt ? new Date(session.completedAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }) : null
+
+              return (
+                <>
+                  {/* Header */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+                    <div>
+                      <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', marginBottom: '0.2rem' }}>{session.playerName}</h2>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                        {timeIn}{timeOut ? ` → ${timeOut}` : ' · In progress'}
+                        {session.durationMin && <span style={{ marginLeft: '0.5rem', color: 'var(--carolina-dark)', fontWeight: 600 }}>({session.durationMin} min)</span>}
+                      </div>
+                    </div>
+                    <button onClick={() => setSessionModal(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1 }}>✕</button>
+                  </div>
+
+                  {/* Summary stats */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.625rem', marginBottom: '1.25rem' }}>
+                    {[
+                      { label: 'Total Weight', value: stats.totalWeightMoved > 0 ? `${stats.totalWeightMoved.toLocaleString()} lbs` : '—' },
+                      { label: 'Sets Completed', value: String(stats.totalSetsCompleted) },
+                      { label: 'Exercises', value: String(stats.exercisesHit) },
+                    ].map(s => (
+                      <div key={s.label} style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 10, padding: '0.75rem', textAlign: 'center' }}>
+                        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: 'var(--carolina)', lineHeight: 1 }}>{s.value}</div>
+                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginTop: '0.25rem' }}>{s.label}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Top lifts */}
+                  {topLifts.length > 0 && (
+                    <div style={{ marginBottom: '1.25rem' }}>
+                      <div style={{ fontSize: '0.72rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.5rem' }}>Top Lifts</div>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                        {topLifts.slice(0, 4).map(l => (
+                          <div key={l.name} style={{ background: 'var(--white)', border: '1.5px solid var(--gray-border)', borderRadius: 8, padding: '0.4rem 0.75rem', fontSize: '0.8rem' }}>
+                            <span style={{ fontWeight: 600 }}>{l.name}</span>
+                            <span style={{ color: 'var(--carolina)', fontFamily: 'var(--font-display)', fontWeight: 700, marginLeft: '0.4rem' }}>{l.heaviest} lbs</span>
+                            {l.repsAtHeaviest && <span style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}> × {l.repsAtHeaviest}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Exercise breakdown in order logged */}
+                  <div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.625rem' }}>
+                      Workout Log <span style={{ fontWeight: 400, textTransform: 'none', color: 'var(--text-muted)' }}>(in order completed)</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 320, overflowY: 'auto' }}>
+                      {exercises.map((ex, i) => {
+                        const completedSets = ex.sets.filter(s => s.completed)
+                        const heaviest = ex.logsWeight ? Math.max(...completedSets.map(s => s.weightLbs ?? 0)) : 0
+                        return (
+                          <div key={ex.exerciseId} style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, overflow: 'hidden' }}>
+                            <div style={{ background: 'var(--carolina-light)', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.75rem', color: '#fff', flexShrink: 0 }}>{i + 1}</div>
+                              <div style={{ flex: 1, fontWeight: 600, fontSize: '0.88rem' }}>{ex.name}</div>
+                              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ex.category}</div>
+                              {heaviest > 0 && <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.88rem', color: 'var(--carolina)' }}>{heaviest} lbs max</div>}
+                            </div>
+                            <div style={{ padding: '0.4rem 0.75rem', display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+                              {ex.sets.map((set, si) => (
+                                <div key={si} style={{ background: set.completed ? 'rgba(22,163,74,0.08)' : 'rgba(239,68,68,0.05)', border: `1px solid ${set.completed ? 'rgba(22,163,74,0.25)' : 'rgba(239,68,68,0.2)'}`, borderRadius: 6, padding: '0.2rem 0.5rem', fontSize: '0.75rem', color: set.completed ? 'var(--success)' : 'var(--danger)', fontWeight: 500 }}>
+                                  Set {set.setNumber}: {set.weightLbs ? `${set.weightLbs}lbs × ` : ''}{set.repsCompleted ?? '—'} reps
+                                </div>
+                              ))}
+                              {ex.sets.length === 0 && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>No sets logged</span>}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
