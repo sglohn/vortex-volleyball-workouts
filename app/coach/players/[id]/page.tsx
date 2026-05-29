@@ -28,6 +28,25 @@ export default function CoachPlayerDetailPage() {
   const [allTemplates, setAllTemplates] = useState<Array<{ id: string; name: string }>>([])
   const [allExercises, setAllExercises] = useState<Array<{ id: string; name: string; category: string }>>([])
   const [showOverrides, setShowOverrides] = useState(false)
+  const [programs, setPrograms] = useState<Array<{
+    id: string; name: string; is_active: boolean; started_on: string; ended_on?: string
+    template_sequence: string[]; periodization_mode: string; notes?: string
+    phase_cycle: Array<{ phase: string; weeks: number }>
+  }>>([])
+  const [showPrograms, setShowPrograms] = useState(false)
+  const [newProgram, setNewProgram] = useState({
+    name: '3x/Week Individual Program',
+    templateSequence: [] as string[],
+    periodizationMode: 'auto',
+    phaseCycle: [
+      { phase: 'build', weeks: 4 },
+      { phase: 'pre_tournament', weeks: 2 },
+      { phase: 'recovery', weeks: 1 },
+    ],
+    startedOn: new Date().toISOString().split('T')[0],
+    notes: '',
+  })
+  const [savingProgram, setSavingProgram] = useState(false)
   const [newOverride, setNewOverride] = useState({ date: '', templateId: '', notes: '' })
   const [newSkip, setNewSkip] = useState({ exerciseId: '', replacementId: '', reason: '', skipType: 'avoid', endsOn: '' })
   const [replacementSearch, setReplacementSearch] = useState('')
@@ -41,6 +60,7 @@ export default function CoachPlayerDetailPage() {
       setAllTemplates(d.templates ?? [])
     })
     fetch('/api/coach/exercises').then(r => r.json()).then(d => setAllExercises(d.exercises ?? []))
+    fetch(`/api/coach/player-programs?playerId=${id}`).then(r => r.json()).then(d => setPrograms(d.programs ?? []))
   }, [id])
 
   async function saveMeasurement() {
@@ -393,6 +413,153 @@ export default function CoachPlayerDetailPage() {
                     const d = await res.json()
                     if (d.override) { setOverrides(prev => [...prev, d.override]); setNewOverride({ date: '', templateId: '', notes: '' }) }
                   }} style={{ padding: '0.5rem 1.25rem', flexShrink: 0 }}>Add Override</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── INDIVIDUAL PROGRAMS ── */}
+      <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showPrograms ? '1.25rem' : 0 }}>
+          <div>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem' }}>Individual Program</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem' }}>
+              {programs.filter(p => p.is_active).length > 0
+                ? `${programs.filter(p => p.is_active)[0]?.name} · active`
+                : 'No individual program — follows team schedule'}
+            </p>
+          </div>
+          <button onClick={() => setShowPrograms(o => !o)} className="btn-ghost" style={{ padding: '0.4rem 0.875rem', fontSize: '0.82rem' }}>
+            {showPrograms ? 'Collapse' : 'Manage'}
+          </button>
+        </div>
+
+        {showPrograms && (
+          <div>
+            {/* Active programs */}
+            {programs.map(prog => (
+              <div key={prog.id} style={{ border: `1.5px solid ${prog.is_active ? 'var(--carolina)' : 'var(--gray-border)'}`, borderRadius: 10, padding: '0.875rem 1rem', marginBottom: '0.625rem', background: prog.is_active ? 'var(--carolina-light)' : 'transparent' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.3rem' }}>
+                      <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>{prog.name}</span>
+                      {prog.is_active
+                        ? <span style={{ fontSize: '0.65rem', background: 'rgba(22,163,74,0.1)', color: 'var(--success)', border: '1px solid rgba(22,163,74,0.3)', borderRadius: 4, padding: '0.1rem 0.4rem', fontWeight: 600 }}>ACTIVE</span>
+                        : <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', border: '1px solid var(--gray-border)', borderRadius: 4, padding: '0.1rem 0.4rem' }}>Ended</span>}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem' }}>
+                      Started {new Date(prog.started_on + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {prog.ended_on && ` · Ended ${new Date(prog.ended_on + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                      {prog.template_sequence.length} templates · {prog.periodization_mode === 'auto' ? `Auto periodization (${prog.phase_cycle.map((p: { phase: string; weeks: number }) => `${p.weeks}wk ${p.phase}`).join(' → ')})` : 'Manual phases'}
+                    </div>
+                    {prog.notes && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', marginTop: '0.2rem' }}>{prog.notes}</div>}
+                  </div>
+                  {prog.is_active && (
+                    <button onClick={async () => {
+                      await fetch('/api/coach/player-programs', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: prog.id, isActive: false, endedOn: new Date().toISOString().split('T')[0] }) })
+                      setPrograms(prev => prev.map(p => p.id === prog.id ? { ...p, is_active: false } : p))
+                    }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, flexShrink: 0 }}>Stop Program</button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* New program form */}
+            <div style={{ borderTop: programs.length > 0 ? '1.5px solid var(--gray-border)' : 'none', paddingTop: programs.length > 0 ? '1.25rem' : 0, marginTop: programs.length > 0 ? '0.75rem' : 0 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--carolina-deep)', marginBottom: '0.875rem' }}>
+                {programs.filter(p => p.is_active).length > 0 ? 'Add Another Program' : 'Start Individual Program'}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
+                <div style={{ gridColumn: '1/-1' }}>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Program Name</label>
+                  <input className="input" value={newProgram.name} onChange={e => setNewProgram(p => ({ ...p, name: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                </div>
+
+                {/* Template sequence builder */}
+                <div style={{ gridColumn: '1/-1' }}>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>
+                    Workout Sequence <span style={{ fontWeight: 400, textTransform: 'none' }}>(player cycles through these in order, repeating)</span>
+                  </label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem', marginBottom: '0.5rem' }}>
+                    {newProgram.templateSequence.map((tid, i) => {
+                      const tmpl = allTemplates.find(t => t.id === tid)
+                      return (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.75rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 7 }}>
+                          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.82rem', color: 'var(--carolina)', width: 24 }}>D{i + 1}</span>
+                          <span style={{ flex: 1, fontSize: '0.85rem', fontWeight: 500 }}>{tmpl?.name ?? tid}</span>
+                          <button onClick={() => setNewProgram(p => ({ ...p, templateSequence: p.templateSequence.filter((_, j) => j !== i) }))} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  <select className="input" value="" onChange={e => { if (e.target.value) setNewProgram(p => ({ ...p, templateSequence: [...p.templateSequence, e.target.value] })) }} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
+                    <option value="">+ Add template to sequence…</option>
+                    {allTemplates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </select>
+                </div>
+
+                {/* Auto periodization */}
+                <div style={{ gridColumn: '1/-1' }}>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', fontWeight: 600 }}>Periodization Cycle (auto)</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                    {newProgram.phaseCycle.map((p, i) => (
+                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <select value={p.phase} onChange={e => setNewProgram(prev => ({ ...prev, phaseCycle: prev.phaseCycle.map((pc, j) => j === i ? { ...pc, phase: e.target.value } : pc) }))}
+                          style={{ flex: 2, padding: '0.4rem 0.5rem', border: '1.5px solid var(--gray-border)', borderRadius: 7, fontSize: '0.82rem', background: 'var(--white)' }}>
+                          <option value="build">Build (Hypertrophy)</option>
+                          <option value="peak">Peak (Heavy/Fast)</option>
+                          <option value="pre_tournament">Pre-Tournament (Light/Explosive)</option>
+                          <option value="recovery">Recovery (Flush Fatigue)</option>
+                          <option value="general">General</option>
+                        </select>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flex: 1 }}>
+                          <input type="number" min="1" max="12" value={p.weeks} onChange={e => setNewProgram(prev => ({ ...prev, phaseCycle: prev.phaseCycle.map((pc, j) => j === i ? { ...pc, weeks: parseInt(e.target.value) || 1 } : pc) }))}
+                            style={{ width: 48, padding: '0.4rem', border: '1.5px solid var(--gray-border)', borderRadius: 7, fontSize: '0.82rem', textAlign: 'center', background: 'var(--white)' }} />
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>weeks</span>
+                          <button onClick={() => setNewProgram(prev => ({ ...prev, phaseCycle: prev.phaseCycle.filter((_, j) => j !== i) }))}
+                            style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.9rem' }}>✕</button>
+                        </div>
+                      </div>
+                    ))}
+                    <button onClick={() => setNewProgram(prev => ({ ...prev, phaseCycle: [...prev.phaseCycle, { phase: 'general', weeks: 2 }] }))}
+                      style={{ background: 'none', border: '1px dashed var(--gray-border)', borderRadius: 7, padding: '0.35rem', fontSize: '0.78rem', color: 'var(--text-muted)', cursor: 'pointer' }}>
+                      + Add Phase
+                    </button>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
+                      Total cycle: {newProgram.phaseCycle.reduce((s, p) => s + p.weeks, 0)} weeks, then repeats. Weight recommendations shift automatically each phase.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Start Date</label>
+                  <input type="date" className="input" value={newProgram.startedOn} onChange={e => setNewProgram(p => ({ ...p, startedOn: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Notes</label>
+                  <input className="input" placeholder="e.g. Overseas player, 3x/week" value={newProgram.notes} onChange={e => setNewProgram(p => ({ ...p, notes: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                </div>
+
+                <div style={{ gridColumn: '1/-1', display: 'flex', justifyContent: 'flex-end' }}>
+                  <button className="btn-volt" disabled={savingProgram || !newProgram.templateSequence.length || !newProgram.name}
+                    onClick={async () => {
+                      setSavingProgram(true)
+                      const res = await fetch('/api/coach/player-programs', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: id, name: newProgram.name, templateSequence: newProgram.templateSequence, periodizationMode: newProgram.periodizationMode, phaseCycle: newProgram.phaseCycle, startedOn: newProgram.startedOn, notes: newProgram.notes }) })
+                      const d = await res.json()
+                      if (d.program) {
+                        setPrograms(prev => [d.program, ...prev])
+                        setNewProgram({ name: '3x/Week Individual Program', templateSequence: [], periodizationMode: 'auto', phaseCycle: [{ phase: 'build', weeks: 4 }, { phase: 'pre_tournament', weeks: 2 }, { phase: 'recovery', weeks: 1 }], startedOn: new Date().toISOString().split('T')[0], notes: '' })
+                      }
+                      setSavingProgram(false)
+                    }} style={{ padding: '0.625rem 1.75rem' }}>
+                    {savingProgram ? 'Starting…' : 'Start Program'}
+                  </button>
                 </div>
               </div>
             </div>
