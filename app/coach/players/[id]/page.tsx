@@ -29,7 +29,8 @@ export default function CoachPlayerDetailPage() {
   const [allExercises, setAllExercises] = useState<Array<{ id: string; name: string; category: string }>>([])
   const [showOverrides, setShowOverrides] = useState(false)
   const [newOverride, setNewOverride] = useState({ date: '', templateId: '', notes: '' })
-  const [newSkip, setNewSkip] = useState({ exerciseId: '', reason: '', endsOn: '' })
+  const [newSkip, setNewSkip] = useState({ exerciseId: '', replacementId: '', reason: '', skipType: 'avoid', endsOn: '' })
+  const [replacementSearch, setReplacementSearch] = useState('')
   const [skipSearch, setSkipSearch] = useState('')
 
   useEffect(() => {
@@ -242,49 +243,110 @@ export default function CoachPlayerDetailPage() {
                 These exercises will be automatically removed from this player's workout. Other players are unaffected.
               </p>
 
-              {skips.map(skip => (
-                <div key={skip.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', background: 'var(--danger-light)', border: '1px solid #fecaca', borderRadius: 8, marginBottom: '0.4rem' }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{skip.exercise_library?.name ?? skip.exercise_id}</div>
-                    {skip.reason && <div style={{ fontSize: '0.72rem', color: 'var(--danger)', fontStyle: 'italic' }}>{skip.reason}</div>}
-                    {skip.ends_on && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Until {new Date(skip.ends_on + 'T12:00:00').toLocaleDateString()}</div>}
+              {skips.map(skip => {
+                const skipAny = skip as Record<string, unknown>
+                const repLib = skipAny.replacement_library as { name: string } | undefined
+                const skipTypeLabel = skipAny.skip_type === 'rehab' ? 'Rehab/Modified' : 'Avoid Area'
+                return (
+                  <div key={skip.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.625rem 0.875rem', background: 'var(--danger-light)', border: '1px solid #fecaca', borderRadius: 8, marginBottom: '0.4rem' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
+                        <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{skip.exercise_library?.name ?? skip.exercise_id}</div>
+                        <span style={{ fontSize: '0.65rem', background: skipAny.skip_type === 'rehab' ? 'rgba(139,92,246,0.1)' : 'rgba(239,68,68,0.1)', color: skipAny.skip_type === 'rehab' ? '#7c3aed' : 'var(--danger)', border: `1px solid ${skipAny.skip_type === 'rehab' ? '#c4b5fd' : '#fecaca'}`, borderRadius: 4, padding: '0.1rem 0.4rem', fontWeight: 600 }}>{skipTypeLabel}</span>
+                      </div>
+                      {skip.reason && <div style={{ fontSize: '0.72rem', color: 'var(--danger)', fontStyle: 'italic', marginBottom: '0.2rem' }}>{skip.reason}</div>}
+                      {repLib && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600 }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+                          Replaced with: {repLib.name}
+                        </div>
+                      )}
+                      {!repLib && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>No replacement — exercise removed</div>}
+                      {skip.ends_on && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>Expires {new Date(skip.ends_on + 'T12:00:00').toLocaleDateString()}</div>}
+                    </div>
+                    <button onClick={async () => {
+                      await fetch('/api/coach/overrides', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_skip', id: skip.id }) })
+                      setSkips(prev => prev.filter(s => s.id !== skip.id))
+                    }} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', flexShrink: 0 }}>Remove</button>
                   </div>
-                  <button onClick={async () => {
-                    await fetch('/api/coach/overrides', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_skip', id: skip.id }) })
-                    setSkips(prev => prev.filter(s => s.id !== skip.id))
-                  }} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}>Remove</button>
-                </div>
-              ))}
+                )
+              })}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem' }}>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Exercise to skip</label>
-                  <input className="input" placeholder="Search exercises…" value={skipSearch} onChange={e => setSkipSearch(e.target.value)} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
-                  {skipSearch && (
-                    <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, maxHeight: 160, overflowY: 'auto', background: 'var(--white)', marginTop: '0.25rem' }}>
-                      {allExercises.filter(e => e.name.toLowerCase().includes(skipSearch.toLowerCase())).map(e => (
-                        <button key={e.id} onClick={() => { setNewSkip(p => ({ ...p, exerciseId: e.id })); setSkipSearch(e.name) }}
-                          style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.5rem 0.75rem', border: 'none', background: newSkip.exerciseId === e.id ? 'var(--carolina-light)' : 'transparent', cursor: 'pointer', fontSize: '0.82rem' }}>
-                          {e.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{e.category}</span>
+              <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 10, padding: '1rem', marginTop: '0.75rem', background: 'rgba(255,255,255,0.6)' }}>
+                <div style={{ fontSize: '0.75rem', color: 'var(--carolina-deep)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.875rem' }}>Add New Modification</div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
+
+                  {/* Skip type */}
+                  <div style={{ gridColumn: '1/-1' }}>
+                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Type of modification</label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      {[['avoid','Avoid Area Entirely','Move to different body part'],['rehab','Rehab / Modified','Different exercise for same area']] .map(([val, label, desc]) => (
+                        <button key={val} onClick={() => setNewSkip(p => ({ ...p, skipType: val }))}
+                          style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: 8, border: `1.5px solid ${newSkip.skipType === val ? (val === 'rehab' ? '#7c3aed' : 'var(--danger)') : 'var(--gray-border)'}`, background: newSkip.skipType === val ? (val === 'rehab' ? 'rgba(139,92,246,0.08)' : 'var(--danger-light)') : 'transparent', cursor: 'pointer', textAlign: 'left' }}>
+                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: newSkip.skipType === val ? (val === 'rehab' ? '#7c3aed' : 'var(--danger)') : 'var(--black)' }}>{label}</div>
+                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{desc}</div>
                         </button>
                       ))}
                     </div>
-                  )}
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Reason</label>
-                  <input className="input" placeholder="e.g. Shoulder injury" value={newSkip.reason} onChange={e => setNewSkip(p => ({ ...p, reason: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Remove skip after (optional)</label>
-                  <input type="date" className="input" value={newSkip.endsOn} onChange={e => setNewSkip(p => ({ ...p, endsOn: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'flex-end' }}>
-                  <button className="btn-volt" disabled={!newSkip.exerciseId} onClick={async () => {
-                    const res = await fetch('/api/coach/overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_skip', playerId: id, exerciseId: newSkip.exerciseId, reason: newSkip.reason, endsOn: newSkip.endsOn || null }) })
-                    const d = await res.json()
-                    if (d.skip) { setSkips(prev => [...prev, d.skip]); setNewSkip({ exerciseId: '', reason: '', endsOn: '' }); setSkipSearch('') }
-                  }} style={{ width: '100%', padding: '0.5rem' }}>Add Skip</button>
+                  </div>
+
+                  {/* Exercise to skip */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Exercise to remove</label>
+                    <input className="input" placeholder="Search…" value={skipSearch} onChange={e => setSkipSearch(e.target.value)} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                    {skipSearch && !newSkip.exerciseId && (
+                      <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, maxHeight: 140, overflowY: 'auto', background: 'var(--white)', marginTop: '0.2rem', position: 'relative', zIndex: 10 }}>
+                        {allExercises.filter(e => e.name.toLowerCase().includes(skipSearch.toLowerCase())).map(e => (
+                          <button key={e.id} onClick={() => { setNewSkip(p => ({ ...p, exerciseId: e.id })); setSkipSearch(e.name) }}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.45rem 0.75rem', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.82rem' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--carolina-light)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            {e.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{e.category}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {newSkip.exerciseId && <div style={{ fontSize: '0.72rem', color: 'var(--danger)', marginTop: '0.2rem', fontWeight: 600 }}>✓ {skipSearch}</div>}
+                  </div>
+
+                  {/* Replacement exercise */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Replace with <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+                    <input className="input" placeholder="Search replacement…" value={replacementSearch} onChange={e => setReplacementSearch(e.target.value)} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                    {replacementSearch && !newSkip.replacementId && (
+                      <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, maxHeight: 140, overflowY: 'auto', background: 'var(--white)', marginTop: '0.2rem', position: 'relative', zIndex: 10 }}>
+                        {allExercises.filter(e => e.name.toLowerCase().includes(replacementSearch.toLowerCase()) && e.id !== newSkip.exerciseId).map(e => (
+                          <button key={e.id} onClick={() => { setNewSkip(p => ({ ...p, replacementId: e.id })); setReplacementSearch(e.name) }}
+                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.45rem 0.75rem', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.82rem' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--carolina-light)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                            {e.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{e.category}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {newSkip.replacementId && <div style={{ fontSize: '0.72rem', color: 'var(--success)', marginTop: '0.2rem', fontWeight: 600 }}>✓ {replacementSearch}</div>}
+                  </div>
+
+                  {/* Reason */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Reason</label>
+                    <input className="input" placeholder="e.g. Left knee pain" value={newSkip.reason} onChange={e => setNewSkip(p => ({ ...p, reason: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                  </div>
+
+                  {/* Expiry */}
+                  <div>
+                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Auto-expire on <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
+                    <input type="date" className="input" value={newSkip.endsOn} onChange={e => setNewSkip(p => ({ ...p, endsOn: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                  </div>
+
+                  <div style={{ gridColumn: '1/-1', display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
+                    <button className="btn-volt" disabled={!newSkip.exerciseId} onClick={async () => {
+                      const res = await fetch('/api/coach/overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_skip', playerId: id, exerciseId: newSkip.exerciseId, replacementId: newSkip.replacementId || null, skipType: newSkip.skipType, reason: newSkip.reason, endsOn: newSkip.endsOn || null }) })
+                      const d = await res.json()
+                      if (d.skip) { setSkips(prev => [...prev, d.skip]); setNewSkip({ exerciseId: '', replacementId: '', reason: '', skipType: 'avoid', endsOn: '' }); setSkipSearch(''); setReplacementSearch('') }
+                    }} style={{ padding: '0.625rem 1.5rem' }}>Save Modification</button>
+                  </div>
                 </div>
               </div>
             </div>
