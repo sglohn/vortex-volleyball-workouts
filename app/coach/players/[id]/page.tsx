@@ -205,7 +205,6 @@ export default function CoachPlayerDetailPage() {
         </div>
       )}
     </div>
-    </div>
 
       {/* ── WORKOUT ADJUSTMENTS ── */}
       <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
