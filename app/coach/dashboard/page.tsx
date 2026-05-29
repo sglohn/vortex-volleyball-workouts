@@ -198,7 +198,7 @@ export default function CoachDashboardPage() {
 
                   {/* Debug — remove once working */}
                   <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '0.625rem', marginBottom: '1rem', fontSize: '0.7rem', fontFamily: 'monospace', color: '#92400e', wordBreak: 'break-all' }}>
-                    exercises={exercises.length} · sets={stats.totalSetsCompleted} · weight={stats.totalWeightMoved} · topLifts={topLifts.length}
+                    sessionId={session.id} · exercises={exercises.length} · sets={stats.totalSetsCompleted} · weight={stats.totalWeightMoved} · api={(sessionModal as Record<string,unknown>)._debug as string}
                     {exercises.length === 0 && ' · NO EXERCISES FOUND'}
                   </div>
 
