@@ -219,7 +219,25 @@ export default function TemplatesPage() {
                 </div>
                 {t.description && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t.description}</div>}
               </div>
-              <button onClick={() => { fetch(`/api/coach/templates?id=${t.id}`).then(r => r.json()).then(d => setEditing(d.template)) }} className="btn-ghost" style={{ padding: '0.4rem 0.875rem', fontSize: '0.85rem', flexShrink: 0 }}>Edit</button>
+              <button onClick={() => {
+                fetch(`/api/coach/templates?id=${t.id}`).then(r => r.json()).then(d => {
+                  const tmpl = d.template
+                  // Map exercise_library nested object to exercise field the editor expects
+                  const mapped = {
+                    ...tmpl,
+                    blocks: (tmpl.blocks ?? []).map((b: Block & { exercises: Array<BlockExercise & { exercise_library?: ExerciseLib }> }) => ({
+                      ...b,
+                      exercises: (b.exercises ?? []).map(e => ({
+                        exercise_id: e.exercise_id,
+                        custom_reps: e.custom_reps ?? '',
+                        custom_notes: e.custom_notes ?? '',
+                        exercise: e.exercise_library ?? e.exercise,
+                      }))
+                    }))
+                  }
+                  setEditing(mapped)
+                })
+              }} className="btn-ghost" style={{ padding: '0.4rem 0.875rem', fontSize: '0.85rem', flexShrink: 0 }}>Edit</button>
             </div>
           )
         })}
