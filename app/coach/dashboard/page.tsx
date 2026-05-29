@@ -196,11 +196,6 @@ export default function CoachDashboardPage() {
                     <button onClick={() => setSessionModal(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1 }}>✕</button>
                   </div>
 
-                  {/* Debug — remove once working */}
-                  <div style={{ background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 8, padding: '0.625rem', marginBottom: '1rem', fontSize: '0.7rem', fontFamily: 'monospace', color: '#92400e', wordBreak: 'break-all' }}>
-                    sessionId={session.id} · exercises={exercises.length} · sets={stats.totalSetsCompleted} · weight={stats.totalWeightMoved} · api={(sessionModal as unknown as Record<string,unknown>)._debug as string}
-                    {exercises.length === 0 && ' · NO EXERCISES FOUND'}
-                  </div>
 
                   {/* Summary stats */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.625rem', marginBottom: '1.25rem' }}>
