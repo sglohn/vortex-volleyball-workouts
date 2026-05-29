@@ -24,7 +24,6 @@ export async function GET(req: NextRequest) {
 
   if (!logs?.length) {
     return NextResponse.json({
-      _debug: `no logs found for session ${sessionId}`,
       session: {
         id: session.id,
         playerName: (session.players as unknown as { name: string })?.name ?? 'Unknown',
@@ -93,7 +92,6 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.heaviest - a.heaviest)
 
   return NextResponse.json({
-    _debug: `found ${logs.length} logs, ${exercises.length} exercises`,
     session: {
       id: session.id,
       playerName: (session.players as unknown as { name: string })?.name ?? 'Unknown',
