@@ -10,7 +10,10 @@ export async function GET(req: NextRequest) {
     const today = new Date().toISOString().split('T')[0]
     const [{ data: overrides }, { data: skips }, { data: templates }] = await Promise.all([
       db.from('player_overrides').select('*').eq('player_id', playerId).order('override_date', { ascending: false }),
-      db.from('player_exercise_skips').select('*, exercise_library:exercise_id(id,name)').eq('player_id', playerId).eq('is_active', true).or(`ends_on.is.null,ends_on.gte.${today}`),
+      db.from('player_exercise_skips')
+        .select('*, exercise_library:exercise_id(id,name), replacement_library:replacement_exercise_id(id,name)')
+        .eq('player_id', playerId).eq('is_active', true)
+        .or(`ends_on.is.null,ends_on.gte.${today}`),
       db.from('workout_templates').select('id, name'),
     ])
     return NextResponse.json({ overrides, skips, templates })
@@ -43,11 +46,12 @@ export async function POST(req: NextRequest) {
   }
 
   if (type === 'player_skip') {
-    const { playerId, exerciseId, reason, endsOn } = body
+    const { playerId, exerciseId, replacementId, skipType, reason, endsOn } = body
     const { data, error } = await db
       .from('player_exercise_skips')
-      .insert({ player_id: playerId, exercise_id: exerciseId, reason, ends_on: endsOn ?? null, is_active: true })
-      .select().single()
+      .insert({ player_id: playerId, exercise_id: exerciseId, replacement_exercise_id: replacementId ?? null, skip_type: skipType ?? 'avoid', reason, ends_on: endsOn ?? null, is_active: true })
+      .select('*, exercise_library:exercise_id(id,name), replacement_library:replacement_exercise_id(id,name)')
+      .single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ skip: data })
   }
