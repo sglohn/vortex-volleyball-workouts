@@ -43,6 +43,97 @@ function ScheduleContent() {
   const [assigning, setAssigning] = useState<{ teamId: string; date: string } | null>(null)
   const [form, setForm] = useState({ templateId: '', notes: '' })
 
+  // Custom workout builder
+  const [buildingCustom, setBuildingCustom] = useState(false)
+  const [customFor, setCustomFor] = useState<{ teamId: string; date: string } | null>(null)
+  const [customPhase, setCustomPhase] = useState<PhaseType>('general')
+  const [customTemplate, setCustomTemplate] = useState<{
+    name: string; warmupNotes: string
+    blocks: Array<{ label: string; sets: number; exercises: Array<{ exId: string; name: string; reps: string; notes: string; logsWeight: boolean }> }>
+  }>({ name: '', warmupNotes: '', blocks: [] })
+  const [customExSearch, setCustomExSearch] = useState('')
+  const [customAddingTo, setCustomAddingTo] = useState<number | null>(null)
+  const [allExercises, setAllExercises] = useState<Array<{ id: string; name: string; category: string; default_reps?: string; logs_weight: boolean }>>([])
+  const [savingCustom, setSavingCustom] = useState(false)
+
+  const PHASE_GUIDANCE: Record<string, { label: string; repRange: string; loadPct: string; intent: string; color: string }> = {
+    build:           { label: 'Build',          repRange: '6–10 reps', loadPct: '70–80% 1RM', intent: 'Hypertrophy — controlled tempo, feel the muscle work', color: '#56a0d3' },
+    peak:            { label: 'Peak',           repRange: '3–6 reps',  loadPct: '85–92% 1RM', intent: 'Max strength — heavy and fast, no grinding',            color: '#111827' },
+    pre_tournament:  { label: 'Pre-Tournament', repRange: '6–8 reps',  loadPct: '65–75% 1RM', intent: 'Stay sharp and fresh — lighter, explosive',             color: '#d97706' },
+    recovery:        { label: 'Recovery',       repRange: '12–15 reps',loadPct: '50–60% 1RM', intent: 'Flush fatigue — light weight, perfect form',            color: '#dc2626' },
+    general:         { label: 'General',        repRange: '8–12 reps', loadPct: '70–80% 1RM', intent: 'Balanced strength and volume',                          color: '#6b7280' },
+  }
+
+  async function openCustomBuilder(teamId: string, date: string) {
+    setCustomFor({ teamId, date })
+    // Detect current phase for this team
+    const res = await fetch(`/api/coach/phases?teamId=${teamId}`)
+    const d = await res.json()
+    const today = date
+    const active = (d.phases ?? []).find((p: { starts_on: string; ends_on: string; phase_type: string }) => p.starts_on <= today && p.ends_on >= today)
+    const phase = (active?.phase_type ?? 'general') as PhaseType
+    setCustomPhase(phase)
+    const guidance = PHASE_GUIDANCE[phase]
+    setCustomTemplate({
+      name: `${teams.find(t => t.id === teamId)?.name ?? 'Team'} — ${new Date(date + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
+      warmupNotes: '',
+      blocks: [
+        { label: 'A', sets: 3, exercises: [] },
+        { label: 'B', sets: 3, exercises: [] },
+        { label: 'C', sets: 3, exercises: [] },
+        { label: 'D', sets: 3, exercises: [] },
+      ],
+    })
+    if (!allExercises.length) {
+      const exRes = await fetch('/api/coach/exercises')
+      const exData = await exRes.json()
+      setAllExercises(exData.exercises ?? [])
+    }
+    setAssigning(null)
+    setBuildingCustom(true)
+  }
+
+  async function saveCustomWorkout() {
+    if (!customFor || !customTemplate.name) return
+    setSavingCustom(true)
+    // Create template
+    const tmplRes = await fetch('/api/coach/templates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: customTemplate.name,
+        warmup_notes: customTemplate.warmupNotes,
+        phase_type: customPhase,
+        description: `Custom workout — ${new Date(customFor.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}`,
+        blocks: customTemplate.blocks
+          .filter(b => b.exercises.length > 0)
+          .map((b, bi) => ({
+            block_label: b.label,
+            sets: b.sets,
+            sort_order: bi,
+            exercises: b.exercises.map((e, ei) => ({
+              exercise_id: e.exId,
+              custom_reps: e.reps,
+              custom_notes: e.notes,
+              sort_order: ei,
+            })),
+          })),
+      }),
+    })
+    const tmplData = await tmplRes.json()
+    if (!tmplData.template?.id) { setSavingCustom(false); alert('Failed to create template'); return }
+    // Assign to schedule
+    await fetch('/api/coach/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teamId: customFor.teamId, templateId: tmplData.template.id, scheduledDate: customFor.date }),
+    })
+    setTemplates(prev => [...prev, tmplData.template])
+    await loadSchedule()
+    setBuildingCustom(false)
+    setSavingCustom(false)
+  }
+
   // Schedule workout editor
   const [editingSchedule, setEditingSchedule] = useState<{ entry: ScheduleEntry; template: ScheduleTemplate } | null>(null)
   const [exerciseSearch, setExerciseSearch] = useState('')
@@ -349,10 +440,14 @@ function ScheduleContent() {
               <Label>Notes (optional)</Label>
               <input className="input" placeholder="e.g. Focus on explosive work" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
             </div>
-            <div style={{ display: 'flex', gap: '0.75rem' }}>
+            <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.625rem' }}>
               <button className="btn-ghost" onClick={() => setAssigning(null)} style={{ flex: 1, padding: '0.75rem' }}>Cancel</button>
               <button className="btn-volt" onClick={assign} disabled={saving || !form.templateId} style={{ flex: 2, padding: '0.75rem' }}>{saving ? 'Saving…' : 'Assign'}</button>
             </div>
+            <button onClick={() => openCustomBuilder(assigning!.teamId, assigning!.date)}
+              style={{ width: '100%', padding: '0.625rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+              ✏️ Build Custom Workout for This Day →
+            </button>
           </div>
         </div>
       )}
@@ -440,6 +535,142 @@ function ScheduleContent() {
                   <div style={{ fontSize: '0.75rem', color: 'var(--carolina)', fontWeight: 600, flexShrink: 0 }}>Select</div>
                 </button>
               ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CUSTOM WORKOUT BUILDER ── */}
+      {buildingCustom && customFor && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 55, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '1rem', overflowY: 'auto' }}
+          onClick={e => { if (e.target === e.currentTarget) setBuildingCustom(false) }}>
+          <div className="card" style={{ width: '100%', maxWidth: 680, padding: '1.75rem', margin: 'auto' }}>
+
+            {/* Header */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
+              <div>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', marginBottom: '0.2rem' }}>Build Custom Workout</h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>
+                  {teams.find(t => t.id === customFor.teamId)?.name} · {new Date(customFor.date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                </p>
+              </div>
+              <button onClick={() => setBuildingCustom(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem' }}>✕</button>
+            </div>
+
+            {/* Phase guidance banner */}
+            {(() => {
+              const g = PHASE_GUIDANCE[customPhase]
+              return (
+                <div style={{ background: `${g.color}10`, border: `1.5px solid ${g.color}30`, borderRadius: 10, padding: '0.875rem 1rem', marginBottom: '1.25rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.4rem' }}>
+                    <div style={{ width: 10, height: 10, borderRadius: '50%', background: g.color, flexShrink: 0 }} />
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem', color: g.color }}>{g.label} Phase</span>
+                    <select value={customPhase} onChange={e => setCustomPhase(e.target.value as PhaseType)}
+                      style={{ marginLeft: 'auto', padding: '0.2rem 0.5rem', border: `1px solid ${g.color}40`, borderRadius: 6, fontSize: '0.75rem', color: g.color, background: 'transparent', cursor: 'pointer' }}>
+                      {Object.entries(PHASE_GUIDANCE).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Suggested Reps</div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: g.color }}>{g.repRange}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Load</div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: g.color }}>{g.loadPct}</div>
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600 }}>Intent</div>
+                      <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>{g.intent}</div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Workout name */}
+            <div style={{ marginBottom: '0.75rem' }}>
+              <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Workout Name</label>
+              <input className="input" value={customTemplate.name} onChange={e => setCustomTemplate(p => ({ ...p, name: e.target.value }))} />
+            </div>
+
+            {/* Warmup notes */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Warmup Notes</label>
+              <input className="input" placeholder="e.g. 10 min: Hip 90/90, glute bridge, lateral band walk…" value={customTemplate.warmupNotes} onChange={e => setCustomTemplate(p => ({ ...p, warmupNotes: e.target.value }))} />
+            </div>
+
+            {/* Blocks */}
+            {customTemplate.blocks.map((block, bi) => (
+              <div key={bi} style={{ border: '1.5px solid var(--gray-border)', borderRadius: 10, overflow: 'hidden', marginBottom: '0.875rem' }}>
+                <div style={{ background: 'var(--black)', padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', color: 'var(--yellow)' }}>BLOCK {block.label}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.5)' }}>Sets:</span>
+                    <input type="number" min={1} max={6} value={block.sets}
+                      onChange={e => setCustomTemplate(p => ({ ...p, blocks: p.blocks.map((b, i) => i === bi ? { ...b, sets: parseInt(e.target.value) || 3 } : b) }))}
+                      style={{ width: 40, padding: '0.2rem', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, background: 'rgba(255,255,255,0.1)', color: '#fff', fontSize: '0.85rem', textAlign: 'center' }} />
+                  </div>
+                  <div style={{ flex: 1 }} />
+                  <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>{PHASE_GUIDANCE[customPhase].repRange}</div>
+                </div>
+
+                <div style={{ padding: '0.625rem' }}>
+                  {/* Exercises */}
+                  {block.exercises.map((ex, ei) => (
+                    <div key={ei} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr auto', gap: '0.4rem', alignItems: 'center', marginBottom: '0.4rem', padding: '0.4rem 0.5rem', background: 'var(--carolina-light)', borderRadius: 6 }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600 }}>{ex.name}</div>
+                      <input className="input" value={ex.reps} placeholder={PHASE_GUIDANCE[customPhase].repRange.split('–')[0] + ' reps'}
+                        onChange={e => setCustomTemplate(p => ({ ...p, blocks: p.blocks.map((b, i) => i !== bi ? b : { ...b, exercises: b.exercises.map((x, j) => j !== ei ? x : { ...x, reps: e.target.value }) }) }))}
+                        style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem', textAlign: 'center' }} />
+                      <input className="input" value={ex.notes} placeholder="Notes…"
+                        onChange={e => setCustomTemplate(p => ({ ...p, blocks: p.blocks.map((b, i) => i !== bi ? b : { ...b, exercises: b.exercises.map((x, j) => j !== ei ? x : { ...x, notes: e.target.value }) }) }))}
+                        style={{ padding: '0.3rem 0.4rem', fontSize: '0.8rem' }} />
+                      <button onClick={() => setCustomTemplate(p => ({ ...p, blocks: p.blocks.map((b, i) => i !== bi ? b : { ...b, exercises: b.exercises.filter((_, j) => j !== ei) }) }))}
+                        style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+                    </div>
+                  ))}
+
+                  {/* Exercise search */}
+                  {customAddingTo === bi ? (
+                    <div style={{ background: 'var(--carolina-light)', borderRadius: 8, padding: '0.625rem', border: '1.5px solid var(--carolina-border)' }}>
+                      <input className="input" autoFocus placeholder="Search exercises…" value={customExSearch}
+                        onChange={e => setCustomExSearch(e.target.value)} style={{ marginBottom: '0.5rem' }} />
+                      <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        {allExercises.filter(e => e.name.toLowerCase().includes(customExSearch.toLowerCase())).slice(0, 20).map(ex => (
+                          <button key={ex.id} onClick={() => {
+                            const defaultReps = PHASE_GUIDANCE[customPhase].repRange.split('–')[0]
+                            setCustomTemplate(p => ({ ...p, blocks: p.blocks.map((b, i) => i !== bi ? b : { ...b, exercises: [...b.exercises, { exId: ex.id, name: ex.name, reps: defaultReps, notes: '', logsWeight: ex.logs_weight }] }) }))
+                            setCustomExSearch('')
+                            setCustomAddingTo(null)
+                          }} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0.625rem', border: '1px solid var(--gray-border)', borderRadius: 6, background: 'var(--white)', cursor: 'pointer', fontSize: '0.82rem', textAlign: 'left' }}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--carolina-light)'}
+                            onMouseLeave={e => e.currentTarget.style.background = 'var(--white)'}>
+                            <span style={{ fontWeight: 500 }}>{ex.name}</span>
+                            <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ex.category}</span>
+                          </button>
+                        ))}
+                      </div>
+                      <button onClick={() => { setCustomAddingTo(null); setCustomExSearch('') }} style={{ marginTop: '0.4rem', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.78rem' }}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button onClick={() => { setCustomAddingTo(bi); setCustomExSearch('') }}
+                      style={{ width: '100%', padding: '0.4rem', background: 'transparent', border: '1px dashed var(--gray-border)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem' }}>
+                      + Add Exercise to Block {block.label}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Save */}
+            <div style={{ display: 'flex', gap: '0.75rem', marginTop: '0.5rem' }}>
+              <button className="btn-ghost" onClick={() => setBuildingCustom(false)} style={{ flex: 1, padding: '0.75rem' }}>Cancel</button>
+              <button className="btn-volt" onClick={saveCustomWorkout}
+                disabled={savingCustom || !customTemplate.name || customTemplate.blocks.every(b => b.exercises.length === 0)}
+                style={{ flex: 2, padding: '0.75rem' }}>
+                {savingCustom ? 'Saving…' : 'Save & Schedule Workout'}
+              </button>
             </div>
           </div>
         </div>
