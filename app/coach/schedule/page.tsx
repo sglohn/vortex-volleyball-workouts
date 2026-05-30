@@ -138,15 +138,14 @@ function ScheduleContent() {
   const [editingSchedule, setEditingSchedule] = useState<{ entry: ScheduleEntry; template: ScheduleTemplate } | null>(null)
   const [exerciseSearch, setExerciseSearch] = useState('')
   const [swapping, setSwapping] = useState<{ blockExId: string; blockLabel: string; currentName: string } | null>(null)
-  const [allExercises, setAllExercises] = useState<Array<{ id: string; name: string; category: string; default_reps?: string }>>([])
 
   async function openEditSchedule(entry: ScheduleEntry) {
     if (!entry.template_id) return
     const [tmplRes, exRes] = await Promise.all([
       fetch(`/api/coach/templates?id=${entry.template_id}`).then(r => r.json()),
-      fetch('/api/coach/exercises').then(r => r.json()),
+      allExercises.length ? Promise.resolve({ exercises: allExercises }) : fetch('/api/coach/exercises').then(r => r.json()),
     ])
-    setAllExercises(exRes.exercises ?? [])
+    if (exRes.exercises?.length && !allExercises.length) setAllExercises(exRes.exercises)
     setEditingSchedule({ entry, template: tmplRes.template })
     setExerciseSearch('')
     setSwapping(null)
