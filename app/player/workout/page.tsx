@@ -17,6 +17,27 @@ interface WorkoutData { id: string; name: string; description?: string; warmup_n
 
 type WorkoutView = 'blocks' | 'active_block'
 
+// Round to nearest available gym weight
+// DBs: 5-50 by 5s. Barbells: 45lb bar + 2.5/5/10/25/35/45 plates
+function roundToGymWeight(lbs: number, isBarbell: boolean): number {
+  if (lbs <= 0) return 0
+  if (!isBarbell) {
+    // Dumbbell: 5-50 by 5s
+    const clamped = Math.max(5, Math.min(50, lbs))
+    return Math.round(clamped / 5) * 5
+  }
+  // Barbell: 45lb bar, plates in 5lb increments (round to nearest 5 above bar)
+  if (lbs <= 45) return 45
+  const aboveBar = lbs - 45
+  const roundedPlates = Math.round(aboveBar / 5) * 5
+  return 45 + roundedPlates
+}
+
+function isLikelyBarbell(exerciseName: string): boolean {
+  const barbellKeywords = ['squat','deadlift','rdl','bench','row','clean','press','snatch','jerk','hip thrust','barbell']
+  return barbellKeywords.some(k => exerciseName.toLowerCase().includes(k))
+}
+
 export default function PlayerWorkoutPage() {
   const router = useRouter()
   const [session, setSession] = useState<{ sessionId: string; playerName: string; templateId?: string; checkedInAt?: string; teamMode?: boolean; teamModeUrl?: string } | null>(null)
@@ -36,7 +57,12 @@ export default function PlayerWorkoutPage() {
   const [finished, setFinished] = useState(false)
   const [demoEx, setDemoEx] = useState<Exercise | null>(null)
   const [showPhaseInfo, setShowPhaseInfo] = useState(false)
+  const [sessionRating, setSessionRating] = useState<'easy'|'medium'|'hard'|null>(null)
+  const [ratingNote, setRatingNote] = useState('')
+  const [ratingSubmitted, setRatingSubmitted] = useState(false)
   const [startTimes, setStartTimes] = useState<Record<string, string>>({})
+  const [lastWeight, setLastWeight] = useState<number | null>(null)
+  const [lastReps, setLastReps] = useState<string | null>(null)
 
   useEffect(() => {
     const stored = localStorage.getItem('vx_session')
@@ -107,6 +133,9 @@ export default function PlayerWorkoutPage() {
 
   const saveSet = useCallback(async (completed: boolean) => {
     if (!workout || !session) return
+    // Track last weight for "same as last" button
+    if (weightInput) setLastWeight(parseFloat(weightInput))
+    if (repsInput) setLastReps(repsInput)
     setSaving(true)
     const block = workout.blocks[activeBlockIdx]
     const ex = block.exercises[currentExIdx]
@@ -217,6 +246,17 @@ export default function PlayerWorkoutPage() {
     </div>
   )
 
+  // Rating submission
+  async function submitRating() {
+    if (!session || !sessionRating) return
+    await fetch('/api/player/health', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: session.sessionId, playerId: session.playerId ?? '', type: 'session_rating', rating: sessionRating, note: ratingNote }),
+    }).catch(() => {})
+    setRatingSubmitted(true)
+  }
+
   if (finished) return (
     <div style={{ padding: '3rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }} className="fade-up">
       <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--carolina-light)', border: '2px solid var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="pulse">
@@ -272,6 +312,40 @@ export default function PlayerWorkoutPage() {
           )}
         </div>
 
+        {/* Progress indicator */}
+        {(() => {
+          const block = activeBlock
+          if (!block) return null
+          const totalSets = block.sets * block.exercises.filter(e => !e.skipped).length
+          const doneSets = block.exercises.filter(e => !e.skipped).reduce((sum, e) => sum + e.setLogs.filter(l => l.completed).length, 0)
+          const allBlocks = workout.blocks.filter(b => b.exercises.some(e => !e.skipped))
+          const totalAllSets = allBlocks.reduce((sum, b) => sum + b.sets * b.exercises.filter(e => !e.skipped).length, 0)
+          const doneAllSets = allBlocks.reduce((sum, b) => sum + b.exercises.filter(e => !e.skipped).reduce((s2, e) => s2 + e.setLogs.filter(l => l.completed).length, 0), 0)
+          return (
+            <div style={{ marginBottom: '0.875rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 500 }}>
+                <span>Block {block.block_label}: {doneSets}/{totalSets} sets</span>
+                <span>Overall: {doneAllSets}/{totalAllSets}</span>
+              </div>
+              <div style={{ height: 6, background: 'var(--gray-border)', borderRadius: 3, overflow: 'hidden' }}>
+                <div style={{ height: '100%', width: `${totalAllSets > 0 ? Math.round(doneAllSets / totalAllSets * 100) : 0}%`, background: 'var(--carolina)', borderRadius: 3, transition: 'width 0.4s ease' }} />
+              </div>
+              <div style={{ display: 'flex', gap: '0.35rem', marginTop: '0.4rem', flexWrap: 'wrap' }}>
+                {allBlocks.map(b => {
+                  const bDone = b.exercises.filter(e => !e.skipped).reduce((s, e) => s + e.setLogs.filter(l => l.completed).length, 0)
+                  const bTotal = b.sets * b.exercises.filter(e => !e.skipped).length
+                  const isActive = b.id === block.id
+                  return (
+                    <div key={b.id} style={{ fontSize: '0.65rem', padding: '0.15rem 0.5rem', borderRadius: 4, fontWeight: 600, background: bDone === bTotal ? 'rgba(22,163,74,0.12)' : isActive ? 'var(--carolina-light)' : 'var(--gray-border)', color: bDone === bTotal ? 'var(--success)' : isActive ? 'var(--carolina-dark)' : 'var(--text-muted)', border: isActive ? '1px solid var(--carolina-border)' : 'none' }}>
+                      {b.block_label} {bDone === bTotal ? '✓' : `${bDone}/${bTotal}`}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
         {/* Current exercise card */}
         <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
@@ -314,14 +388,29 @@ export default function PlayerWorkoutPage() {
           )}
 
           {/* Input fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight && ex.logs_velocity ? '1fr 1fr 1fr' : ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.625rem', marginBottom: '1rem' }}>
-            {ex.logs_weight && (
-              <div>
-                <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Weight (lbs)</label>
-                <input className="input" type="number" inputMode="decimal" placeholder={ex.recommendation?.best1RM ? String(ex.recommendation.weight) : '0'} value={weightInput} onChange={e => setWeightInput(e.target.value)}
-                  style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, padding: '0.75rem' }} autoFocus />
-              </div>
-            )}
+          <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight && ex.logs_velocity ? '1fr 1fr 1fr' : ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.625rem', marginBottom: ex.logs_weight ? '0.5rem' : '1rem' }}>
+            {ex.logs_weight && (() => {
+              const isBarbell = isLikelyBarbell(ex.name)
+              const rawSuggestion = ex.recommendation?.best1RM ? ex.recommendation.weight : null
+              const gymWeight = rawSuggestion ? roundToGymWeight(rawSuggestion, isBarbell) : null
+              return (
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
+                    <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Weight (lbs)</label>
+                    {gymWeight && !weightInput && (
+                      <button onClick={() => setWeightInput(String(gymWeight))}
+                        style={{ fontSize: '0.7rem', color: 'var(--carolina)', fontWeight: 700, background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 5, padding: '0.15rem 0.5rem', cursor: 'pointer' }}>
+                        Use {gymWeight} lbs →
+                      </button>
+                    )}
+                  </div>
+                  <input className="input" type="number" inputMode="decimal"
+                    placeholder={gymWeight ? `${gymWeight}` : '0'}
+                    value={weightInput} onChange={e => setWeightInput(e.target.value)}
+                    style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, padding: '0.75rem', borderColor: gymWeight && !weightInput ? 'var(--carolina)' : undefined }} autoFocus />
+                </div>
+              )
+            })()}
             <div>
               <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Reps</label>
               <input className="input" type="number" inputMode="numeric" placeholder={ex.customReps ?? ex.default_reps ?? '—'} value={repsInput} onChange={e => setRepsInput(e.target.value)}
@@ -335,6 +424,14 @@ export default function PlayerWorkoutPage() {
               </div>
             )}
           </div>
+
+          {/* Same as last set */}
+          {ex.logs_weight && lastWeight && currentSet > 1 && !weightInput && (
+            <button onClick={() => { setWeightInput(String(lastWeight)); if (lastReps) setRepsInput(lastReps) }}
+              style={{ width: '100%', padding: '0.5rem', marginBottom: '0.5rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
+              Same as last set ({lastWeight} lbs{lastReps ? ` × ${lastReps}` : ''}) →
+            </button>
+          )}
 
           <button className="btn-volt" onClick={() => saveSet(true)} disabled={saving}
             style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', letterSpacing: '0.05em' }}>
