@@ -314,7 +314,7 @@ export default function PlayerWorkoutPage() {
 
         {/* Progress indicator */}
         {(() => {
-          const block = activeBlock
+          const block = workout.blocks[activeBlockIdx]
           if (!block) return null
           const totalSets = block.sets * block.exercises.filter(e => !e.skipped).length
           const doneSets = block.exercises.filter(e => !e.skipped).reduce((sum, e) => sum + e.setLogs.filter(l => l.completed).length, 0)
