@@ -127,6 +127,23 @@ export default function CoachTeamsPage() {
               <a href={sessionUrl} target="_blank" rel="noopener noreferrer" className="btn-black" style={{ padding:'0.5rem 0.875rem', fontSize:'0.82rem', textDecoration:'none', flexShrink:0 }}>Open →</a>
             </>
           )}
+          {sessionUrl && (
+            <div style={{ marginTop:'0.75rem', display:'flex', alignItems:'flex-start', gap:'1rem', flexWrap:'wrap' }}>
+              <div>
+                <div style={{ fontSize:'0.72rem', color:'var(--text-muted)', marginBottom:'0.35rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>QR Code for tablets</div>
+                <img src={`https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(sessionUrl)}`} alt="Session QR code" style={{ width:120, height:120, borderRadius:8, border:'2px solid var(--gray-border)' }} />
+                <div style={{ fontSize:'0.68rem', color:'var(--text-muted)', marginTop:'0.3rem', maxWidth:120 }}>Scan to open on wall tablet</div>
+              </div>
+              <div style={{ flex:1, minWidth:200 }}>
+                <div style={{ fontSize:'0.72rem', color:'var(--text-muted)', marginBottom:'0.35rem', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.05em' }}>Bookmark this URL on each tablet</div>
+                <div style={{ fontSize:'0.75rem', fontFamily:'monospace', background:'var(--carolina-light)', border:'1px solid var(--carolina-border)', borderRadius:6, padding:'0.5rem 0.75rem', wordBreak:'break-all', color:'var(--carolina-deep)' }}>{sessionUrl}</div>
+                <div style={{ fontSize:'0.7rem', color:'var(--text-muted)', marginTop:'0.3rem' }}>Players can check in directly from this page — no phone needed</div>
+              </div>
+            </div>
+          )}
+          {sessionUrl && <>
+            </>
+          )}
         </div>
       </div>
 
