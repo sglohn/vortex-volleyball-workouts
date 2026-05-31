@@ -141,9 +141,6 @@ export default function CoachTeamsPage() {
               </div>
             </div>
           )}
-          {sessionUrl && <>
-            </>
-          )}
         </div>
       </div>
 
