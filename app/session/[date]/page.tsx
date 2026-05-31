@@ -436,8 +436,11 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
           )}
           {view === 'team' && activeTeam && (
             <>
-              <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, padding: '0.25rem 0.5rem 0.5rem' }}>
+              <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, padding: '0.25rem 0.5rem 0.25rem' }}>
                 {teamRoster.filter(p => p.checkedIn).length}/{teamRoster.length} checked in
+              </div>
+              <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.25)', padding: '0 0.5rem 0.5rem', fontStyle: 'italic' }}>
+                Tap name to check in or log sets
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
                 {teamRoster.sort((a, b) => (b.checkedIn ? 1 : 0) - (a.checkedIn ? 1 : 0) || a.name.localeCompare(b.name)).map(p => (
