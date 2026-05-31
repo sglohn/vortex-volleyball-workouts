@@ -252,7 +252,7 @@ export default function PlayerWorkoutPage() {
     await fetch('/api/player/health', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: session.sessionId, playerId: session.playerId ?? '', type: 'session_rating', rating: sessionRating, note: ratingNote }),
+      body: JSON.stringify({ sessionId: session.sessionId, type: 'session_rating', rating: sessionRating, note: ratingNote }),
     }).catch(() => {})
     setRatingSubmitted(true)
   }
