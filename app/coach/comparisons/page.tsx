@@ -295,13 +295,13 @@ export default function ComparisonsPage() {
                 style={{ position:'absolute', inset:0, width:'100%', height:'100%', zIndex:1 }} />
 
               {/* Net image — position hardcoded from calibration, never recalculates */}
-              <img src={NET_URL} alt="volleyball net"
+             <img src={NET_URL} alt="volleyball net"
                 style={{
                   position: 'absolute',
-                  left:   '34.7%',
-                  top:    '7.9%',
-                  width:  '69.9%',
-                  height: '92.1%',
+                  left:   '36.1%',
+                  top:    '8.0%',
+                  width:  '66.7%',
+                  height: '92.0%',
                   objectFit: 'fill',
                   objectPosition: 'left top',
                   zIndex: 2,
