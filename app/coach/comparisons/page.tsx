@@ -146,23 +146,6 @@ export default function ComparisonsPage() {
     svg.appendChild(el('line', { x1: LP, y1: TOP, x2: LP, y2: TOP + cH, stroke: '#ccc', 'stroke-width': '1' }))
     svg.appendChild(el('rect', { x: LP, y: TOP + cH, width: cW, height: 1, fill: '#ccc' }))
 
-    // Net — draw in right half (jumping section) only
-    const netY = yp(net)
-    const nL = xp(.42), nR = xp(.97)
-    const netH = TOP + cH - netY
-    svg.appendChild(el('rect', { x: nL - 6, y: netY - 18, width: 10, height: netH + 18, rx: 3, fill: '#2563eb' }))
-    svg.appendChild(el('rect', { x: nR - 4, y: netY - 18, width: 10, height: netH + 18, rx: 3, fill: '#2563eb' }))
-    for (let i = 0; i < 7; i++) {
-      const fill = i % 2 === 0 ? '#e11d48' : '#fff'
-      svg.appendChild(el('rect', { x: nL + 1, y: netY - 42 + i * 7, width: 4, height: 5, fill }))
-      svg.appendChild(el('rect', { x: nR + 1, y: netY - 42 + i * 7, width: 4, height: 5, fill }))
-    }
-    svg.appendChild(el('rect', { x: nL + 4, y: netY, width: nR - nL - 8, height: netH, fill: 'url(#np)' }))
-    svg.appendChild(el('rect', { x: nL + 4, y: netY - 3, width: nR - nL - 8, height: 7, fill: 'white', stroke: '#ccc', 'stroke-width': '.5' }))
-    const nlb = el('text', { x: (nL + nR) / 2, y: netY - 22, 'text-anchor': 'middle', 'font-size': '11', fill: '#1d4ed8', 'font-weight': '500' })
-    nlb.textContent = `Net ${fi(net)}`
-    svg.appendChild(nlb)
-
     // Image aspect ratios (standing 250x387, jumping 280x373)
     const STAND_AR = 250 / 387
     const JUMP_AR  = 280 / 373
