@@ -43,7 +43,7 @@ export default function ComparisonsPage() {
   const svgRef = useRef<SVGSVGElement>(null)
 
   useEffect(() => {
-    fetch('/api/coach/players')
+    fetch('/api/coach/comparisons')
       .then(r => r.json())
       .then(d => {
         const pl: Player[] = (d.players ?? []).filter((p: Player) =>
@@ -304,7 +304,9 @@ export default function ComparisonsPage() {
       {loading
         ? <div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Loading players…</div>
         : !sp2
-          ? <div style={{ color: 'var(--text-muted)', padding: '2rem' }}>No player measurements found. Add measurements in the player profiles first.</div>
+          ? <div style={{ color: 'var(--text-muted)', padding: '2rem', fontSize: '.9rem' }}>
+              No players with measurements found. Go to <strong>Coach → Players → [player name]</strong> and enter their height and approach touch to see them here.
+            </div>
           : (
             <svg ref={svgRef} viewBox="0 0 700 500"
               style={{ display: 'block', width: '100%', borderRadius: 12, border: '.5px solid var(--gray-border)', background: '#f8f9fa' }} />
