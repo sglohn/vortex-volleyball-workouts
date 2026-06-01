@@ -138,10 +138,12 @@ export default function ComparisonsPage() {
 
   // Net image sizing — left pole at divider, extends off right
   const divX = xp(.42)
-  const netPoleX = xp(NET_POLE_FRAC)
-  const netTopY  = yp(net) + NET_TOP_VS_TAPE   // tape at yp(net), img top offset by calibration
-  const netImgH  = (TOP + cH) - (yp(net) + NET_TOP_VS_TAPE) + 20
-  const netImgW  = W - netPoleX + 32
+  // Net image — fully hardcoded position from calibration, never changes
+  // Derived from: NET_POLE_FRAC=0.318, NET_TOP_VS_TAPE=-142, fixed ppi=cH/145
+  const NET_LEFT   = 253    // xp(0.318) = 52 + 0.318*632
+  const NET_TOP    = 38     // yp(88.25) + (-142)
+  const NET_WIDTH  = W - 253 + 32   // extends to right edge
+  const NET_HEIGHT = H - 38         // fills from top to bottom of scene
 
   // SVG for grid, axes, lines
   const NS = 'http://www.w3.org/2000/svg'
@@ -202,7 +204,7 @@ export default function ComparisonsPage() {
     }
 
     // Net label
-    const netLbl = el('text', {x:netPoleX+12,y:netTopY-8,'font-size':'11',fill:'#1d4ed8','font-weight':'500'})
+    const netLbl = el('text', {x: NET_LEFT + 20, y: yp(net) - 8, 'font-size':'11', fill:'#1d4ed8', 'font-weight':'500'})
     netLbl.textContent = `Net ${fi(net)}`; svg.appendChild(netLbl)
 
     // Player label under standing
@@ -297,10 +299,10 @@ export default function ComparisonsPage() {
                 <img src={NET_URL} alt="volleyball net"
                   style={{
                     position: 'absolute',
-                    left:   pctL(netPoleX),
-                    top:    pctT(netTopY),
-                    width:  pctW(netImgW),
-                    height: pctH(netImgH),
+                    left:   pctL(NET_LEFT),
+                    top:    pctT(NET_TOP),
+                    width:  pctW(NET_WIDTH),
+                    height: pctH(NET_HEIGHT),
                     objectFit: 'fill',
                     objectPosition: 'left top',
                     zIndex: 2,
