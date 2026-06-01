@@ -8,16 +8,18 @@ const NET_URL   = '/volleyball_net.webp'
 const SW = 720, SH = 560
 const LP = 60, RP = 20, TOP = 30, BOT = 60
 const cW = SW - LP - RP, cH = SH - TOP - BOT
-const MIN_IN = 56, MAX_IN = 140
+const MIN_IN = 0    // floor = 0 inches
+const MAX_IN = 145  // ceiling = ~12'1"
 const ppi = cH / (MAX_IN - MIN_IN)
 function yp(inch: number) { return TOP + cH - (inch - MIN_IN) * ppi }
 function xp(frac: number) { return LP + frac * cW }
 
-const REF_LINES = [60, 66, 72, 78, 84, 88.25, 95.5, 102, 108, 120, 132]
+const REF_LINES = [12,24,36,48,60,66,72,78,84,88.25,95.5,96,108,120,132,144]
 const REF_LABELS: Record<number, string> = {
+  12:"1'0\"", 24:"2'0\"", 36:"3'0\"", 48:"4'0\"",
   60:"5'0\"", 66:"5'6\"", 72:"6'0\"", 78:"6'6\"",
   84:"7'0\"", 88.25:"7'4\" (Girls net)", 95.5:"7'11\" (Boys net)",
-  102:"8'6\"", 108:"9'0\"", 120:"10'0\"", 132:"11'0\""
+  96:"8'0\"", 108:"9'0\"", 120:"10'0\"", 132:"11'0\"", 144:"12'0\""
 }
 
 interface Obj { x:number; y:number; w:number; h:number; url:string; label:string; color:string }
@@ -28,9 +30,9 @@ export default function CalibratePage() {
   const fgRef  = useRef<HTMLCanvasElement>(null)
   const wrapRef = useRef<HTMLDivElement>(null)
   const [objs, setObjs] = useState<ObjMap>({
-    stand: { x:xp(.08),   y:yp(67)-10,    w:75,  h:200, url:STAND_URL, label:'Standing', color:'#3b82f6' },
-    jump:  { x:xp(.38),   y:yp(110)-5,    w:85,  h:220, url:JUMP_URL,  label:'Jumping',  color:'#e11d48' },
-    net:   { x:xp(.62)-10,y:yp(88.25)-15, w:280, h:120, url:NET_URL,   label:'Net',      color:'#d97706' },
+    stand: { x:xp(.08),    y:yp(72),       w:80,  h:yp(0)-yp(72),  url:STAND_URL, label:'Standing', color:'#3b82f6' },
+    jump:  { x:xp(.38),    y:yp(110),      w:90,  h:yp(0)-yp(110), url:JUMP_URL,  label:'Jumping',  color:'#e11d48' },
+    net:   { x:xp(.60)-10, y:yp(95)-10,    w:300, h:120,            url:NET_URL,   label:'Net',      color:'#d97706' },
   })
   const [copied, setCopied] = useState(false)
   const dragRef   = useRef<{key:string;ox:number;oy:number}|null>(null)
@@ -62,7 +64,7 @@ export default function CalibratePage() {
     ctx.beginPath(); ctx.moveTo(LP,TOP); ctx.lineTo(LP,TOP+cH); ctx.stroke()
     ctx.fillStyle='#cbd5e1'; ctx.fillRect(LP,TOP+cH,cW,1)
     ctx.font='11px sans-serif'; ctx.fillStyle='#94a3b8'; ctx.textAlign='left'
-    ctx.fillText('Floor (5\'0" reference)', LP+4, TOP+cH+14)
+    ctx.fillText("Floor (0\")", LP+4, TOP+cH+14)
   }
 
   function drawFg(o: ObjMap) {
@@ -123,6 +125,7 @@ export default function CalibratePage() {
   }, [])
 
   const s=objs.stand, j=objs.jump, n=objs.net
+  const floorY = yp(0)
   const code = `  // Calibrated — paste into app/coach/comparisons/page.tsx
   const STAND_AR        = ${(s.w/s.h).toFixed(4)}
   const STAND_HEAD_FRAC = ${((s.y-TOP)/s.h).toFixed(3)}
@@ -135,7 +138,7 @@ export default function CalibratePage() {
 
   // Net
   const netPoleX        = xp(${((n.x-LP)/cW).toFixed(3)})
-  const netTopOffset    = ${Math.round(n.y - yp(88.25))}  // px above net tape`
+  const netTopOffset    = ${Math.round(n.y - yp(88.25))}  // px above girls net tape`
 
   return (
     <div style={{padding:'1.5rem',maxWidth:820}}>
