@@ -89,56 +89,59 @@ export default function ComparisonsPage() {
   function yp(inch: number) { return TOP + cH - inch * ppi }
   function xp(frac: number) { return LP + frac * cW }
 
-  // Calibrated image fractions (measured from actual pixel content)
-  // Standing: head top at 23.3% from img top, feet at 89.9% from img top
-  // Jumping:  fingertip at 4.0% from img top, feet at 77.7% from img top
-  const STAND_AR        = 0.6460   // image width/height ratio
-  const STAND_HEAD_FRAC = 0.233    // head top as fraction from img top
-  const STAND_FEET_FRAC = 0.899    // feet as fraction from img top
-  const STAND_CONTENT   = STAND_FEET_FRAC - STAND_HEAD_FRAC  // 0.666
+  // ── CALIBRATION ── from /coach/comparisons/calibrate
+  // Standing: calibrated with 6'0" player, feet on floor
+  const STAND_AR        = 0.4758
+  const STAND_HEAD_FRAC = 0.062   // head pixel as fraction from img top
+  const STAND_FEET_FRAC = 0.926   // feet pixel as fraction from img top
+  const STAND_CONTENT   = 0.864   // head-to-feet span as fraction of img height
 
-  const JUMP_AR         = 0.7507   // image width/height ratio
-  const JUMP_TIP_FRAC   = 0.040    // fingertip as fraction from img top
-  const JUMP_FEET_FRAC  = 0.777    // feet as fraction from img top
+  // Jumping: calibrated with fingertip at 10'0"
+  // Body is sized using STAND_CONTENT so a 6' jumper is same size as 6' standing figure
+  const JUMP_AR         = 0.5754
+  const JUMP_TIP_FRAC   = 0.025   // fingertip as fraction from img top
 
-  // Section centres and ghost offset
+  // Net
+  const NET_POLE_FRAC   = 0.318
+  const NET_TOP_VS_TAPE = -142    // img top relative to net tape height in px
+
   const standCX    = xp(.18)
   const jumpCX     = xp(.65)
   const GHOST_OFFSET = 14
 
-  // Standing: size image so content height = player height in px
-  // feet pixel aligns to floor, head pixel aligns to player height
+  // Standing: size so head-to-feet content = player height in px
+  // feet land at floor, head at player height
   function standProps(hIn: number, cx: number) {
-    const hpx    = hIn * ppi                          // player height in px
-    const imgH   = hpx / STAND_CONTENT               // total image height
-    const imgW   = imgH * STAND_AR
-    const imgTop = (TOP + cH) - STAND_FEET_FRAC * imgH  // feet land on floor
+    const hpx  = hIn * ppi                        // player height in scene pixels
+    const imgH = hpx / STAND_CONTENT              // total image height
+    const imgW = imgH * STAND_AR
+    const imgTop = (TOP + cH) - STAND_FEET_FRAC * imgH  // feet at floor
     return { top: imgTop, left: cx - imgW / 2, width: imgW, height: imgH }
   }
 
-  // Jumping: size image so fingertip-to-feet span = approach_vertical in px
-  // fingertip aligns to yp(avIn), feet land on floor
-  function jumpProps(avIn: number, cx: number) {
-    const avpx  = avIn * ppi                          // approach touch in px
-    const span  = JUMP_FEET_FRAC - JUMP_TIP_FRAC     // 0.737
-    const imgH  = avpx / span
-    const imgW  = imgH * JUMP_AR
-    const tipY  = yp(avIn)
-    const imgTop = tipY - JUMP_TIP_FRAC * imgH        // tip aligns to reach height
+  // Jumping: size body same as standing (same STAND_CONTENT fraction)
+  // so a 6' jumper looks same size as 6' standing figure
+  // then position so fingertip lands at approach touch height
+  function jumpProps(hIn: number, avIn: number, cx: number) {
+    const hpx  = hIn * ppi                        // player height in scene pixels
+    const imgH = hpx / STAND_CONTENT              // same body scale as standing
+    const imgW = imgH * JUMP_AR
+    const tipY = yp(avIn)                         // approach touch height in scene
+    const imgTop = tipY - JUMP_TIP_FRAC * imgH    // fingertip at approach touch
     return { top: imgTop, left: cx - imgW * 0.35, width: imgW, height: imgH, tipY }
   }
 
   const pStand = pH  > 0 ? standProps(pH,  standCX) : null
-  const pJump  = pAV > 0 ? jumpProps(pAV, jumpCX)  : null
+  const pJump  = pAV > 0 ? jumpProps(pH, pAV, jumpCX)  : null
   const gStand = aH  > 0 ? standProps(aH,  standCX + GHOST_OFFSET) : null
-  const gJump  = aAV > 0 ? jumpProps(aAV, jumpCX  + GHOST_OFFSET) : null
+  const gJump  = aAV > 0 ? jumpProps(aH, aAV, jumpCX  + GHOST_OFFSET) : null
 
   // Net image sizing — left pole at divider, extends off right
   const divX = xp(.42)
-  const netPoleX = divX - 8
-  const netTopY  = yp(net)
-  const netImgH  = (TOP + cH) - netTopY + 30
-  const netImgW  = W - netPoleX + 20
+  const netPoleX = xp(NET_POLE_FRAC)
+  const netTopY  = yp(net) + NET_TOP_VS_TAPE
+  const netImgH  = (TOP + cH) - netTopY + 20
+  const netImgW  = W - netPoleX + 32
 
   // SVG for grid, axes, lines
   const NS = 'http://www.w3.org/2000/svg'
