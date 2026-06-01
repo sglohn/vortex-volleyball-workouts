@@ -139,8 +139,8 @@ export default function ComparisonsPage() {
   // Net image sizing — left pole at divider, extends off right
   const divX = xp(.42)
   const netPoleX = xp(NET_POLE_FRAC)
-  const netTopY  = yp(net) + NET_TOP_VS_TAPE
-  const netImgH  = (TOP + cH) - netTopY + 20
+  const netTopY  = yp(net) + NET_TOP_VS_TAPE   // tape at yp(net), img top offset by calibration
+  const netImgH  = (TOP + cH) - (yp(net) + NET_TOP_VS_TAPE) + 20
   const netImgW  = W - netPoleX + 32
 
   // SVG for grid, axes, lines
@@ -297,10 +297,10 @@ export default function ComparisonsPage() {
                 <img src={NET_URL} alt="volleyball net"
                   style={{
                     position: 'absolute',
-                    left:   pctL(netPoleX - 12),
-                    top:    pctT(netTopY - 20),   // 20px above tape so antenna shows
-                    width:  pctW(W - netPoleX + 32),
-                    height: pctH((TOP + cH) - netTopY + 40),
+                    left:   pctL(netPoleX),
+                    top:    pctT(netTopY),
+                    width:  pctW(netImgW),
+                    height: pctH(netImgH),
                     objectFit: 'fill',
                     objectPosition: 'left top',
                     zIndex: 2,
