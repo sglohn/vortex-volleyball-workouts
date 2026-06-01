@@ -294,21 +294,19 @@ export default function ComparisonsPage() {
               <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`}
                 style={{ position:'absolute', inset:0, width:'100%', height:'100%', zIndex:1 }} />
 
-              {/* Net image — left pole at divider, scales to correct height */}
-              {sp && (
-                <img src={NET_URL} alt="volleyball net"
-                  style={{
-                    position: 'absolute',
-                    left:   pctL(NET_LEFT),
-                    top:    pctT(NET_TOP),
-                    width:  pctW(NET_WIDTH),
-                    height: pctH(NET_HEIGHT),
-                    objectFit: 'fill',
-                    objectPosition: 'left top',
-                    zIndex: 2,
-                    pointerEvents: 'none',
-                  }} />
-              )}
+              {/* Net image — position hardcoded from calibration, never recalculates */}
+              <img src={NET_URL} alt="volleyball net"
+                style={{
+                  position: 'absolute',
+                  left:   '34.7%',
+                  top:    '7.9%',
+                  width:  '69.9%',
+                  height: '92.1%',
+                  objectFit: 'fill',
+                  objectPosition: 'left top',
+                  zIndex: 2,
+                  pointerEvents: 'none',
+                }} />
 
               {/* Ghost silhouettes — behind player, mix-blend-mode so transparent bg works */}
               {gStand && co.length > 0 && (
