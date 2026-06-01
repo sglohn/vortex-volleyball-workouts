@@ -37,6 +37,7 @@ const GROUP_LABELS: Record<CompGroup, string> = {
 export default function ComparisonsPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [loading, setLoading] = useState(true)
+  const [debug, setDebug] = useState<Record<string, number> | null>(null)
   const [selId, setSelId] = useState('')
   const [gender, setGender] = useState<'F' | 'M'>('F')
   const [group, setGroup] = useState<CompGroup>('team')
@@ -46,10 +47,10 @@ export default function ComparisonsPage() {
     fetch('/api/coach/comparisons')
       .then(r => r.json())
       .then(d => {
-        const pl: Player[] = (d.players ?? []).filter((p: Player) =>
-          p.height_in && p.approach_vertical_in
-        )
+        console.log('Comparisons API response:', d._debug, d.players?.length)
+        const pl: Player[] = (d.players ?? [])
         setPlayers(pl)
+        setDebug(d._debug ?? null)
         const first = pl.find(p => p.gender === 'F') ?? pl[0]
         if (first) { setSelId(first.id); setGender((first.gender as 'F' | 'M') ?? 'F') }
         setLoading(false)
@@ -306,6 +307,9 @@ export default function ComparisonsPage() {
         : !sp2
           ? <div style={{ color: 'var(--text-muted)', padding: '2rem', fontSize: '.9rem' }}>
               No players with measurements found. Go to <strong>Coach → Players → [player name]</strong> and enter their height and approach touch to see them here.
+              {debug && <div style={{ marginTop: '0.75rem', fontFamily: 'monospace', fontSize: '0.75rem', background: '#fef3c7', padding: '0.5rem', borderRadius: 6, color: '#92400e' }}>
+                Debug: {JSON.stringify(debug)}
+              </div>}
             </div>
           : (
             <svg ref={svgRef} viewBox="0 0 700 500"
