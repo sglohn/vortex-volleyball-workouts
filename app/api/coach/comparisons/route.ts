@@ -4,7 +4,6 @@ import { createServerClient } from '@/lib/supabase'
 export async function GET() {
   const db = createServerClient()
 
-  // Fetch players
   const { data: players, error: pErr } = await db
     .from('players')
     .select('id, name, jersey_number, position')
@@ -13,20 +12,19 @@ export async function GET() {
 
   if (pErr) return NextResponse.json({ error: pErr.message, players: [] })
 
-  // Fetch all team memberships — no is_primary filter, just take first team per player
+  // teams table has: name, color, age_group — no gender column
   const { data: playerTeams } = await db
     .from('player_teams')
-    .select('player_id, teams(id, name, color, age_group, gender)')
+    .select('player_id, teams(id, name, color, age_group)')
+    .eq('is_primary', true)
 
-  // Build team map — first team found per player
-  const teamMap: Record<string, { name: string; color: string; age_group?: string; gender?: string }> = {}
+  const teamMap: Record<string, { name: string; color: string; age_group?: string }> = {}
   for (const pt of (playerTeams ?? [])) {
-    if (!teamMap[pt.player_id] && pt.teams) {
-      teamMap[pt.player_id] = pt.teams as unknown as { name: string; color: string; age_group?: string; gender?: string }
+    if (pt.teams) {
+      teamMap[pt.player_id] = pt.teams as unknown as { name: string; color: string; age_group?: string }
     }
   }
 
-  // Fetch all measurements — most recent first
   const { data: allMeasurements, error: mErr } = await db
     .from('measurements')
     .select('player_id, height_in, standing_reach_in, approach_vertical_in, measured_at')
@@ -34,7 +32,6 @@ export async function GET() {
 
   if (mErr) return NextResponse.json({ error: mErr.message, players: [] })
 
-  // Most recent measurement per player
   const measMap: Record<string, { height_in: number | null; standing_reach_in: number | null; approach_vertical_in: number | null }> = {}
   for (const m of (allMeasurements ?? [])) {
     if (!measMap[m.player_id]) {
@@ -49,17 +46,19 @@ export async function GET() {
   const enriched = (players ?? []).map(p => {
     const team = teamMap[p.id]
     const meas = measMap[p.id] ?? { height_in: null, standing_reach_in: null, approach_vertical_in: null }
-    // Derive gender from team name if not set on team record
-    const rawGender = team?.gender
-    const derivedGender = rawGender ?? (team?.name?.toLowerCase().includes('boy') ? 'M' : 'F')
+    const teamName = team?.name ?? 'No team'
+    // Derive gender from team name — "boy" anywhere in name = M, else F
+    const gender = teamName.toLowerCase().includes('boy') ? 'M' : 'F'
+    // Derive age group from team age_group field
+    const age_group = team?.age_group ?? ''
     return {
       id: p.id,
       name: p.name,
       jersey_number: p.jersey_number,
       position: p.position,
-      gender: derivedGender,
-      age_group: team?.age_group ?? '',
-      teamName: team?.name ?? 'No team',
+      gender,
+      age_group,
+      teamName,
       teamColor: team?.color ?? '#888',
       height_in: meas.height_in,
       standing_reach_in: meas.standing_reach_in,
