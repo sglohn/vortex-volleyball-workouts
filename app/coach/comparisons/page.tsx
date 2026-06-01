@@ -84,8 +84,8 @@ export default function ComparisonsPage() {
   const aH2  = co.length ? avgF(co,'height_in') : null
   const aAV2 = co.length ? avgF(co,'approach_vertical_in') : null
 
-  const maxIn = Math.max(pAV, aAV, net) + 14
-  const ppi = cH / maxIn
+  // Fixed scale 0-145" — must match calibration tool exactly
+  const ppi = cH / 145
   function yp(inch: number) { return TOP + cH - inch * ppi }
   function xp(frac: number) { return LP + frac * cW }
 
@@ -156,9 +156,9 @@ export default function ComparisonsPage() {
     if (!svg || !sp) return
     while (svg.firstChild) svg.removeChild(svg.firstChild)
 
-    // Grid lines
-    for (let ft=0; ft<=Math.ceil(maxIn/12)+1; ft++) {
-      const inch = ft*12; if (inch > maxIn+6) break
+    // Grid lines — fixed 0-145" scale
+    for (let ft=0; ft<=12; ft++) {
+      const inch = ft*12; if (inch > 145) break
       const y = yp(inch); if (y < TOP-2 || y > TOP+cH+2) continue
       svg.appendChild(el('line', {x1:LP,y1:y,x2:W-RP,y2:y,stroke:'#e2e8f0','stroke-width':'.8'}))
       const lbl = el('text', {x:LP-5,y:y+4,'text-anchor':'end','font-size':'10',fill:'#94a3b8'})
