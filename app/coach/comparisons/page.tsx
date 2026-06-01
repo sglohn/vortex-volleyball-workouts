@@ -129,8 +129,8 @@ export default function ComparisonsPage() {
     defs.appendChild(flt)
     svg.appendChild(defs)
 
-    // Background
-    svg.appendChild(el('rect', { x: 0, y: 0, width: W, height: H, fill: '#f8f9fa' }))
+    // Background — must be WHITE for mix-blend-mode multiply to work
+    svg.appendChild(el('rect', { x: 0, y: 0, width: W, height: H, fill: '#ffffff' }))
 
     // Grid + labels
     for (let ft = 0; ft <= Math.ceil(maxIn / 12) + 1; ft++) {
@@ -179,13 +179,15 @@ export default function ComparisonsPage() {
         height: hpx,
         preserveAspectRatio: 'xMidYMax meet',
       })
-      if (ghost) img.setAttribute('filter', 'url(#ghost)')
+      if (ghost) {
+        img.setAttribute('style', 'mix-blend-mode: multiply; opacity: 0.35;')
+      }
       svg.appendChild(img)
       // Head line
       svg.appendChild(el('line', {
         x1: cx - wpx / 2 - 4, y1: footY - hpx,
         x2: cx + wpx / 2 + 4, y2: footY - hpx,
-        stroke: ghost ? '#bbb' : '#222', 'stroke-width': 1.5,
+        stroke: ghost ? '#bbb' : '#222', 'stroke-width': ghost ? 1 : 1.5,
       }))
     }
 
@@ -202,16 +204,18 @@ export default function ComparisonsPage() {
         height: avpx,
         preserveAspectRatio: 'xMidYMax meet',
       })
-      if (ghost) img.setAttribute('filter', 'url(#ghost)')
+      if (ghost) {
+        img.setAttribute('style', 'mix-blend-mode: multiply; opacity: 0.35;')
+      }
       svg.appendChild(img)
       // Reach line
       const lclr = ghost ? '#bbb' : '#e11d48'
+      const lw = ghost ? 1 : 2
       svg.appendChild(el('line', {
         x1: cx - 12, y1: tipY,
         x2: cx + wpx * .65, y2: tipY,
-        stroke: lclr, 'stroke-width': 2,
+        stroke: lclr, 'stroke-width': lw,
       }))
-      // Above/below label
       if (!ghost) {
         const above = avIn - net
         const sign  = above >= 0 ? '+' : ''
@@ -225,77 +229,89 @@ export default function ComparisonsPage() {
       }
     }
 
-    // ── LAYOUT ──
-    // Left half: standing figures overlapping (ghost slightly behind + offset right)
-    // Right half: jumping figures overlapping (ghost slightly behind + offset right)
-    // Net spans the right portion as visual context
+    // ── NET IMAGE ──
+    // Left pole visible, net extends to right edge
+    const netY = yp(net)
+    const poleW = 18
+    const poleX = xp(.42)
+    const netImgH = TOP + cH - netY + 40  // image height from net top to floor
+    const netImgW = (W - poleX) * 1.1     // wider than needed so it runs off right edge
 
+    // Net image — position so bottom of image aligns with floor, left edge at pole
+    svg.appendChild(el('image', {
+      href: '/volleyball_net.png',
+      x: poleX - poleW,
+      y: netY - netImgH * 0.12,   // a bit above net line so top tape aligns
+      width: netImgW,
+      height: netImgH * 1.12,
+      preserveAspectRatio: 'xMinYMid meet',
+    }))
+
+    // Net height label above the tape
+    const nlb = el('text', { x: poleX + 30, y: netY - 8, 'font-size': '11', fill: '#1d4ed8', 'font-weight': '500' })
+    nlb.textContent = `Net ${fi(net)}`
+    svg.appendChild(nlb)
+
+    // ── FIGURE PLACEMENT ──
     const standCX = xp(.18)   // centre of standing group
     const jumpCX  = xp(.65)   // centre of jumping group
-    const OFFSET  = 10         // ghost offset in px
+    const OFFSET  = 12         // ghost offset px so differences are visible
 
-    // Draw ghost (comparison) FIRST so player renders on top
+    // Ghost FIRST so player renders on top
     if (co.length && aH > 0) {
-      // Ghost standing — offset slightly right so differences are visible
       placeStanding(standCX + OFFSET, aH, true)
-      // Ghost jumping
       placeJumping(jumpCX + OFFSET, aAV, true)
     }
 
-    // Draw player on top
+    // Player on top
     if (pH > 0)  placeStanding(standCX, pH, false)
     if (pAV > 0) placeJumping(jumpCX, pAV, false)
 
-    // Section headers
-    const standLblY = TOP + cH + 16
-    const standSubY = TOP + cH + 28
+    // ── LABELS ──
+    const lblY = TOP + cH + 16
+    const subY = TOP + cH + 28
 
-    // Player label under standing
-    const pnl = el('text', { x: standCX, y: standLblY, 'text-anchor': 'middle', 'font-size': '11', fill: '#111', 'font-weight': '600' })
+    const pnl = el('text', { x: standCX, y: lblY, 'text-anchor': 'middle', 'font-size': '11', fill: '#111', 'font-weight': '600' })
     pnl.textContent = `${p.name.split(' ')[0]}  ${fi(pH)}`
     svg.appendChild(pnl)
 
     if (co.length && aH > 0) {
       const glab = GROUP_LABELS[group] ?? 'Avg'
-      const dH = pH - aH
-      const dHSign = dH >= 0 ? '+' : ''
-      const dHClr = dH >= 0 ? '#16a34a' : '#dc2626'
-      const dHlbl = el('text', { x: standCX, y: standSubY, 'text-anchor': 'middle', 'font-size': '10', fill: dHClr })
-      dHlbl.textContent = `${dHSign}${dH.toFixed(1)}" vs ${glab} (${fi(aH)})`
+      const dH = pH - aH; const dHs = dH >= 0 ? '+' : ''
+      const dHlbl = el('text', { x: standCX, y: subY, 'text-anchor': 'middle', 'font-size': '10', fill: dH >= 0 ? '#16a34a' : '#dc2626' })
+      dHlbl.textContent = `${dHs}${dH.toFixed(1)}" vs ${glab} (${fi(aH)})`
       svg.appendChild(dHlbl)
     }
 
-    // Player label under jumping
-    const jnl = el('text', { x: jumpCX, y: standLblY, 'text-anchor': 'middle', 'font-size': '11', fill: '#111', 'font-weight': '600' })
+    const jnl = el('text', { x: jumpCX, y: lblY, 'text-anchor': 'middle', 'font-size': '11', fill: '#111', 'font-weight': '600' })
     jnl.textContent = `${p.name.split(' ')[0]}  reach ${fi(pAV)}`
     svg.appendChild(jnl)
 
     if (co.length && aAV > 0) {
       const glab = GROUP_LABELS[group] ?? 'Avg'
-      const dAV = pAV - aAV
-      const dSign = dAV >= 0 ? '+' : ''
-      const dClr  = dAV >= 0 ? '#16a34a' : '#dc2626'
-      const dlbl  = el('text', { x: jumpCX, y: standSubY, 'text-anchor': 'middle', 'font-size': '10', fill: dClr })
-      dlbl.textContent = `${dSign}${dAV.toFixed(1)}" vs ${glab} (${fi(aAV)})`
+      const dAV = pAV - aAV; const dS = dAV >= 0 ? '+' : ''
+      const dlbl = el('text', { x: jumpCX, y: subY, 'text-anchor': 'middle', 'font-size': '10', fill: dAV >= 0 ? '#16a34a' : '#dc2626' })
+      dlbl.textContent = `${dS}${dAV.toFixed(1)}" vs ${glab} (${fi(aAV)})`
       svg.appendChild(dlbl)
     }
 
-    // Section divider
+    // Divider between standing and jumping sections
     const divX = xp(.40)
     svg.appendChild(el('line', { x1: divX, y1: TOP + 10, x2: divX, y2: TOP + cH, stroke: '#dde', 'stroke-width': 1, 'stroke-dasharray': '4,4' }))
 
     // Section titles
-    const stLabel = el('text', { x: (LP + divX) / 2, y: TOP + 12, 'text-anchor': 'middle', 'font-size': '10', fill: '#aaa', 'font-weight': '600', 'letter-spacing': '0.08em' }); stLabel.textContent = 'STANDING HEIGHT'; svg.appendChild(stLabel)
-    const jpLabel = el('text', { x: (divX + W - RP) / 2, y: TOP + 12, 'text-anchor': 'middle', 'font-size': '10', fill: '#aaa', 'font-weight': '600', 'letter-spacing': '0.08em' }); jpLabel.textContent = 'APPROACH TOUCH'; svg.appendChild(jpLabel)
+    const stLbl = el('text', { x: (LP + divX) / 2, y: TOP + 12, 'text-anchor': 'middle', 'font-size': '10', fill: '#aaa', 'font-weight': '600', 'letter-spacing': '0.08em' })
+    stLbl.textContent = 'STANDING HEIGHT'; svg.appendChild(stLbl)
+    const jpLbl = el('text', { x: (divX + W - RP) / 2, y: TOP + 12, 'text-anchor': 'middle', 'font-size': '10', fill: '#aaa', 'font-weight': '600', 'letter-spacing': '0.08em' })
+    jpLbl.textContent = 'APPROACH TOUCH'; svg.appendChild(jpLbl)
 
     // Legend
-    const legY = TOP + 22
-    const legX = LP + 8
-    svg.appendChild(el('rect', { x: legX, y: legY - 7, width: 10, height: 10, rx: 2, fill: '#222' }))
+    const legY = TOP + 24; const legX = LP + 6
+    svg.appendChild(el('rect', { x: legX, y: legY - 7, width: 10, height: 10, rx: 2, fill: '#333' }))
     const ll1 = el('text', { x: legX + 13, y: legY + 2, 'font-size': '10', fill: '#555' }); ll1.textContent = p.name.split(' ')[0]; svg.appendChild(ll1)
     if (co.length) {
       svg.appendChild(el('rect', { x: legX, y: legY + 10, width: 10, height: 10, rx: 2, fill: '#aaa' }))
-      const ll2 = el('text', { x: legX + 13, y: legY + 19, 'font-size': '10', fill: '#555' }); ll2.textContent = GROUP_LABELS[group] ?? 'Avg'; svg.appendChild(ll2)
+      const ll2 = el('text', { x: legX + 13, y: legY + 19, 'font-size': '10', fill: '#999' }); ll2.textContent = GROUP_LABELS[group] ?? 'Avg'; svg.appendChild(ll2)
     }
   }
 
@@ -369,7 +385,7 @@ export default function ComparisonsPage() {
             </div>
           : (
             <svg ref={svgRef} viewBox="0 0 700 500"
-              style={{ display: 'block', width: '100%', borderRadius: 12, border: '.5px solid var(--gray-border)', background: '#f8f9fa' }} />
+              style={{ display: 'block', width: '100%', borderRadius: 12, border: '.5px solid var(--gray-border)', background: '#fff' }} />
           )
       }
 
