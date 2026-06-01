@@ -13,7 +13,12 @@ interface Player {
   teamName?: string; gender?: string; age_group?: string; position?: string
   height_in?: number; standing_reach_in?: number; approach_vertical_in?: number
 }
-function fi(inches: number) { return `${Math.floor(inches/12)}'${Math.round(inches%12)}"` }
+function fi(inches: number) {
+  const totalInches = Math.round(inches)
+  const ft = Math.floor(totalInches / 12)
+  const inch = totalInches % 12
+  return `${ft}'${inch}"`
+}
 function avgF(arr: Player[], key: keyof Player): number {
   const vals = arr.map(p => p[key] as number).filter(v => v > 0)
   return vals.length ? vals.reduce((a,b) => a+b,0)/vals.length : 0
