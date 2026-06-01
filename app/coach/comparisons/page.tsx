@@ -35,11 +35,10 @@ const STAND_AR=0.4758, STAND_FEET_FRAC=0.926, STAND_CONTENT=0.864, STAND_HEAD_FR
 const JUMP_AR=0.5754, JUMP_TIP_FRAC=0.025
 const standCX=xp(.18), jumpCX=xp(.65), GHOST_OFF=14
 
-// Net image — hardcoded px from calibration (NET_POLE_FRAC=0.352, NET_TOP_VS_TAPE=-140)
-// Computed once: left=39.2% top=8.4% width=63.6% height=91.6%
+// Net image — hardcoded from calibration (NET_POLE_FRAC=0.352, NET_TOP_VS_TAPE=-140)
 const NET_L='39.2%', NET_T='8.4%', NET_W='63.6%', NET_H_GIRLS='91.6%'
-// Boys net (7'11.5"=95.5"): top shifts up
 const NET_T_BOYS='4.3%', NET_H_BOYS='95.7%'
+const NET_LABEL_X=xp(0.352)+20  // SVG label x position
 
 function standProps(hIn:number,cx:number){
   const hpx=hIn*ppi, imgH=hpx/STAND_CONTENT, imgW=imgH*STAND_AR
@@ -139,8 +138,7 @@ export default function ComparisonsPage(){
       const al=el('text',{x:pJump.left+pJump.width*.88,y:pJump.tipY+4,'font-size':'10',fill:above>=0?'#16a34a':'#dc2626','font-weight':'500'});al.textContent=`${above>=0?'+':''}${above.toFixed(1)}" vs net`;svg.appendChild(al)
     }
     if(gJump&&co.length){svg.appendChild(el('line',{x1:gJump.left-4,y1:gJump.tipY,x2:gJump.left+gJump.width*.85,y2:gJump.tipY,stroke:'#94a3b8','stroke-width':'1','stroke-dasharray':'4,3'}))}
-    // Net height label — sits at the actual net tape height on scale
-    const nl=el('text',{x:xp(NET_L_FRAC)+20,y:yp(net)-8,'font-size':'11',fill:'#1d4ed8','font-weight':'500'});nl.textContent=`Net ${fi(net)}`;svg.appendChild(nl)
+    const nl=el('text',{x:NET_LABEL_X,y:yp(net)-8,'font-size':'11',fill:'#1d4ed8','font-weight':'500'});nl.textContent=`Net ${fi(net)}`;svg.appendChild(nl)
     const pnl=el('text',{x:standCX,y:TOP+cH+16,'text-anchor':'middle','font-size':'11',fill:'#0f172a','font-weight':'600'});pnl.textContent=`${sp.name.split(' ')[0]}  ${fi(pH)}`;svg.appendChild(pnl)
     if(co.length&&aH>0){const dH=pH-aH;const dl=el('text',{x:standCX,y:TOP+cH+28,'text-anchor':'middle','font-size':'10',fill:dH>=0?'#16a34a':'#dc2626'});dl.textContent=`${dH>=0?'+':''}${dH.toFixed(1)}" vs ${GROUP_LABELS[group]} (${fi(aH)})`;svg.appendChild(dl)}
     const jnl=el('text',{x:jumpCX,y:TOP+cH+16,'text-anchor':'middle','font-size':'11',fill:'#0f172a','font-weight':'600'});jnl.textContent=`${sp.name.split(' ')[0]}  reach ${fi(pAV)}`;svg.appendChild(jnl)
@@ -184,7 +182,6 @@ export default function ComparisonsPage(){
         <div style={{position:'relative',width:'100%',aspectRatio:`${W}/${H}`,border:'.5px solid var(--gray-border)',borderRadius:12,overflow:'hidden',background:'#fff'}}>
           <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} style={{position:'absolute',inset:0,width:'100%',height:'100%',zIndex:1}} />
 
-          {/* Net — left=36.1% top shifts with girls/boys net height */}
           <img src={NET_URL} alt="net" style={{position:'absolute',left:NET_L,top:gender==='M'?NET_T_BOYS:NET_T,width:NET_W,height:gender==='M'?NET_H_BOYS:NET_H_GIRLS,objectFit:'fill',objectPosition:'left top',zIndex:2,pointerEvents:'none'}} />
 
           {gStand&&co.length>0&&<img src={STAND_URL} alt="" style={{position:'absolute',left:p2l(gStand.left),top:p2t(gStand.top),width:p2w(gStand.width),height:p2h(gStand.height),opacity:.35,mixBlendMode:'multiply',zIndex:3,pointerEvents:'none'}} />}
@@ -214,5 +211,3 @@ export default function ComparisonsPage(){
     </div>
   )
 }
-// NET_L_FRAC used in SVG label only
-const NET_L_FRAC=0.318
