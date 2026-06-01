@@ -3,7 +3,7 @@ import { useState, useEffect, useRef } from 'react'
 
 const STAND_URL = '/sil_stand_f.png'
 const JUMP_URL  = '/sil_jump_f.png'
-const NET_URL   = '/volleyball_net.png'
+const NET_URL   = '/volleyball_net.webp'
 const FEMALE_NET = 88.25
 const MALE_NET   = 95.5
 
@@ -270,18 +270,21 @@ export default function ComparisonsPage() {
               <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`}
                 style={{ position:'absolute', inset:0, width:'100%', height:'100%', zIndex:1 }} />
 
-              {/* Net image — behind silhouettes */}
-              <img src={NET_URL} alt="volleyball net"
-                style={{
-                  position:'absolute',
-                  left: pctL(netPoleX),
-                  top:  pctT(netTopY - netImgH*0.08),
-                  width: pctW(netImgW),
-                  height: pctH(netImgH*1.1),
-                  objectFit:'fill',
-                  zIndex:2,
-                  mixBlendMode:'multiply',
-                }} />
+              {/* Net image — left pole at divider, scales to correct height */}
+              {sp && (
+                <img src={NET_URL} alt="volleyball net"
+                  style={{
+                    position: 'absolute',
+                    left:   pctL(netPoleX - 12),
+                    top:    pctT(netTopY - 20),   // 20px above tape so antenna shows
+                    width:  pctW(W - netPoleX + 32),
+                    height: pctH((TOP + cH) - netTopY + 40),
+                    objectFit: 'fill',
+                    objectPosition: 'left top',
+                    zIndex: 2,
+                    pointerEvents: 'none',
+                  }} />
+              )}
 
               {/* Ghost silhouettes — behind player, mix-blend-mode so transparent bg works */}
               {gStand && co.length > 0 && (
