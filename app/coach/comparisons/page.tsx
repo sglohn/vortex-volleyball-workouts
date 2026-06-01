@@ -36,8 +36,8 @@ const JUMP_AR=0.5754, JUMP_TIP_FRAC=0.025
 const standCX=xp(.18), jumpCX=xp(.65), GHOST_OFF=14
 
 // Net image — hardcoded from calibration (NET_POLE_FRAC=0.352, NET_TOP_VS_TAPE=-140)
-const NET_L='39.2%', NET_T='8.4%', NET_W='63.6%', NET_H_GIRLS='91.6%'
-const NET_T_BOYS='4.3%', NET_H_BOYS='95.7%'
+const NET_L='39.2%', NET_T='17.6%', NET_W='63.6%', NET_H_GIRLS='82.4%'
+const NET_T_BOYS='13.5%', NET_H_BOYS='86.5%'
 const NET_LABEL_X=xp(0.352)+20  // SVG label x position
 
 function standProps(hIn:number,cx:number){
