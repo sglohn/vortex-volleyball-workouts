@@ -101,6 +101,11 @@ export default function ComparisonsPage() {
   const JUMP_TIP_FRAC   = 0.040    // fingertip as fraction from img top
   const JUMP_FEET_FRAC  = 0.777    // feet as fraction from img top
 
+  // Section centres and ghost offset
+  const standCX    = xp(.18)
+  const jumpCX     = xp(.65)
+  const GHOST_OFFSET = 14
+
   // Standing: size image so content height = player height in px
   // feet pixel aligns to floor, head pixel aligns to player height
   function standProps(hIn: number, cx: number) {
