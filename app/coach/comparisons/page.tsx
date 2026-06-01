@@ -35,11 +35,10 @@ const STAND_AR=0.4758, STAND_FEET_FRAC=0.926, STAND_CONTENT=0.864, STAND_HEAD_FR
 const JUMP_AR=0.5754, JUMP_TIP_FRAC=0.025
 const standCX=xp(.18), jumpCX=xp(.65), GHOST_OFF=14
 
-// Net image — hardcoded from calibration (NET_POLE_FRAC=0.352, NET_TOP_VS_TAPE=-140)
 // Net — locked to calibration. Do not change these values.
-const NET_L='39.2%', NET_T='8.4%', NET_W='63.6%', NET_H_GIRLS='91.6%'
-const NET_T_BOYS='4.3%', NET_H_BOYS='95.7%'
-const NET_LABEL_X=xp(0.352)+20  // SVG label x position
+const NET_L='36.0%', NET_T='12.9%', NET_W='92.4%', NET_H_GIRLS='97.4%'
+const NET_T_BOYS='2.3%', NET_H_BOYS='110.6%'
+const NET_LABEL_X=xp(0.320)+20  // SVG net label x position
 
 function standProps(hIn:number,cx:number){
   const hpx=hIn*ppi, imgH=hpx/STAND_CONTENT, imgW=imgH*STAND_AR
