@@ -48,16 +48,24 @@ export default function ComparisonsPage() {
       .then(r => r.json())
       .then(d => {
         console.log('Comparisons API response:', d._debug, d.players?.length)
-        const pl: Player[] = (d.players ?? [])
+        // Derive gender from team name since players table may not have gender column
+        const pl: Player[] = (d.players ?? []).map((p: Player) => ({
+          ...p,
+          gender: p.gender ?? (p.teamName?.toLowerCase().includes('boy') ? 'M' : 'F'),
+        }))
         setPlayers(pl)
         setDebug(d._debug ?? null)
-        const first = pl.find(p => p.gender === 'F') ?? pl[0]
+        const first = pl.find(p => (p.gender ?? 'F') === 'F') ?? pl[0]
         if (first) { setSelId(first.id); setGender((first.gender as 'F' | 'M') ?? 'F') }
         setLoading(false)
       })
   }, [])
 
-  const filteredByGender = players.filter(p => p.gender === gender)
+  // Filter by gender — derive from team name as fallback
+  const filteredByGender = players.filter(p => {
+    const g = p.gender ?? (p.teamName?.toLowerCase().includes('boy') ? 'M' : 'F')
+    return g === gender
+  })
   const sp = players.find(p => p.id === selId)
 
   function getComp(): Player[] {
@@ -138,9 +146,9 @@ export default function ComparisonsPage() {
     svg.appendChild(el('line', { x1: LP, y1: TOP, x2: LP, y2: TOP + cH, stroke: '#ccc', 'stroke-width': '1' }))
     svg.appendChild(el('rect', { x: LP, y: TOP + cH, width: cW, height: 1, fill: '#ccc' }))
 
-    // Net
+    // Net — draw in right half (jumping section) only
     const netY = yp(net)
-    const nL = xp(.44), nR = xp(.97)
+    const nL = xp(.42), nR = xp(.97)
     const netH = TOP + cH - netY
     svg.appendChild(el('rect', { x: nL - 6, y: netY - 18, width: 10, height: netH + 18, rx: 3, fill: '#2563eb' }))
     svg.appendChild(el('rect', { x: nR - 4, y: netY - 18, width: 10, height: netH + 18, rx: 3, fill: '#2563eb' }))
@@ -217,33 +225,78 @@ export default function ComparisonsPage() {
       }
     }
 
-    // Positions: player left, net right-centre
-    const pStX = xp(.08), pJpX = xp(.25)
-    const cStX = xp(.55), cJpX = xp(.73)
+    // ── LAYOUT ──
+    // Left half: standing figures overlapping (ghost slightly behind + offset right)
+    // Right half: jumping figures overlapping (ghost slightly behind + offset right)
+    // Net spans the right portion as visual context
 
-    // Comparison ghost
+    const standCX = xp(.18)   // centre of standing group
+    const jumpCX  = xp(.65)   // centre of jumping group
+    const OFFSET  = 10         // ghost offset in px
+
+    // Draw ghost (comparison) FIRST so player renders on top
     if (co.length && aH > 0) {
-      placeStanding(cStX, aH, true)
-      placeJumping(cJpX, aAV, true)
-      const glab = GROUP_LABELS[group] ?? 'Avg'
-      const cl = el('text', { x: (cStX + cJpX) / 2, y: TOP + cH + 16, 'text-anchor': 'middle', 'font-size': '11', fill: '#888', 'font-weight': '500' })
-      cl.textContent = `${glab} ${fi(aH)}`
-      svg.appendChild(cl)
-      const clr = el('text', { x: (cStX + cJpX) / 2, y: TOP + cH + 28, 'text-anchor': 'middle', 'font-size': '10', fill: '#aaa' })
-      clr.textContent = `reach ${fi(aAV)}`
-      svg.appendChild(clr)
+      // Ghost standing — offset slightly right so differences are visible
+      placeStanding(standCX + OFFSET, aH, true)
+      // Ghost jumping
+      placeJumping(jumpCX + OFFSET, aAV, true)
     }
 
-    // Player
-    if (pH > 0)  placeStanding(pStX, pH, false)
-    if (pAV > 0) placeJumping(pJpX, pAV, false)
+    // Draw player on top
+    if (pH > 0)  placeStanding(standCX, pH, false)
+    if (pAV > 0) placeJumping(jumpCX, pAV, false)
 
-    const pnl = el('text', { x: (pStX + pJpX) / 2, y: TOP + cH + 16, 'text-anchor': 'middle', 'font-size': '11', fill: '#111', 'font-weight': '500' })
+    // Section headers
+    const standLblY = TOP + cH + 16
+    const standSubY = TOP + cH + 28
+
+    // Player label under standing
+    const pnl = el('text', { x: standCX, y: standLblY, 'text-anchor': 'middle', 'font-size': '11', fill: '#111', 'font-weight': '600' })
     pnl.textContent = `${p.name.split(' ')[0]}  ${fi(pH)}`
     svg.appendChild(pnl)
-    const prl = el('text', { x: (pStX + pJpX) / 2, y: TOP + cH + 28, 'text-anchor': 'middle', 'font-size': '10', fill: '#555' })
-    prl.textContent = `reach ${fi(pAV)}`
-    svg.appendChild(prl)
+
+    if (co.length && aH > 0) {
+      const glab = GROUP_LABELS[group] ?? 'Avg'
+      const dH = pH - aH
+      const dHSign = dH >= 0 ? '+' : ''
+      const dHClr = dH >= 0 ? '#16a34a' : '#dc2626'
+      const dHlbl = el('text', { x: standCX, y: standSubY, 'text-anchor': 'middle', 'font-size': '10', fill: dHClr })
+      dHlbl.textContent = `${dHSign}${dH.toFixed(1)}" vs ${glab} (${fi(aH)})`
+      svg.appendChild(dHlbl)
+    }
+
+    // Player label under jumping
+    const jnl = el('text', { x: jumpCX, y: standLblY, 'text-anchor': 'middle', 'font-size': '11', fill: '#111', 'font-weight': '600' })
+    jnl.textContent = `${p.name.split(' ')[0]}  reach ${fi(pAV)}`
+    svg.appendChild(jnl)
+
+    if (co.length && aAV > 0) {
+      const glab = GROUP_LABELS[group] ?? 'Avg'
+      const dAV = pAV - aAV
+      const dSign = dAV >= 0 ? '+' : ''
+      const dClr  = dAV >= 0 ? '#16a34a' : '#dc2626'
+      const dlbl  = el('text', { x: jumpCX, y: standSubY, 'text-anchor': 'middle', 'font-size': '10', fill: dClr })
+      dlbl.textContent = `${dSign}${dAV.toFixed(1)}" vs ${glab} (${fi(aAV)})`
+      svg.appendChild(dlbl)
+    }
+
+    // Section divider
+    const divX = xp(.40)
+    svg.appendChild(el('line', { x1: divX, y1: TOP + 10, x2: divX, y2: TOP + cH, stroke: '#dde', 'stroke-width': 1, 'stroke-dasharray': '4,4' }))
+
+    // Section titles
+    const stLabel = el('text', { x: (LP + divX) / 2, y: TOP + 12, 'text-anchor': 'middle', 'font-size': '10', fill: '#aaa', 'font-weight': '600', 'letter-spacing': '0.08em' }); stLabel.textContent = 'STANDING HEIGHT'; svg.appendChild(stLabel)
+    const jpLabel = el('text', { x: (divX + W - RP) / 2, y: TOP + 12, 'text-anchor': 'middle', 'font-size': '10', fill: '#aaa', 'font-weight': '600', 'letter-spacing': '0.08em' }); jpLabel.textContent = 'APPROACH TOUCH'; svg.appendChild(jpLabel)
+
+    // Legend
+    const legY = TOP + 22
+    const legX = LP + 8
+    svg.appendChild(el('rect', { x: legX, y: legY - 7, width: 10, height: 10, rx: 2, fill: '#222' }))
+    const ll1 = el('text', { x: legX + 13, y: legY + 2, 'font-size': '10', fill: '#555' }); ll1.textContent = p.name.split(' ')[0]; svg.appendChild(ll1)
+    if (co.length) {
+      svg.appendChild(el('rect', { x: legX, y: legY + 10, width: 10, height: 10, rx: 2, fill: '#aaa' }))
+      const ll2 = el('text', { x: legX + 13, y: legY + 19, 'font-size': '10', fill: '#555' }); ll2.textContent = GROUP_LABELS[group] ?? 'Avg'; svg.appendChild(ll2)
+    }
   }
 
   const sp2 = players.find(p => p.id === selId)
@@ -272,7 +325,10 @@ export default function ComparisonsPage() {
           <select className="input" value={gender} onChange={e => {
             const g = e.target.value as 'F' | 'M'
             setGender(g)
-            const first = players.find(p => p.gender === g)
+            const first = players.find(p => {
+              const pg = p.gender ?? (p.teamName?.toLowerCase().includes('boy') ? 'M' : 'F')
+              return pg === g
+            })
             if (first) setSelId(first.id)
           }} style={{ fontSize: 13 }}>
             <option value="F">Girls — 7'4.25"</option>
