@@ -89,29 +89,38 @@ export default function ComparisonsPage() {
   function yp(inch: number) { return TOP + cH - inch * ppi }
   function xp(frac: number) { return LP + frac * cW }
 
-  // Silhouette sizing
-  const STAND_AR = 250/387  // w:h ratio of standing image
-  const JUMP_AR  = 280/373  // w:h ratio of jumping image
+  // Calibrated image fractions (measured from actual pixel content)
+  // Standing: head top at 23.3% from img top, feet at 89.9% from img top
+  // Jumping:  fingertip at 4.0% from img top, feet at 77.7% from img top
+  const STAND_AR        = 0.6460   // image width/height ratio
+  const STAND_HEAD_FRAC = 0.233    // head top as fraction from img top
+  const STAND_FEET_FRAC = 0.899    // feet as fraction from img top
+  const STAND_CONTENT   = STAND_FEET_FRAC - STAND_HEAD_FRAC  // 0.666
 
-  // Standing section centre, jumping section centre
-  const standCX = xp(.18)
-  const jumpCX  = xp(.65)
-  const GHOST_OFFSET = 14  // px rightward shift for ghost
+  const JUMP_AR         = 0.7507   // image width/height ratio
+  const JUMP_TIP_FRAC   = 0.040    // fingertip as fraction from img top
+  const JUMP_FEET_FRAC  = 0.777    // feet as fraction from img top
 
+  // Standing: size image so content height = player height in px
+  // feet pixel aligns to floor, head pixel aligns to player height
   function standProps(hIn: number, cx: number) {
-    const hpx = hIn * ppi
-    const wpx = hpx * STAND_AR
-    const top  = yp(hIn)
-    const left = cx - wpx/2
-    return { top, left, width: wpx, height: hpx }
+    const hpx    = hIn * ppi                          // player height in px
+    const imgH   = hpx / STAND_CONTENT               // total image height
+    const imgW   = imgH * STAND_AR
+    const imgTop = (TOP + cH) - STAND_FEET_FRAC * imgH  // feet land on floor
+    return { top: imgTop, left: cx - imgW / 2, width: imgW, height: imgH }
   }
 
+  // Jumping: size image so fingertip-to-feet span = approach_vertical in px
+  // fingertip aligns to yp(avIn), feet land on floor
   function jumpProps(avIn: number, cx: number) {
-    const avpx = avIn * ppi
-    const wpx  = avpx * JUMP_AR
-    const top  = yp(avIn)
-    const left = cx - wpx*0.35
-    return { top, left, width: wpx, height: avpx, tipY: yp(avIn) }
+    const avpx  = avIn * ppi                          // approach touch in px
+    const span  = JUMP_FEET_FRAC - JUMP_TIP_FRAC     // 0.737
+    const imgH  = avpx / span
+    const imgW  = imgH * JUMP_AR
+    const tipY  = yp(avIn)
+    const imgTop = tipY - JUMP_TIP_FRAC * imgH        // tip aligns to reach height
+    return { top: imgTop, left: cx - imgW * 0.35, width: imgW, height: imgH, tipY }
   }
 
   const pStand = pH  > 0 ? standProps(pH,  standCX) : null
@@ -159,24 +168,29 @@ export default function ComparisonsPage() {
     const jpLbl = el('text', {x:(divX+W-RP)/2,y:TOP+13,'text-anchor':'middle','font-size':'10',fill:'#94a3b8','font-weight':'600','letter-spacing':'0.06em'})
     jpLbl.textContent = 'APPROACH TOUCH'; svg.appendChild(jpLbl)
 
-    // Head-height line for player
+    // Head-height line for player — aligns with actual head pixel in image
     if (pStand) {
-      svg.appendChild(el('line', {x1:pStand.left-4,y1:pStand.top,x2:pStand.left+pStand.width+4,y2:pStand.top,stroke:'#1e293b','stroke-width':'1.5'}))
+      const headY = pStand.top + STAND_HEAD_FRAC * pStand.height
+      svg.appendChild(el('line', {x1:pStand.left-4,y1:headY,x2:pStand.left+pStand.width+4,y2:headY,stroke:'#1e293b','stroke-width':'1.5'}))
+      // Height label
+      const hl = el('text', {x:pStand.left-8,y:headY+4,'text-anchor':'end','font-size':'10',fill:'#1e293b','font-weight':'500'})
+      hl.textContent = fi(pH); svg.appendChild(hl)
     }
-    // Head-height line for ghost
+    // Ghost head line
     if (gStand && co.length) {
-      svg.appendChild(el('line', {x1:gStand.left-4,y1:gStand.top,x2:gStand.left+gStand.width+4,y2:gStand.top,stroke:'#94a3b8','stroke-width':'1.5','stroke-dasharray':'4,3'}))
+      const headY = gStand.top + STAND_HEAD_FRAC * gStand.height
+      svg.appendChild(el('line', {x1:gStand.left-4,y1:headY,x2:gStand.left+gStand.width+4,y2:headY,stroke:'#94a3b8','stroke-width':'1','stroke-dasharray':'4,3'}))
     }
 
-    // Reach line for player
+    // Reach line for player — tipY already = yp(avIn) = actual fingertip height
     if (pJump) {
-      svg.appendChild(el('line', {x1:pJump.left-4,y1:pJump.tipY,x2:pJump.left+pJump.width*.8,y2:pJump.tipY,stroke:'#e11d48','stroke-width':'2'}))
-      const aboveLbl = el('text', {x:pJump.left+pJump.width*.85,y:pJump.tipY+4,'font-size':'10',fill:above>=0?'#16a34a':'#dc2626','font-weight':'500'})
+      svg.appendChild(el('line', {x1:pJump.left-4,y1:pJump.tipY,x2:pJump.left+pJump.width*.85,y2:pJump.tipY,stroke:'#e11d48','stroke-width':'2'}))
+      const aboveLbl = el('text', {x:pJump.left+pJump.width*.88,y:pJump.tipY+4,'font-size':'10',fill:above>=0?'#16a34a':'#dc2626','font-weight':'500'})
       aboveLbl.textContent = `${above>=0?'+':''}${above.toFixed(1)}" vs net`; svg.appendChild(aboveLbl)
     }
-    // Reach line for ghost
+    // Ghost reach line
     if (gJump && co.length) {
-      svg.appendChild(el('line', {x1:gJump.left-4,y1:gJump.tipY,x2:gJump.left+gJump.width*.8,y2:gJump.tipY,stroke:'#94a3b8','stroke-width':'1.5','stroke-dasharray':'4,3'}))
+      svg.appendChild(el('line', {x1:gJump.left-4,y1:gJump.tipY,x2:gJump.left+gJump.width*.85,y2:gJump.tipY,stroke:'#94a3b8','stroke-width':'1','stroke-dasharray':'4,3'}))
     }
 
     // Net label
