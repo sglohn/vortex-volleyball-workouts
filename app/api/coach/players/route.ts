@@ -14,6 +14,15 @@ export async function GET(req: NextRequest) {
     const { data: healthReports } = await db.from('health_reports').select('*').eq('player_id', playerId).order('reported_at', { ascending: false })
     const { data: playerTeam } = await db.from('player_teams').select('*, teams(*)').eq('player_id', playerId).eq('is_primary', true).single()
 
+    // Fetch last 60 body checks for soreness pattern analysis
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
+    const { data: bodyChecks } = await db
+      .from('body_checks')
+      .select('regions, checked_at')
+      .eq('player_id', playerId)
+      .gte('checked_at', sixtyDaysAgo)
+      .order('checked_at', { ascending: false })
+
     const sessionIds = sessions?.map(s => s.id) ?? []
     const { data: allLogs } = await db.from('set_logs').select('exercise_id, session_id, weight_lbs, reps_completed, completed, logged_at').in('session_id', sessionIds.length ? sessionIds : ['none']).eq('completed', true)
     const exerciseIds = [...new Set(allLogs?.map(l => l.exercise_id) ?? [])]
@@ -34,7 +43,7 @@ export async function GET(req: NextRequest) {
       return { exerciseId: ex.id, exerciseName: ex.name, history, trend: getTrend(vals), current: vals[vals.length - 1] ?? 0 }
     })
 
-    return NextResponse.json({ player, sessions: sessions?.slice(0, 10), measurements, healthReports, exerciseProgress, team: playerTeam?.teams ?? null })
+    return NextResponse.json({ player, sessions: sessions?.slice(0, 10), measurements, healthReports, bodyChecks: bodyChecks ?? [], exerciseProgress, team: playerTeam?.teams ?? null })
   }
 
   // Player list with team info and health flags
