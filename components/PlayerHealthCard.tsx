@@ -97,6 +97,17 @@ function bodyPartToZoneIds(bodyPart: string): string[] {
   return candidates
 }
 
+// ─── Zone classification ──────────────────────────────────────────────────────
+
+const JOINT_ZONE_IDS = new Set([
+  'r_knee','l_knee','r_ankle','l_ankle','r_shoulder','l_shoulder',
+  'r_hip','l_hip','r_elbow','l_elbow','r_wrist','l_wrist','neck','head',
+])
+const MUSCLE_ZONE_IDS = new Set([
+  'r_quad','l_quad','r_hamstring','l_hamstring','r_calf','l_calf',
+  'r_glute','l_glute','r_shin','l_shin','chest','core','upper_back','lower_back',
+])
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface HealthReport {
@@ -115,10 +126,16 @@ interface HealthReport {
   status: string
 }
 
+interface BodyCheck {
+  regions: Record<string, string> // zone_id → 'sore' | 'injured'
+  checked_at: string
+}
+
 type PlayerStatus = 'active' | 'adjusted' | 'inactive'
 
 interface Props {
   healthReports: HealthReport[]
+  bodyChecks: BodyCheck[]
   playerId: string
   onUpdate: () => void
 }
@@ -184,11 +201,44 @@ function Figure({ zones, redZones, orangeZones, yellowZones, recurringZones, mir
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function PlayerHealthCard({ healthReports, playerId, onUpdate }: Props) {
+export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, onUpdate }: Props) {
   const [side, setSide] = useState<'front' | 'back'>('front')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [playerStatus, setPlayerStatus] = useState<PlayerStatus>(() => deriveStatus(healthReports))
+
+  const currentReports  = healthReports.filter(r => r.status === 'active' || r.status === 'monitoring')
+  const resolvedReports = healthReports.filter(r => r.status === 'resolved')
+
+  // ── Muscle soreness pattern analysis from body_checks ────────────────────
+  // Count how many times each muscle zone was flagged sore in the last 30 days
+  const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000
+  const recentChecks = bodyChecks.filter(c => new Date(c.checked_at).getTime() > thirtyDaysAgo)
+
+  // zone_id → count of sore flags in last 30 days (muscles only)
+  const muscleSoreCounts: Record<string, number> = {}
+  for (const check of recentChecks) {
+    for (const [zoneId, status] of Object.entries(check.regions)) {
+      if (!MUSCLE_ZONE_IDS.has(zoneId)) continue
+      if (status === 'sore' || status === 'injured') {
+        muscleSoreCounts[zoneId] = (muscleSoreCounts[zoneId] ?? 0) + 1
+      }
+    }
+  }
+  // Muscles flagged 4+ times in 30 days = recurring pattern worth noting
+  const recurringMuscleSoreness = Object.entries(muscleSoreCounts)
+    .filter(([, count]) => count >= 4)
+    .sort((a, b) => b[1] - a[1])
+
+  // Muscles flagged 1–3 times = routine soreness, show in awareness section only
+  const routineMuscleSoreness = Object.entries(muscleSoreCounts)
+    .filter(([, count]) => count >= 1 && count < 4)
+    .sort((a, b) => b[1] - a[1])
+
+  // Zone label lookup
+  function zoneLabel(zoneId: string): string {
+    return ALL_ZONES.find(z => z.id === zoneId)?.label ?? zoneId
+  }
 
   const currentReports  = healthReports.filter(r => r.status === 'active' || r.status === 'monitoring')
   const resolvedReports = healthReports.filter(r => r.status === 'resolved')
@@ -224,6 +274,12 @@ export default function PlayerHealthCard({ healthReports, playerId, onUpdate }: 
     for (const zid of bodyPartToZoneIds(r.body_part)) {
       if (!allCurrentZones.has(zid)) recurringZones.add(zid)
     }
+  }
+
+  // Recurring muscle soreness (4+ times in 30 days) also gets yellow on map
+  // — doesn't override a coach-logged report color if that zone is already classified
+  for (const [zoneId] of recurringMuscleSoreness) {
+    if (!allCurrentZones.has(zoneId)) yellowZones.add(zoneId)
   }
 
   const cfg = STATUS_CONFIG[playerStatus]
@@ -332,13 +388,52 @@ export default function PlayerHealthCard({ healthReports, playerId, onUpdate }: 
 
       {/* ── Resolved history ── */}
       {resolvedReports.length > 0 && (
-        <div>
+        <div style={{ marginBottom: '0.75rem' }}>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>History ({resolvedReports.length})</div>
           {resolvedReports.slice(0, 5).map(r => (
             <ReportRow key={r.id} r={r} expanded={expanded === r.id} onToggle={() => setExpanded(expanded === r.id ? null : r.id)} onUpdate={updateReport} saving={saving} resolved />
           ))}
           {resolvedReports.length > 5 && (
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', paddingLeft: '0.25rem' }}>+ {resolvedReports.length - 5} more resolved</div>
+          )}
+        </div>
+      )}
+
+      {/* ── Player-reported soreness awareness ── */}
+      {(recurringMuscleSoreness.length > 0 || routineMuscleSoreness.length > 0) && (
+        <div style={{ borderTop: '1px solid var(--court-border)', paddingTop: '0.75rem', marginTop: '0.25rem' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--carolina)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.5rem' }}>
+            Player Self-Report — Last 30 Days
+          </div>
+
+          {recurringMuscleSoreness.length > 0 && (
+            <div style={{ marginBottom: '0.5rem' }}>
+              <div style={{ fontSize: '0.68rem', color: '#facc15', fontWeight: 600, marginBottom: '0.3rem' }}>
+                Recurring muscle soreness — consider adjusting load
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                {recurringMuscleSoreness.map(([zoneId, count]) => (
+                  <div key={zoneId} style={{ fontSize: '0.72rem', padding: '0.15rem 0.5rem', borderRadius: 20, background: 'rgba(250,204,21,0.12)', border: '1px solid rgba(250,204,21,0.3)', color: '#facc15', fontWeight: 600 }}>
+                    {zoneLabel(zoneId)} <span style={{ opacity: 0.7 }}>×{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {routineMuscleSoreness.length > 0 && (
+            <div>
+              <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: '0.3rem' }}>
+                Routine muscle soreness — normal training response
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.3rem' }}>
+                {routineMuscleSoreness.map(([zoneId, count]) => (
+                  <div key={zoneId} style={{ fontSize: '0.72rem', padding: '0.15rem 0.5rem', borderRadius: 20, background: 'rgba(255,255,255,0.04)', border: '1px solid var(--court-border)', color: 'var(--text-muted)' }}>
+                    {zoneLabel(zoneId)} <span style={{ opacity: 0.6 }}>×{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </div>
       )}
