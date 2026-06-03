@@ -240,9 +240,6 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
     return ALL_ZONES.find(z => z.id === zoneId)?.label ?? zoneId
   }
 
-  const currentReports  = healthReports.filter(r => r.status === 'active' || r.status === 'monitoring')
-  const resolvedReports = healthReports.filter(r => r.status === 'resolved')
-
   // Classify each current report into red / orange / yellow
   // Red    = severe severity
   // Orange = moderate severity OR major_injury type with no severity set
