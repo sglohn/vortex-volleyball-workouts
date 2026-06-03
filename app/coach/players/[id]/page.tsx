@@ -84,6 +84,7 @@ export default function CoachPlayerDetailPage() {
   const exercises = (data.exerciseProgress as Array<Record<string, unknown>>) ?? []
   const measurements = (data.measurements as Array<Record<string, unknown>>) ?? []
   const healthReports = (data.healthReports as Array<Record<string, unknown>>) ?? []
+  const bodyChecks = (data.bodyChecks as Array<{ regions: Record<string, string>; checked_at: string }>) ?? []
   const sessions = (data.sessions as Array<Record<string, unknown>>) ?? []
   const latestMeas = measurements[0] as Record<string, number | string> | undefined
   const activeHealth = healthReports.filter(r => r.status === 'active' || r.status === 'monitoring')
@@ -113,6 +114,7 @@ export default function CoachPlayerDetailPage() {
         {/* Health card */}
         <PlayerHealthCard
           healthReports={healthReports as never}
+          bodyChecks={bodyChecks}
           playerId={id}
           onUpdate={() => fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)}
         />
