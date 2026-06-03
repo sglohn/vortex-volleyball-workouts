@@ -348,14 +348,20 @@ export default function PlayerWorkoutPage() {
 
         {/* Current exercise card */}
         <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
+          {/* Exercise image — shown inline if available */}
+          {ex.demo_image_url && (
+            <div style={{ margin: '-1.25rem -1.25rem 1rem -1.25rem', borderRadius: '12px 12px 0 0', overflow: 'hidden', background: 'var(--court-raised)', maxHeight: 200 }}>
+              <img src={ex.demo_image_url} alt={ex.name} style={{ width: '100%', height: 200, objectFit: 'cover', display: 'block' }} />
+            </div>
+          )}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
             <div style={{ flex: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
                 <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', fontWeight: 800 }}>{ex.name}</h2>
-                {(ex.demo_url || ex.demo_image_url) && (
-                  <button onClick={() => setDemoEx(ex)} style={{ background: 'none', border: 'none', color: 'var(--volt)', cursor: 'pointer', padding: '0 0.25rem' }}>
+                {ex.demo_url && (
+                  <a href={ex.demo_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--volt)', lineHeight: 1, flexShrink: 0 }} title="Watch demo video">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
-                  </button>
+                  </a>
                 )}
               </div>
               <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
