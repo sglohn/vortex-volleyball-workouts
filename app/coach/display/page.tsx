@@ -25,7 +25,7 @@ interface Exercise {
 }
 interface Block { id: string; block_label: string; sets: number; exercises: Exercise[] }
 interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[] }
-interface Team { id: string; name: string; age_group?: string; color: string }
+interface Team { id: string; name: string; age_group?: string; color: string; is_open_gym?: boolean }
 
 const BG      = '#0d1117'
 const SURFACE = '#161d2a'
@@ -107,11 +107,23 @@ function DisplayContent() {
 
         {/* Team pills */}
         <div style={{ display: 'flex', gap: '0.4rem', flex: 1 }}>
-          {teams.map(t => (
-            <button key={t.id} onClick={() => setSelectedTeamId(t.id)} style={{ padding: '0.2vh 0.8rem', borderRadius: 20, fontSize: '1.8vh', fontWeight: 700, cursor: 'pointer', border: `2px solid ${selectedTeamId === t.id ? YELLOW : 'rgba(255,255,255,0.15)'}`, background: selectedTeamId === t.id ? YELLOW : 'transparent', color: selectedTeamId === t.id ? '#111827' : 'rgba(255,255,255,0.5)', transition: 'all 0.12s' }}>
-              {t.name}{t.age_group ? ` ${t.age_group}` : ''}
-            </button>
-          ))}
+          {teams.map(t => {
+            const isActive = selectedTeamId === t.id
+            const isOpenGym = t.is_open_gym
+            return (
+              <button key={t.id} onClick={() => setSelectedTeamId(t.id)} style={{
+                padding: '0.2vh 0.8rem', borderRadius: 20, fontSize: '1.8vh', fontWeight: 700, cursor: 'pointer',
+                border: `2px solid ${isActive ? (isOpenGym ? CAROLINA : YELLOW) : 'rgba(255,255,255,0.15)'}`,
+                background: isActive ? (isOpenGym ? CAROLINA : YELLOW) : 'transparent',
+                color: isActive ? '#111827' : (isOpenGym ? CAROLINA : 'rgba(255,255,255,0.5)'),
+                transition: 'all 0.12s',
+                display: 'flex', alignItems: 'center', gap: '0.3rem',
+              }}>
+                {isOpenGym && <span style={{ fontSize: '1.6vh' }}>⚡</span>}
+                {t.name}{!isOpenGym && t.age_group ? ` ${t.age_group}` : ''}
+              </button>
+            )
+          })}
         </div>
 
         {/* Workout name + date */}
@@ -126,33 +138,19 @@ function DisplayContent() {
         <a href="/coach/dashboard" style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1.8vh', textDecoration: 'none', flexShrink: 0, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.4vh', padding: '0.3vh 0.75rem', fontWeight: 600 }}>✕ Exit TV</a>
       </div>
 
-
-
       {/* ── WARMUP BLOCK STRIP ── */}
       {(warmupBlock || workout?.warmup_notes) && !loading && !noWorkout && workout && (
-        <div style={{ background: `${CAROLINA}15`, borderBottom: `1px solid ${CAROLINA}25`, padding: '0.4vh 1.5rem', display: 'flex', alignItems: 'center', gap: '1.25rem', flexShrink: 0, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5vh', color: CAROLINA, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}>WARMUP</span>
-          {warmupBlock && (
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
-              {warmupBlock.exercises.map((ex, ei) => {
-                const lib = ex.exercise_library
-                if (!lib) return null
-                return (
-                  <span key={ex.id} style={{ fontSize: '1.5vh', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>
-                    {ei > 0 && <span style={{ color: 'rgba(255,255,255,0.25)', marginRight: '1rem' }}>·</span>}
-                    {lib.name}
-                    {(ex.custom_reps) && (
-                      <span style={{ color: YELLOW, marginLeft: '0.35rem', fontFamily: 'var(--font-display)', fontWeight: 700 }}>
-                        {warmupBlock.sets}×{ex.custom_reps}
-                      </span>
-                    )}
-                  </span>
-                )
-              })}
-            </div>
-          )}
+        <div style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}`, padding: '0.5vh 1.5rem', display: 'flex', alignItems: 'center', gap: '1.5rem', flexShrink: 0, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.8vh', color: CAROLINA, letterSpacing: '0.08em', flexShrink: 0 }}>WARM-UP</span>
+          {warmupBlock && warmupBlock.exercises.filter(e => !e.skipped).map((ex, i) => (
+            <span key={ex.id} style={{ fontSize: '1.6vh', color: 'rgba(255,255,255,0.7)', fontWeight: 600 }}>
+              {i > 0 && <span style={{ color: 'rgba(255,255,255,0.2)', marginRight: '0.75rem' }}>·</span>}
+              {ex.exercise_library?.name}
+              {ex.custom_reps && <span style={{ color: CAROLINA, marginLeft: '0.4rem' }}>{warmupBlock.sets}×{ex.custom_reps}</span>}
+            </span>
+          ))}
           {workout.warmup_notes && (
-            <span style={{ fontSize: '1.4vh', color: 'rgba(255,255,255,0.45)', fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '30vw' }}>
+            <span style={{ fontSize: '1.5vh', color: 'rgba(255,255,255,0.4)', fontStyle: 'italic' }}>
               {workout.warmup_notes}
             </span>
           )}
