@@ -292,6 +292,15 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
     setSaving(false)
   }
 
+  async function deleteReport(id: string) {
+    await fetch('/api/player/health', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id }),
+    })
+    onUpdate()
+  }
+
   async function savePlayerStatus(s: PlayerStatus) {
     setPlayerStatus(s)
     // Persist on player record if you add a player_status column later
@@ -378,7 +387,7 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
         <div style={{ marginBottom: '0.75rem' }}>
           <div style={{ fontSize: '0.7rem', color: '#f87171', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>Current</div>
           {currentReports.map(r => (
-            <ReportRow key={r.id} r={r} expanded={expanded === r.id} onToggle={() => setExpanded(expanded === r.id ? null : r.id)} onUpdate={updateReport} saving={saving} />
+            <ReportRow key={r.id} r={r} expanded={expanded === r.id} onToggle={() => setExpanded(expanded === r.id ? null : r.id)} onUpdate={updateReport} onDelete={deleteReport} saving={saving} />
           ))}
         </div>
       )}
@@ -388,7 +397,7 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
         <div style={{ marginBottom: '0.75rem' }}>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>History ({resolvedReports.length})</div>
           {resolvedReports.slice(0, 5).map(r => (
-            <ReportRow key={r.id} r={r} expanded={expanded === r.id} onToggle={() => setExpanded(expanded === r.id ? null : r.id)} onUpdate={updateReport} saving={saving} resolved />
+            <ReportRow key={r.id} r={r} expanded={expanded === r.id} onToggle={() => setExpanded(expanded === r.id ? null : r.id)} onUpdate={updateReport} onDelete={deleteReport} saving={saving} resolved />
           ))}
           {resolvedReports.length > 5 && (
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', paddingLeft: '0.25rem' }}>+ {resolvedReports.length - 5} more resolved</div>
@@ -442,14 +451,17 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
 
 const SEVERITY_COLOR: Record<string, string> = { mild: '#facc15', moderate: '#f97316', severe: '#f87171' }
 
-function ReportRow({ r, expanded, onToggle, onUpdate, saving, resolved }: {
+function ReportRow({ r, expanded, onToggle, onUpdate, onDelete, saving, resolved }: {
   r: HealthReport
   expanded: boolean
   onToggle: () => void
   onUpdate: (id: string, status: string) => void
+  onDelete: (id: string) => void
   saving: boolean
   resolved?: boolean
 }) {
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
   return (
     <div style={{ background: resolved ? 'transparent' : 'rgba(248,113,113,0.06)', border: `1px solid ${resolved ? 'var(--court-border)' : 'rgba(248,113,113,0.18)'}`, borderRadius: 8, marginBottom: '0.4rem', overflow: 'hidden' }}>
       <button onClick={onToggle} style={{ width: '100%', background: 'none', border: 'none', padding: '0.6rem 0.75rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', textAlign: 'left' }}>
@@ -472,12 +484,31 @@ function ReportRow({ r, expanded, onToggle, onUpdate, saving, resolved }: {
           {r.coach_notes && <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.25rem 0' }}>📋 {r.coach_notes}</p>}
           {r.expected_return && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0' }}>Est. return: {new Date(r.expected_return + 'T12:00:00').toLocaleDateString()}</p>}
           {r.resolved_at && <p style={{ fontSize: '0.75rem', color: '#4ade80', margin: '0.25rem 0' }}>Resolved: {new Date(r.resolved_at).toLocaleDateString()}</p>}
-          {!resolved && (
-            <div style={{ display: 'flex', gap: '0.375rem', marginTop: '0.625rem' }}>
-              <button onClick={() => onUpdate(r.id, 'monitoring')} disabled={saving} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#facc15', color: '#facc15' }}>Monitoring</button>
-              <button onClick={() => onUpdate(r.id, 'resolved')} disabled={saving} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#4ade80', color: '#4ade80' }}>Mark Resolved</button>
-            </div>
-          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.625rem' }}>
+            {!resolved ? (
+              <div style={{ display: 'flex', gap: '0.375rem' }}>
+                <button onClick={() => onUpdate(r.id, 'monitoring')} disabled={saving} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#facc15', color: '#facc15' }}>Monitoring</button>
+                <button onClick={() => onUpdate(r.id, 'resolved')} disabled={saving} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#4ade80', color: '#4ade80' }}>Mark Resolved</button>
+              </div>
+            ) : <div />}
+
+            {/* Delete */}
+            {!confirmDelete ? (
+              <button onClick={() => setConfirmDelete(true)} style={{ background: 'none', border: 'none', color: 'rgba(248,113,113,0.4)', cursor: 'pointer', fontSize: '0.72rem', padding: '0.25rem 0.375rem', borderRadius: 4, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
+                onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(248,113,113,0.4)')}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+                Delete
+              </button>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.375rem' }}>
+                <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Delete this report?</span>
+                <button onClick={() => onDelete(r.id)} style={{ background: 'none', border: '1px solid #f87171', color: '#f87171', borderRadius: 4, padding: '0.2rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}>Yes</button>
+                <button onClick={() => setConfirmDelete(false)} style={{ background: 'none', border: '1px solid var(--court-border)', color: 'var(--text-muted)', borderRadius: 4, padding: '0.2rem 0.5rem', fontSize: '0.72rem', cursor: 'pointer' }}>Cancel</button>
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>
