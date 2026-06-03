@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianG
 import { inchesToFeetInches, painLevelColor, painLevelLabel } from '@/lib/fitness'
 import FeetInchesInput from '@/components/FeetInchesInput'
 import MeasurementHistoryModal from '@/components/MeasurementHistoryModal'
+import PlayerHealthCard from '@/components/PlayerHealthCard'
 
 const MEASUREMENT_FIELDS = [
   { key: 'height_in', label: 'Height', showFt: true },
@@ -109,36 +110,12 @@ export default function CoachPlayerDetailPage() {
       {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--volt)', fontSize: '0.9rem' }}>{msg}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-        {/* Health reports */}
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem', color: activeHealth.length ? '#f87171' : undefined }}>
-            Health {activeHealth.length > 0 && <span className="tag tag-danger" style={{ fontSize: '0.65rem' }}>{activeHealth.length}</span>}
-          </h2>
-          {activeHealth.length === 0
-            ? <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No active health concerns.</p>
-            : activeHealth.map(r => {
-                const rid = r.id as string
-                const bodyPart = r.body_part as string
-                const reportType = r.report_type as string
-                const painLevel = r.pain_level != null ? Number(r.pain_level) : null
-                const description = r.description as string | undefined
-                return (
-                  <div key={rid} style={{ background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.2)', borderRadius: 8, padding: '0.75rem', marginBottom: '0.5rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <span style={{ fontWeight: 600, fontSize: '0.9rem', color: '#f87171' }}>{bodyPart}</span>
-                      <span className={`tag ${reportType === 'major_injury' ? 'tag-danger' : 'tag-warn'}`}>{reportType === 'major_injury' ? 'Injury' : 'Pain'}</span>
-                    </div>
-                    {painLevel != null && <div style={{ fontSize: '0.8rem', color: painLevelColor(painLevel) }}>{painLevel}/10 — {painLevelLabel(painLevel)}</div>}
-                    {description && <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>{description}</div>}
-                    <div style={{ display: 'flex', gap: '0.4rem', marginTop: '0.5rem' }}>
-                      <button onClick={() => updateHealth(rid, 'monitoring', '')} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#facc15', color: '#facc15' }}>Monitoring</button>
-                      <button onClick={() => updateHealth(rid, 'resolved', '')} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: 'var(--volt)', color: 'var(--volt)' }}>Resolved</button>
-                    </div>
-                  </div>
-                )
-              })
-          }
-        </div>
+        {/* Health card */}
+        <PlayerHealthCard
+          healthReports={healthReports as never}
+          playerId={id}
+          onUpdate={() => fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)}
+        />
 
         {/* Measurements */}
         <div className="card" style={{ padding: '1.25rem' }}>
