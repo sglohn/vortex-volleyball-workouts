@@ -36,6 +36,14 @@ const BODY_PARTS = [
   'Ankle', 'Knee', 'Hip', 'Lower Back', 'Upper Back', 'Shoulder',
   'Elbow', 'Wrist', 'Finger', 'Neck', 'Hamstring', 'Quad', 'Calf', 'Foot', 'Other',
 ]
+const BILATERAL_PARTS = new Set([
+  'Ankle', 'Knee', 'Hip', 'Shoulder', 'Elbow', 'Wrist', 'Finger', 'Hamstring', 'Quad', 'Calf', 'Foot',
+])
+const SIDES = [
+  { value: 'Left',      label: 'Left' },
+  { value: 'Right',     label: 'Right' },
+  { value: 'Bilateral', label: 'Both' },
+]
 const INJURY_TYPES = ['Sprain', 'Strain', 'Overuse', 'Contusion', 'Tendinitis', 'Fracture', 'Other']
 const SEVERITY_LEVELS = [
   { value: 'mild',     label: 'Mild',     color: '#facc15', desc: 'Plays through it' },
@@ -47,7 +55,7 @@ const STATUS_LABELS: Record<string, string> = { active: 'Active', monitoring: 'M
 const STATUS_COLORS: Record<string, string> = { active: '#f87171', monitoring: '#facc15', resolved: '#4ade80' }
 
 const BLANK_FORM = {
-  playerId: '', bodyPart: '', injuryType: '', severity: '',
+  playerId: '', bodyPart: '', side: '', injuryType: '', severity: '',
   reportType: 'major_injury' as 'major_injury' | 'nagging_pain',
   description: '', painLevel: '', expectedReturn: '', coachNotes: '',
 }
@@ -124,12 +132,13 @@ export default function CoachHealthPage() {
   async function submitNew() {
     if (!newForm.playerId || !newForm.bodyPart) return
     setSavingNew(true)
+    const fullBodyPart = newForm.side ? `${newForm.side} ${newForm.bodyPart}` : newForm.bodyPart
     await fetch('/api/coach/health', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         playerId: newForm.playerId,
-        bodyPart: newForm.bodyPart,
+        bodyPart: fullBodyPart,
         injuryType: newForm.injuryType || null,
         severity: newForm.severity || null,
         reportType: newForm.reportType,
@@ -457,7 +466,7 @@ export default function CoachHealthPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <div>
                   <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem', fontWeight: 600 }}>Body Part *</label>
-                  <select className="input" value={newForm.bodyPart} onChange={e => setNewForm(f => ({ ...f, bodyPart: e.target.value }))}>
+                  <select className="input" value={newForm.bodyPart} onChange={e => setNewForm(f => ({ ...f, bodyPart: e.target.value, side: BILATERAL_PARTS.has(e.target.value) ? f.side : '' }))}>
                     <option value="">Select…</option>
                     {BODY_PARTS.map(b => <option key={b} value={b}>{b}</option>)}
                   </select>
@@ -470,6 +479,21 @@ export default function CoachHealthPage() {
                   </select>
                 </div>
               </div>
+
+              {/* Side selector — only for bilateral body parts */}
+              {BILATERAL_PARTS.has(newForm.bodyPart) && (
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', fontWeight: 600 }}>Side</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    {SIDES.map(s => (
+                      <button key={s.value} onClick={() => setNewForm(f => ({ ...f, side: f.side === s.value ? '' : s.value }))}
+                        style={{ flex: 1, padding: '0.5rem', borderRadius: 8, border: `2px solid ${newForm.side === s.value ? 'var(--carolina)' : 'var(--court-border)'}`, background: newForm.side === s.value ? 'rgba(86,160,211,0.15)' : 'transparent', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 700, color: newForm.side === s.value ? 'var(--carolina)' : 'var(--text-muted)' }}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Severity */}
               <div>
