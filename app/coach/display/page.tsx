@@ -214,12 +214,14 @@ function DisplayContent() {
                           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.2rem, 5vh, 3.8rem)', color: '#fff', lineHeight: 1.0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
                             {lib.name}
                           </div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.1rem, 4.2vh, 3rem)', color: YELLOW, lineHeight: 1 }}>
-                            {block.sets} × {reps} reps
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1vh', flexWrap: 'nowrap' }}>
+                            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.1rem, 4.2vh, 3rem)', color: YELLOW, lineHeight: 1 }}>
+                              {block.sets} × {reps} reps
+                            </div>
+                            {lib.logs_weight && (
+                              <div style={{ fontSize: 'clamp(0.65rem, 1.6vh, 1rem)', color: CAROLINA, fontWeight: 700, background: `${CAROLINA}20`, border: `1px solid ${CAROLINA}50`, borderRadius: '0.4vh', padding: '0.2vh 0.6vh', whiteSpace: 'nowrap', flexShrink: 0 }}>Log weight</div>
+                            )}
                           </div>
-                          {lib.logs_weight && (
-                            <div style={{ fontSize: 'clamp(0.7rem, 1.8vh, 1.1rem)', color: CAROLINA, fontWeight: 600 }}>Log weight</div>
-                          )}
                           {notes && (
                             <div style={{ fontSize: 'clamp(0.65rem, 1.5vh, 1rem)', color: 'rgba(255,255,255,0.45)', fontStyle: 'italic', lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', marginTop: '0.1vh' }}>
                               {notes}
