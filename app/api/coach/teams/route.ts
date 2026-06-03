@@ -18,6 +18,13 @@ export async function GET() {
     return { ...team, playerCount: count ?? 0 }
   }))
 
+  // Sort: regular teams first (by age_group), Open Gym last
+  enriched.sort((a, b) => {
+    if (a.is_open_gym && !b.is_open_gym) return 1
+    if (!a.is_open_gym && b.is_open_gym) return -1
+    return (a.age_group ?? '').localeCompare(b.age_group ?? '')
+  })
+
   return NextResponse.json({ teams: enriched })
 }
 
