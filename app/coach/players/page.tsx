@@ -114,6 +114,16 @@ export default function CoachPlayersPage() {
     (!teamFilter || p.teamName === teamFilter)
   )
 
+  // Group by team; unassigned last
+  const teamOrder = teams.map(t => t.id)
+  const grouped: { label: string; color?: string; players: Player[] }[] = []
+  for (const team of teams) {
+    const tp = filtered.filter(p => p.teamId === team.id)
+    if (tp.length > 0) grouped.push({ label: `${team.name}${team.age_group ? ` ${team.age_group}` : ''}`, color: team.color, players: tp })
+  }
+  const unassigned = filtered.filter(p => !p.teamId || !teamOrder.includes(p.teamId))
+  if (unassigned.length > 0) grouped.push({ label: 'Unassigned', color: undefined, players: unassigned })
+
 
 
   if (loading) return <div style={{ padding:'2rem', color:'var(--text-muted)' }}>Loading…</div>
@@ -138,50 +148,61 @@ export default function CoachPlayersPage() {
         </select>
       </div>
 
-      <div className="card" style={{ overflow:'hidden' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse' }}>
-          <thead>
-            <tr style={{ borderBottom:'1.5px solid var(--gray-border)', background:'var(--carolina-light)' }}>
-              {['Player','Team','Position','Sessions','Last Active','Actions'].map(h => (
-                <th key={h} style={{ padding:'0.75rem 1rem', textAlign:'left', fontSize:'0.72rem', color:'var(--carolina-deep)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:700 }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && <tr><td colSpan={6} style={{ padding:'2rem', textAlign:'center', color:'var(--text-muted)' }}>No players found.</td></tr>}
-            {filtered.map((p, i) => (
-              <tr key={p.id} style={{ borderBottom:'1px solid var(--gray-border)', background: i%2===0 ? 'var(--white)' : 'rgba(238,244,255,0.35)' }}>
-                <td style={{ padding:'0.875rem 1rem' }}>
-                  <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
-                    <div style={{ width:34, height:34, borderRadius:'50%', background: p.teamColor ? `${p.teamColor}22` : 'var(--carolina-light)', border:`1.5px solid ${p.teamColor ?? 'var(--carolina-border)'}`, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, color: p.teamColor ?? 'var(--carolina-deep)', fontSize:'0.85rem', flexShrink:0 }}>
-                      {p.jersey_number || p.name.charAt(0)}
-                    </div>
-                    <div>
-                      <div style={{ fontWeight:600 }}>{p.name}</div>
-                      {p.hasHealthFlag && <div style={{ fontSize:'0.7rem', color:'var(--danger)' }}>⚠ Health flag</div>}
-                    </div>
-                  </div>
-                </td>
-                <td style={{ padding:'0.875rem 1rem' }}>
-                  {p.teamName ? <span style={{ fontSize:'0.82rem', color: p.teamColor ?? 'var(--carolina-dark)', background: p.teamColor ? `${p.teamColor}18` : 'var(--carolina-light)', padding:'0.2rem 0.6rem', borderRadius:4, fontWeight:500 }}>{p.teamName}</span> : <span style={{ color:'var(--text-muted)', fontSize:'0.82rem' }}>—</span>}
-                </td>
-                <td style={{ padding:'0.875rem 1rem', color:'var(--text-secondary)', fontSize:'0.85rem' }}>{p.position || '—'}</td>
-                <td style={{ padding:'0.875rem 1rem', color:'var(--text-secondary)', fontSize:'0.85rem' }}>{p.sessionCount ?? 0}</td>
-                <td style={{ padding:'0.875rem 1rem', color:'var(--text-muted)', fontSize:'0.82rem' }}>{p.lastSeen ? new Date(p.lastSeen).toLocaleDateString() : 'Never'}</td>
-                <td style={{ padding:'0.875rem 1rem' }}>
-                  <div style={{ display:'flex', gap:'0.625rem', alignItems:'center' }}>
-                    <Link href={`/coach/players/${p.id}`} style={{ color:'var(--carolina-dark)', fontSize:'0.82rem', textDecoration:'none', fontWeight:600 }}>View</Link>
-                    <span style={{ color:'var(--gray-border)' }}>|</span>
-                    <button onClick={() => openEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Edit</button>
-                    <span style={{ color:'var(--gray-border)' }}>|</span>
-                    <button onClick={() => setDeleteConfirm(p)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Remove</button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {filtered.length === 0 && (
+        <div className="card" style={{ padding:'2rem', textAlign:'center', color:'var(--text-muted)' }}>No players found.</div>
+      )}
+
+      {grouped.map(group => (
+        <div key={group.label} style={{ marginBottom:'1.5rem' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', marginBottom:'0.5rem' }}>
+            {group.color && <div style={{ width:10, height:10, borderRadius:'50%', background:group.color, flexShrink:0 }} />}
+            <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'0.85rem', color: group.color ?? 'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.07em' }}>{group.label}</span>
+            <span style={{ fontSize:'0.75rem', color:'var(--text-muted)', fontWeight:500 }}>— {group.players.length} player{group.players.length !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="card" style={{ overflow:'hidden' }}>
+            <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <thead>
+                <tr style={{ borderBottom:'1.5px solid var(--gray-border)', background:'var(--carolina-light)' }}>
+                  {['Player','Position','Sessions','Last Active','Actions'].map(h => (
+                    <th key={h} style={{ padding:'0.75rem 1rem', textAlign:'left', fontSize:'0.72rem', color:'var(--carolina-deep)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:700 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {group.players.map((p, i) => (
+                  <tr key={p.id} style={{ borderBottom:'1px solid var(--gray-border)', background: i%2===0 ? 'var(--white)' : 'rgba(238,244,255,0.35)' }}>
+                    <td style={{ padding:'0.875rem 1rem' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+                        <div style={{ width:34, height:34, borderRadius:'50%', background: p.teamColor ? `${p.teamColor}22` : 'var(--carolina-light)', border:`1.5px solid ${p.teamColor ?? 'var(--carolina-border)'}`, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, color: p.teamColor ?? 'var(--carolina-deep)', fontSize:'0.85rem', flexShrink:0 }}>
+                          {p.jersey_number || p.name.charAt(0)}
+                        </div>
+                        <div>
+                          <Link href={`/coach/players/${p.id}`} style={{ fontWeight:700, color:'var(--carolina-dark)', textDecoration:'none' }}
+                            onMouseEnter={e => (e.currentTarget.style.textDecoration='underline')}
+                            onMouseLeave={e => (e.currentTarget.style.textDecoration='none')}>
+                            {p.name}
+                          </Link>
+                          {p.hasHealthFlag && <div style={{ fontSize:'0.7rem', color:'var(--danger)' }}>⚠ Health flag</div>}
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding:'0.875rem 1rem', color:'var(--text-secondary)', fontSize:'0.85rem' }}>{p.position || '—'}</td>
+                    <td style={{ padding:'0.875rem 1rem', color:'var(--text-secondary)', fontSize:'0.85rem' }}>{p.sessionCount ?? 0}</td>
+                    <td style={{ padding:'0.875rem 1rem', color:'var(--text-muted)', fontSize:'0.82rem' }}>{p.lastSeen ? new Date(p.lastSeen).toLocaleDateString() : 'Never'}</td>
+                    <td style={{ padding:'0.875rem 1rem' }}>
+                      <div style={{ display:'flex', gap:'0.625rem', alignItems:'center' }}>
+                        <button onClick={() => openEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Edit</button>
+                        <span style={{ color:'var(--gray-border)' }}>|</span>
+                        <button onClick={() => setDeleteConfirm(p)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Remove</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
 
       {/* Add/Edit Modal */}
       {modal && (
