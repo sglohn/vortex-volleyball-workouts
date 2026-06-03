@@ -143,9 +143,11 @@ function deriveStatus(reports: HealthReport[]): PlayerStatus {
 
 // ─── Figure sub-component ────────────────────────────────────────────────────
 
-function Figure({ zones, activeZones, recurringZones, mirror = false }: {
+function Figure({ zones, redZones, orangeZones, yellowZones, recurringZones, mirror = false }: {
   zones: ZoneDef[]
-  activeZones: Set<string>
+  redZones: Set<string>
+  orangeZones: Set<string>
+  yellowZones: Set<string>
   recurringZones: Set<string>
   mirror?: boolean
 }) {
@@ -155,14 +157,25 @@ function Figure({ zones, activeZones, recurringZones, mirror = false }: {
       <path d={BODY_PATH} fill="#1e2736" stroke="#2d3f52" strokeWidth="0.8"
         transform={mirror ? `scale(-1,1) translate(-${VB},0)` : undefined} />
       {zones.map(z => {
-        const isActive    = activeZones.has(z.id)
+        const isRed      = redZones.has(z.id)
+        const isOrange   = orangeZones.has(z.id)
+        const isYellow   = yellowZones.has(z.id)
         const isRecurring = recurringZones.has(z.id)
-        if (!isActive && !isRecurring) return null
+        // Priority: red > orange > yellow > recurring
+        const fill   = isRed ? 'rgba(239,68,68,0.4)'
+                     : isOrange ? 'rgba(249,115,22,0.4)'
+                     : isYellow ? 'rgba(250,204,21,0.35)'
+                     : isRecurring ? 'rgba(250,204,21,0.15)'
+                     : null
+        const stroke = isRed ? '#ef4444'
+                     : isOrange ? '#f97316'
+                     : isYellow ? '#facc15'
+                     : isRecurring ? 'rgba(250,204,21,0.4)'
+                     : null
+        if (!fill) return null
         return (
           <rect key={z.id} x={z.x} y={z.y} width={z.w} height={z.h} rx={3}
-            fill={isActive ? 'rgba(239,68,68,0.35)' : 'rgba(250,204,21,0.28)'}
-            stroke={isActive ? '#ef4444' : '#facc15'}
-            strokeWidth={1.5} />
+            fill={fill} stroke={stroke!} strokeWidth={1.5} />
         )
       })}
     </svg>
@@ -180,20 +193,37 @@ export default function PlayerHealthCard({ healthReports, playerId, onUpdate }: 
   const currentReports  = healthReports.filter(r => r.status === 'active' || r.status === 'monitoring')
   const resolvedReports = healthReports.filter(r => r.status === 'resolved')
 
-  // Build zone sets
-  const activeZones    = new Set<string>()
+  // Classify each current report into red / orange / yellow
+  // Red    = severe severity
+  // Orange = moderate severity OR major_injury type with no severity set
+  // Yellow = mild severity OR nagging_pain OR monitoring status
+  function reportColor(r: HealthReport): 'red' | 'orange' | 'yellow' {
+    if (r.severity === 'severe') return 'red'
+    if (r.severity === 'moderate') return 'orange'
+    if (r.report_type === 'major_injury' && !r.severity) return 'orange'
+    return 'yellow'
+  }
+
+  const redZones    = new Set<string>()
+  const orangeZones = new Set<string>()
+  const yellowZones = new Set<string>()
   const recurringZones = new Set<string>()
 
   for (const r of currentReports) {
-    for (const zid of bodyPartToZoneIds(r.body_part)) activeZones.add(zid)
+    const color = reportColor(r)
+    for (const zid of bodyPartToZoneIds(r.body_part)) {
+      if (color === 'red')    redZones.add(zid)
+      else if (color === 'orange') orangeZones.add(zid)
+      else yellowZones.add(zid)
+    }
   }
-  // Recurring = body parts that appear in resolved history AND are not currently active
-  const resolvedPartZones = new Set<string>()
+
+  // Recurring = resolved history zones not currently flagged at any level
+  const allCurrentZones = new Set([...redZones, ...orangeZones, ...yellowZones])
   for (const r of resolvedReports) {
-    for (const zid of bodyPartToZoneIds(r.body_part)) resolvedPartZones.add(zid)
-  }
-  for (const zid of resolvedPartZones) {
-    if (!activeZones.has(zid)) recurringZones.add(zid)
+    for (const zid of bodyPartToZoneIds(r.body_part)) {
+      if (!allCurrentZones.has(zid)) recurringZones.add(zid)
+    }
   }
 
   const cfg = STATUS_CONFIG[playerStatus]
@@ -256,14 +286,14 @@ export default function PlayerHealthCard({ healthReports, playerId, onUpdate }: 
           <div style={{ width: '45%', maxWidth: 90 }}>
             <Figure
               zones={side === 'front' ? FRONT_ZONES : BACK_ZONES}
-              activeZones={activeZones}
+              redZones={redZones} orangeZones={orangeZones} yellowZones={yellowZones}
               recurringZones={recurringZones}
             />
           </div>
           <div style={{ width: '45%', maxWidth: 90 }}>
             <Figure
               zones={side === 'front' ? FRONT_ZONES : BACK_ZONES}
-              activeZones={activeZones}
+              redZones={redZones} orangeZones={orangeZones} yellowZones={yellowZones}
               recurringZones={recurringZones}
               mirror
             />
@@ -271,15 +301,18 @@ export default function PlayerHealthCard({ healthReports, playerId, onUpdate }: 
         </div>
 
         {/* Legend */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', marginTop: '0.5rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)' }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(239,68,68,0.35)', border: '1.5px solid #ef4444' }} />
-            Current
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)' }}>
-            <div style={{ width: 10, height: 10, borderRadius: 2, background: 'rgba(250,204,21,0.28)', border: '1.5px solid #facc15' }} />
-            Recurring
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
+          {[
+            { color: '#ef4444', bg: 'rgba(239,68,68,0.4)',    label: 'Stop' },
+            { color: '#f97316', bg: 'rgba(249,115,22,0.4)',   label: 'Adjust' },
+            { color: '#facc15', bg: 'rgba(250,204,21,0.35)',  label: 'Monitor' },
+            { color: 'rgba(250,204,21,0.4)', bg: 'rgba(250,204,21,0.15)', label: 'History' },
+          ].map(l => (
+            <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)' }}>
+              <div style={{ width: 10, height: 10, borderRadius: 2, background: l.bg, border: `1.5px solid ${l.color}` }} />
+              {l.label}
+            </div>
+          ))}
         </div>
       </div>
 
