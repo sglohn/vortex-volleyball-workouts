@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 
-interface Team { id: string; name: string; age_group?: string; color: string; is_active: boolean; playerCount?: number }
+interface Team { id: string; name: string; age_group?: string; color: string; is_active: boolean; playerCount?: number; is_open_gym?: boolean }
 
 const COLORS = ['#56a0d3','#111827','#ef4444','#f97316','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16']
 const AGE_GROUPS = ['12s','13s','14s','15-16s','17-18s','Boys 14s','Boys 16s','Boys 18s','Open']
@@ -78,27 +78,38 @@ export default function CoachTeamsPage() {
           <div key={t.id} className="card" style={{ padding:'1.1rem 1.25rem', borderLeft:`4px solid ${t.color}`, display:'flex', alignItems:'center', gap:'1rem' }}>
             {/* Color swatch */}
             <div style={{ width:40, height:40, borderRadius:10, background:t.color, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
-              <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1rem', color:'white' }}>{t.name.charAt(0)}</span>
+              <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1rem', color:'white' }}>
+                {t.is_open_gym ? '⚡' : t.name.charAt(0)}
+              </span>
             </div>
             <div style={{ flex:1, minWidth:0 }}>
-              <Link href={`/coach/teams/${t.id}`} style={{ fontWeight:700, fontSize:'1rem', color:'var(--black)', textDecoration:'none' }}>{t.name} →</Link>
+              <div style={{ display:'flex', alignItems:'center', gap:'0.5rem' }}>
+                <Link href={`/coach/teams/${t.id}`} style={{ fontWeight:700, fontSize:'1rem', color:'var(--black)', textDecoration:'none' }}>{t.name} →</Link>
+                {t.is_open_gym && <span style={{ fontSize:'0.7rem', fontWeight:700, background:'var(--carolina-light)', color:'var(--carolina-deep)', border:'1px solid var(--carolina-border)', borderRadius:20, padding:'0.1rem 0.5rem', letterSpacing:'0.04em', textTransform:'uppercase' }}>TV Display Only</span>}
+              </div>
               <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginTop:'0.1rem' }}>
-                {t.age_group && <span>{t.age_group} · </span>}
-                <span>{t.playerCount ?? 0} players</span>
+                {t.is_open_gym
+                  ? 'Schedule a workout to show on the TV — no player check-in'
+                  : <>{t.age_group && <span>{t.age_group} · </span>}<span>{t.playerCount ?? 0} players</span></>
+                }
               </div>
             </div>
             <div style={{ display:'flex', gap:'0.625rem', alignItems:'center', flexShrink:0 }}>
-              <a href={`/team/${t.id}`} target="_blank" rel="noopener noreferrer"
-                style={{ background:'var(--carolina)', color:'var(--white)', fontSize:'0.78rem', textDecoration:'none', fontWeight:700, padding:'0.35rem 0.75rem', borderRadius:6, letterSpacing:'0.03em' }}>
-                ▶ Team Mode
-              </a>
+              {!t.is_open_gym && (
+                <a href={`/team/${t.id}`} target="_blank" rel="noopener noreferrer"
+                  style={{ background:'var(--carolina)', color:'var(--white)', fontSize:'0.78rem', textDecoration:'none', fontWeight:700, padding:'0.35rem 0.75rem', borderRadius:6, letterSpacing:'0.03em' }}>
+                  ▶ Team Mode
+                </a>
+              )}
               <Link href={`/coach/schedule?team=${t.id}`}
                 style={{ color:'var(--carolina-dark)', fontSize:'0.82rem', textDecoration:'none', fontWeight:600 }}>
                 Schedule
               </Link>
-              <button onClick={() => openEdit(t)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Edit</button>
-              <span style={{ color:'var(--gray-border)' }}>|</span>
-              <button onClick={() => setDeleteConfirm(t)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Delete</button>
+              {!t.is_open_gym && <>
+                <button onClick={() => openEdit(t)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Edit</button>
+                <span style={{ color:'var(--gray-border)' }}>|</span>
+                <button onClick={() => setDeleteConfirm(t)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Delete</button>
+              </>}
             </div>
           </div>
         ))}
