@@ -82,21 +82,20 @@ export async function DELETE(req: NextRequest) {
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!
       )
-      // List everything in the exercise's folder and delete it all
       const { data: listed } = await storageClient.storage
         .from('exercise-media')
         .list(`exercises/${id}`)
 
       if (listed && listed.length > 0) {
-        const paths = listed.map(f => `exercises/${id}/${f.name}`)
+        const paths = listed.map((f: { name: string }) => `exercises/${id}/${f.name}`)
         await storageClient.storage.from('exercise-media').remove(paths)
       }
     } catch {
-      // Storage cleanup failure shouldn't block the DB delete
+      // Storage cleanup failure should not block the DB delete
     }
   }
 
-  // Hard delete from DB — set_logs cascade on delete
+  // Hard delete — template_block_exercises, overrides, skips all cascade
   const { error } = await db
     .from('exercise_library')
     .delete()
