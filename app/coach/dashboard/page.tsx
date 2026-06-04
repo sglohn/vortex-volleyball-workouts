@@ -20,16 +20,6 @@ interface DashboardData {
   teamsActive: Array<{ id: string; name: string; age_group?: string; color: string; is_open_gym?: boolean; phase?: { phase_type: string; name: string } | null; todayWorkout?: string | null }>
 }
 
-const NAV_LINKS = [
-  { label: 'Schedule', href: '/coach/schedule', icon: '📅' },
-  { label: 'Teams', href: '/coach/teams', icon: '🏐' },
-  { label: 'Players', href: '/coach/players', icon: '👤' },
-  { label: 'Health', href: '/coach/health', icon: '🩺' },
-  { label: 'Templates', href: '/coach/templates', icon: '📋' },
-  { label: 'Exercises', href: '/coach/exercises', icon: '💪' },
-  { label: 'TV Display', href: '/coach/display', icon: '📺' },
-]
-
 export default function CoachDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -74,27 +64,6 @@ export default function CoachDashboardPage() {
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '0.2rem' }}>Dashboard</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{today}</p>
-      </div>
-
-      {/* Quick Nav */}
-      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '2rem', padding: '1rem 1.25rem', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 12 }}>
-        {NAV_LINKS.map(link => (
-          <Link key={link.href} href={link.href} style={{ textDecoration: 'none' }}>
-            <div style={{
-              display: 'flex', alignItems: 'center', gap: '0.375rem',
-              padding: '0.4rem 0.875rem', borderRadius: 20,
-              background: 'var(--white)', border: '1.5px solid var(--gray-border)',
-              fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)',
-              cursor: 'pointer', transition: 'border-color 0.12s, background 0.12s',
-            }}
-              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--carolina)'; (e.currentTarget as HTMLDivElement).style.background = '#f0f7ff' }}
-              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gray-border)'; (e.currentTarget as HTMLDivElement).style.background = 'var(--white)' }}
-            >
-              <span style={{ fontSize: '0.9rem' }}>{link.icon}</span>
-              {link.label}
-            </div>
-          </Link>
-        ))}
       </div>
 
       {/* Stat row — clickable */}
@@ -164,7 +133,7 @@ export default function CoachDashboardPage() {
             {data.teamsActive.map(team => {
               const phase = team.phase
               const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
-              const href = team.is_open_gym ? `/coach/schedule?team=${team.id}` : `/coach/teams`
+              const href = team.is_open_gym ? `/coach/schedule?team=${team.id}` : `/coach/teams/${team.id}`
               return (
                 <Link key={team.id} href={href} style={{ textDecoration: 'none' }}>
                   <div
