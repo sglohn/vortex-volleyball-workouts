@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 
@@ -11,20 +11,34 @@ interface SessionDetail {
 }
 
 interface DashboardData {
-  todaySessions: Array<{ id: string; playerName: string; teamName?: string; checkedInAt: string; completedAt?: string; completionPct: number; hasHealthFlag: boolean }>
+  todaySessions: Array<{ id: string; playerName: string; jerseyNumber?: string; teamName?: string; teamColor?: string; checkedInAt: string; completedAt?: string; completionPct: number; hasHealthFlag: boolean }>
   unconfirmedHealth: Array<{ id: string; playerName: string; bodyPart: string; reportType: string; painLevel?: number }>
   activeInjuries: number
   totalPlayers: number
   sessionsTodayCount: number
   sessionsWeekCount: number
-  teamsActive: Array<{ id: string; name: string; age_group?: string; color: string; phase?: { phase_type: string; name: string } }>
+  teamsActive: Array<{ id: string; name: string; age_group?: string; color: string; is_open_gym?: boolean; phase?: { phase_type: string; name: string } | null; todayWorkout?: string | null }>
 }
+
+const NAV_LINKS = [
+  { label: 'Schedule', href: '/coach/schedule', icon: '📅' },
+  { label: 'Teams', href: '/coach/teams', icon: '🏐' },
+  { label: 'Players', href: '/coach/players', icon: '👤' },
+  { label: 'Health', href: '/coach/health', icon: '🩺' },
+  { label: 'Templates', href: '/coach/templates', icon: '📋' },
+  { label: 'Exercises', href: '/coach/exercises', icon: '💪' },
+  { label: 'TV Display', href: '/coach/display', icon: '📺' },
+]
 
 export default function CoachDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
   const [loading, setLoading] = useState(true)
   const [sessionModal, setSessionModal] = useState<SessionDetail | null>(null)
   const [loadingSession, setLoadingSession] = useState(false)
+
+  const checkinsRef = useRef<HTMLDivElement>(null)
+  const healthRef = useRef<HTMLDivElement>(null)
+  const teamsRef = useRef<HTMLDivElement>(null)
 
   async function openSession(sessionId: string) {
     setLoadingSession(true)
@@ -44,119 +58,135 @@ export default function CoachDashboardPage() {
 
   const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })
 
+  const scrollTo = (ref: React.RefObject<HTMLDivElement | null>) => {
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading…</div>
 
+  const pendingHealth = data?.unconfirmedHealth?.length ?? 0
+  const activeInjuries = data?.activeInjuries ?? 0
+
   return (
-    <div style={{ padding: '2rem', maxWidth: 1000 }}>
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '0.25rem' }}>Dashboard</h1>
-        <p style={{ color: 'var(--text-muted)' }}>{today}</p>
+    <div style={{ padding: '2rem', maxWidth: 1040 }}>
+
+      {/* Header */}
+      <div style={{ marginBottom: '1.5rem' }}>
+        <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '0.2rem' }}>Dashboard</h1>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{today}</p>
       </div>
 
-      {/* Stat row */}
+      {/* Quick Nav */}
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '2rem', padding: '1rem 1.25rem', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 12 }}>
+        {NAV_LINKS.map(link => (
+          <Link key={link.href} href={link.href} style={{ textDecoration: 'none' }}>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: '0.375rem',
+              padding: '0.4rem 0.875rem', borderRadius: 20,
+              background: 'var(--white)', border: '1.5px solid var(--gray-border)',
+              fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)',
+              cursor: 'pointer', transition: 'border-color 0.12s, background 0.12s',
+            }}
+              onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--carolina)'; (e.currentTarget as HTMLDivElement).style.background = '#f0f7ff' }}
+              onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--gray-border)'; (e.currentTarget as HTMLDivElement).style.background = 'var(--white)' }}
+            >
+              <span style={{ fontSize: '0.9rem' }}>{link.icon}</span>
+              {link.label}
+            </div>
+          </Link>
+        ))}
+      </div>
+
+      {/* Stat row — clickable */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
         {[
-          { value: data?.sessionsTodayCount ?? 0, label: 'Checked in today' },
-          { value: data?.sessionsWeekCount ?? 0, label: 'Sessions this week' },
-          { value: data?.activeInjuries ?? 0, label: 'Active injuries', alert: (data?.activeInjuries ?? 0) > 0 },
-          { value: data?.unconfirmedHealth?.length ?? 0, label: 'Pending health reports', alert: (data?.unconfirmedHealth?.length ?? 0) > 0 },
+          {
+            value: data?.sessionsTodayCount ?? 0,
+            label: 'Checked in today',
+            onClick: () => scrollTo(checkinsRef),
+            alert: false,
+          },
+          {
+            value: data?.sessionsWeekCount ?? 0,
+            label: 'Sessions this week',
+            onClick: () => scrollTo(checkinsRef),
+            alert: false,
+          },
+          {
+            value: activeInjuries,
+            label: 'Active injuries',
+            onClick: () => { window.location.href = '/coach/health' },
+            alert: activeInjuries > 0,
+          },
+          {
+            value: pendingHealth,
+            label: 'Pending health reports',
+            onClick: () => pendingHealth > 0 ? scrollTo(healthRef) : scrollTo(healthRef),
+            alert: pendingHealth > 0,
+            badge: pendingHealth > 0 ? 'Review' : undefined,
+          },
         ].map(s => (
-          <div key={s.label} className="stat-card" style={{ borderColor: s.alert ? 'rgba(248,113,113,0.4)' : 'var(--court-border)' }}>
+          <div
+            key={s.label}
+            className="stat-card"
+            onClick={s.onClick}
+            style={{
+              borderColor: s.alert ? 'rgba(248,113,113,0.4)' : 'var(--court-border)',
+              cursor: 'pointer',
+              transition: 'transform 0.1s, box-shadow 0.1s',
+              position: 'relative',
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)' }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '' }}
+          >
             <div className="stat-value" style={{ color: s.alert ? '#f87171' : 'var(--volt)' }}>{s.value}</div>
             <div className="stat-label">{s.label}</div>
+            {s.badge && (
+              <div style={{ position: 'absolute', top: 8, right: 8, background: '#f87171', color: '#fff', fontSize: '0.6rem', fontWeight: 700, padding: '0.15rem 0.4rem', borderRadius: 8, textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+                {s.badge}
+              </div>
+            )}
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '0.25rem', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              {s.alert ? '↗ tap to view' : '↗ tap to jump'}
+            </div>
           </div>
         ))}
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
-        {/* Today's check-ins */}
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today's Check-Ins</h2>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{data?.sessionsTodayCount ?? 0} players</span>
-          </div>
-          {!data?.todaySessions?.length
-            ? <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No check-ins yet.</p>
-            : <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 320, overflowY: 'auto' }}>
-                {data.todaySessions.map(s => (
-                  <div key={s.id} onClick={() => openSession(s.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.375rem', borderBottom: '1px solid var(--court-border)', cursor: 'pointer', borderRadius: 6, transition: 'background 0.12s' }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'var(--carolina-light)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                    <div style={{ width: 30, height: 30, borderRadius: '50%', background: s.hasHealthFlag ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: s.hasHealthFlag ? '#f87171' : 'var(--volt)', flexShrink: 0 }}>
-                      {s.playerName.charAt(0)}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 500, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        {s.playerName}
-                        {s.hasHealthFlag && <span style={{ fontSize: '0.65rem', color: '#f87171' }}>⚠ health flag</span>}
-                      </div>
-                      {s.teamName && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{s.teamName}</div>}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      {s.completedAt
-                        ? <span className="tag tag-volt">Done</span>
-                        : <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{s.completionPct}%</span>}
-                      <span style={{ fontSize: '0.7rem', color: 'var(--carolina-dark)' }}>→</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-          }
-        </div>
-
-        {/* Pending health reports */}
-        <div className="card" style={{ padding: '1.25rem', borderColor: data?.unconfirmedHealth?.length ? 'rgba(248,113,113,0.3)' : 'var(--court-border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: data?.unconfirmedHealth?.length ? '#f87171' : undefined }}>
-              Pending Health Reports
-            </h2>
-            <Link href="/coach/health" style={{ fontSize: '0.8rem', color: 'var(--volt)', textDecoration: 'none' }}>View all →</Link>
-          </div>
-          {!data?.unconfirmedHealth?.length
-            ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1.5rem', color: 'var(--text-muted)', gap: '0.5rem' }}>
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                <span style={{ fontSize: '0.85rem' }}>No pending reports</span>
-              </div>
-            : <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {data.unconfirmedHealth.map(r => (
-                  <Link key={r.id} href="/coach/health" style={{ textDecoration: 'none' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.625rem', borderRadius: 8, background: 'rgba(248,113,113,0.07)', border: '1px solid rgba(248,113,113,0.2)' }}>
-                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(248,113,113,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#f87171', flexShrink: 0 }}>
-                        {r.playerName.charAt(0)}
-                      </div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 500, fontSize: '0.85rem', color: 'var(--text-primary)' }}>{r.playerName}</div>
-                        <div style={{ fontSize: '0.75rem', color: '#f87171' }}>{r.bodyPart} · {r.reportType === 'major_injury' ? 'Injury' : 'Pain'}{r.painLevel ? ` · ${r.painLevel}/10` : ''}</div>
-                      </div>
-                      <span className="tag tag-danger">Review</span>
-                    </div>
-                  </Link>
-                ))}
-              </div>
-          }
-        </div>
-      </div>
-
-      {/* Active teams with phases */}
+      {/* Teams section */}
       {data?.teamsActive && data.teamsActive.length > 0 && (
-        <div className="card" style={{ padding: '1.25rem' }}>
+        <div ref={teamsRef} className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Teams</h2>
-            <Link href="/coach/teams" style={{ fontSize: '0.8rem', color: 'var(--volt)', textDecoration: 'none' }}>Manage →</Link>
+            <Link href="/coach/teams" style={{ fontSize: '0.8rem', color: 'var(--volt)', textDecoration: 'none' }}>Manage teams →</Link>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '0.75rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
             {data.teamsActive.map(team => {
               const phase = team.phase
               const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
+              const href = team.is_open_gym ? `/coach/schedule?team=${team.id}` : `/coach/teams`
               return (
-                <Link key={team.id} href={`/coach/schedule?team=${team.id}`} style={{ textDecoration: 'none' }}>
-                  <div className="card-raised" style={{ padding: '0.875rem', borderLeft: `3px solid ${team.color}`, cursor: 'pointer' }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.25rem' }}>{team.name}</div>
-                    {team.age_group && <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>{team.age_group}</div>}
+                <Link key={team.id} href={href} style={{ textDecoration: 'none' }}>
+                  <div
+                    className="card-raised"
+                    style={{ padding: '0.875rem', borderLeft: `4px solid ${team.color}`, cursor: 'pointer', transition: 'transform 0.1s, box-shadow 0.1s' }}
+                    onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(-2px)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '0 4px 16px rgba(0,0,0,0.1)' }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.transform = 'translateY(0)'; (e.currentTarget as HTMLDivElement).style.boxShadow = '' }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: '0.92rem', marginBottom: '0.2rem' }}>{team.name}</div>
+                    {team.age_group && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>{team.age_group}</div>}
+
+                    {/* Today's workout */}
+                    {team.todayWorkout
+                      ? <div style={{ fontSize: '0.72rem', color: 'var(--carolina-dark)', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 5, padding: '0.2rem 0.5rem', marginBottom: '0.5rem', fontWeight: 600 }}>
+                          📅 {team.todayWorkout}
+                        </div>
+                      : <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>No workout today</div>
+                    }
+
                     {phaseConfig
-                      ? <span style={{ fontSize: '0.7rem', color: phaseConfig.color, background: `${phaseConfig.color}20`, padding: '0.15rem 0.5rem', borderRadius: 4, fontWeight: 600 }}>{phaseConfig.label}</span>
-                      : <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>No phase set</span>
+                      ? <span style={{ fontSize: '0.68rem', color: phaseConfig.color, background: `${phaseConfig.color}20`, padding: '0.15rem 0.5rem', borderRadius: 4, fontWeight: 600 }}>{phaseConfig.label}</span>
+                      : <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>No phase set</span>
                     }
                   </div>
                 </Link>
@@ -166,7 +196,111 @@ export default function CoachDashboardPage() {
         </div>
       )}
 
-      {/* ── SESSION DETAIL MODAL ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+
+        {/* Today's check-ins */}
+        <div ref={checkinsRef} className="card" style={{ padding: '1.25rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Today's Check-Ins</h2>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{data?.sessionsTodayCount ?? 0} players</span>
+          </div>
+          {!data?.todaySessions?.length
+            ? <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>No check-ins yet.</p>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 340, overflowY: 'auto' }}>
+                {data.todaySessions.map(s => {
+                  const timeIn = new Date(s.checkedInAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+                  return (
+                    <div key={s.id} onClick={() => openSession(s.id)}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.5rem', borderBottom: '1px solid var(--court-border)', cursor: 'pointer', borderRadius: 6, transition: 'background 0.12s' }}
+                      onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.background = 'var(--carolina-light)'}
+                      onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.background = 'transparent'}>
+                      <div style={{
+                        width: 32, height: 32, borderRadius: '50%',
+                        background: s.teamColor ? `${s.teamColor}25` : s.hasHealthFlag ? 'rgba(248,113,113,0.15)' : 'rgba(74,222,128,0.12)',
+                        border: `2px solid ${s.teamColor ?? (s.hasHealthFlag ? '#f87171' : 'rgba(74,222,128,0.4)')}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.72rem', fontWeight: 700,
+                        color: s.teamColor ?? (s.hasHealthFlag ? '#f87171' : 'var(--volt)'),
+                        flexShrink: 0,
+                      }}>
+                        {s.jerseyNumber ?? s.playerName.charAt(0)}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontWeight: 500, fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          {s.playerName}
+                          {s.hasHealthFlag && <span style={{ fontSize: '0.62rem', color: '#f87171', fontWeight: 700 }}>⚠ flag</span>}
+                        </div>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', display: 'flex', gap: '0.4rem' }}>
+                          {s.teamName && <span>{s.teamName}</span>}
+                          <span>· {timeIn}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexShrink: 0 }}>
+                        {s.completedAt
+                          ? <span className="tag tag-volt" style={{ fontSize: '0.65rem' }}>Done</span>
+                          : <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>{s.completionPct}%</span>}
+                        <span style={{ fontSize: '0.7rem', color: 'var(--carolina-dark)' }}>→</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+          }
+        </div>
+
+        {/* Pending health reports */}
+        <div ref={healthRef} className="card" style={{ padding: '1.25rem', borderColor: pendingHealth > 0 ? 'rgba(248,113,113,0.3)' : 'var(--court-border)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: pendingHealth > 0 ? '#f87171' : undefined }}>
+              Health Reports
+            </h2>
+            <Link href="/coach/health" style={{ fontSize: '0.8rem', color: 'var(--volt)', textDecoration: 'none' }}>View all →</Link>
+          </div>
+
+          {/* Summary row */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem', marginBottom: '1rem' }}>
+            <div style={{ background: pendingHealth > 0 ? 'rgba(248,113,113,0.06)' : 'var(--carolina-light)', border: `1px solid ${pendingHealth > 0 ? 'rgba(248,113,113,0.25)' : 'var(--carolina-border)'}`, borderRadius: 8, padding: '0.625rem', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: pendingHealth > 0 ? '#f87171' : 'var(--carolina)', lineHeight: 1 }}>{pendingHealth}</div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginTop: '0.2rem' }}>Need review</div>
+            </div>
+            <div style={{ background: activeInjuries > 0 ? 'rgba(251,191,36,0.06)' : 'var(--carolina-light)', border: `1px solid ${activeInjuries > 0 ? 'rgba(251,191,36,0.3)' : 'var(--carolina-border)'}`, borderRadius: 8, padding: '0.625rem', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: activeInjuries > 0 ? '#f59e0b' : 'var(--carolina)', lineHeight: 1 }}>{activeInjuries}</div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginTop: '0.2rem' }}>Active injuries</div>
+            </div>
+          </div>
+
+          {!data?.unconfirmedHealth?.length
+            ? <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '1rem', color: 'var(--text-muted)', gap: '0.4rem' }}>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="1.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                <span style={{ fontSize: '0.82rem' }}>All clear — no pending reports</span>
+              </div>
+            : <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 220, overflowY: 'auto' }}>
+                {data.unconfirmedHealth.map(r => (
+                  <Link key={r.id} href="/coach/health" style={{ textDecoration: 'none' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.625rem', borderRadius: 8, background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.2)' }}>
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'rgba(248,113,113,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 700, color: '#f87171', flexShrink: 0 }}>
+                        {r.playerName.charAt(0)}
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 500, fontSize: '0.85rem', color: 'var(--text-primary)' }}>{r.playerName}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#f87171' }}>{r.bodyPart} · {r.reportType === 'major_injury' ? 'Injury' : 'Pain'}{r.painLevel ? ` · ${r.painLevel}/10` : ''}</div>
+                      </div>
+                      <span className="tag tag-danger" style={{ fontSize: '0.65rem' }}>Review</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+          }
+
+          <Link href="/coach/health" style={{ textDecoration: 'none' }}>
+            <div style={{ marginTop: '0.875rem', display: 'flex', justifyContent: 'center', padding: '0.4rem', borderTop: '1px solid var(--court-border)', fontSize: '0.78rem', color: 'var(--carolina-dark)', fontWeight: 600, cursor: 'pointer' }}>
+              + Log injury / view health board
+            </div>
+          </Link>
+        </div>
+      </div>
+
+      {/* SESSION DETAIL MODAL */}
       {(loadingSession || sessionModal) && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 50, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '1.5rem 1rem', overflowY: 'auto' }}
           onClick={e => { if (e.target === e.currentTarget) { setSessionModal(null) } }}>
@@ -184,7 +318,6 @@ export default function CoachDashboardPage() {
 
               return (
                 <>
-                  {/* Header */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.25rem' }}>
                     <div>
                       <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', marginBottom: '0.2rem' }}>{session.playerName}</h2>
@@ -196,8 +329,6 @@ export default function CoachDashboardPage() {
                     <button onClick={() => setSessionModal(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1 }}>✕</button>
                   </div>
 
-
-                  {/* Summary stats */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.625rem', marginBottom: '1.25rem' }}>
                     {[
                       { label: 'Total Weight', value: stats.totalWeightMoved > 0 ? `${stats.totalWeightMoved.toLocaleString()} lbs` : '—' },
@@ -211,7 +342,6 @@ export default function CoachDashboardPage() {
                     ))}
                   </div>
 
-                  {/* Top lifts */}
                   {topLifts.length > 0 && (
                     <div style={{ marginBottom: '1.25rem' }}>
                       <div style={{ fontSize: '0.72rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.5rem' }}>Top Lifts</div>
@@ -227,7 +357,6 @@ export default function CoachDashboardPage() {
                     </div>
                   )}
 
-                  {/* Exercise breakdown in order logged */}
                   <div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.625rem' }}>
                       Workout Log <span style={{ fontWeight: 400, textTransform: 'none', color: 'var(--text-muted)' }}>(in order completed)</span>
@@ -235,7 +364,7 @@ export default function CoachDashboardPage() {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: 320, overflowY: 'auto' }}>
                       {exercises.map((ex, i) => {
                         const completedSets = ex.sets.filter(s => s.completed)
-                        const heaviest = ex.logsWeight ? Math.max(...completedSets.map(s => s.weightLbs ?? 0)) : 0
+                        const heaviest = ex.logsWeight ? Math.max(0, ...completedSets.map(s => s.weightLbs ?? 0)) : 0
                         return (
                           <div key={ex.exerciseId} style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, overflow: 'hidden' }}>
                             <div style={{ background: 'var(--carolina-light)', padding: '0.4rem 0.75rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
