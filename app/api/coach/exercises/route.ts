@@ -60,3 +60,48 @@ export async function PUT(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ exercise })
 }
+
+export async function DELETE(req: NextRequest) {
+  const { id } = await req.json()
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  const db = createServerClient()
+
+  // Fetch image URLs before deleting so we can clean up storage
+  const { data: exercise } = await db
+    .from('exercise_library')
+    .select('start_image_url, end_image_url, demo_image_url')
+    .eq('id', id)
+    .single()
+
+  // Delete storage files — all objects under exercises/{id}/
+  if (exercise) {
+    try {
+      const { createClient } = await import('@supabase/supabase-js')
+      const storageClient = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+      )
+      // List everything in the exercise's folder and delete it all
+      const { data: listed } = await storageClient.storage
+        .from('exercise-media')
+        .list(`exercises/${id}`)
+
+      if (listed && listed.length > 0) {
+        const paths = listed.map(f => `exercises/${id}/${f.name}`)
+        await storageClient.storage.from('exercise-media').remove(paths)
+      }
+    } catch {
+      // Storage cleanup failure shouldn't block the DB delete
+    }
+  }
+
+  // Hard delete from DB — set_logs cascade on delete
+  const { error } = await db
+    .from('exercise_library')
+    .delete()
+    .eq('id', id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
+}
