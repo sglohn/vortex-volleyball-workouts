@@ -130,3 +130,20 @@ export async function PUT(req: NextRequest) {
   const { data: full } = await db.from('workout_templates').select('*').eq('id', id).single()
   return NextResponse.json({ template: full })
 }
+
+export async function DELETE(req: NextRequest) {
+  const { id } = await req.json()
+  if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
+
+  const db = createServerClient()
+
+  // template_blocks cascade deletes template_block_exercises
+  // team_schedule.template_id goes SET NULL (so schedule entries stay, just lose the template ref)
+  const { error } = await db
+    .from('workout_templates')
+    .delete()
+    .eq('id', id)
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
+}
