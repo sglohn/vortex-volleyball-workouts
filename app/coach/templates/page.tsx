@@ -16,6 +16,7 @@ export default function TemplatesPage() {
   const [editing, setEditing] = useState<Template | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleteConfirm, setDeleteConfirm] = useState<Template | null>(null)
   const [msg, setMsg] = useState('')
   const [exSearch, setExSearch] = useState('')
   const [addingTo, setAddingTo] = useState<number | null>(null)
@@ -97,6 +98,26 @@ export default function TemplatesPage() {
       setTimeout(() => setMsg(''), 3000)
     } else setMsg(data.error)
     setSaving(false)
+  }
+
+
+  async function deleteTemplate(t: Template) {
+    if (!t.id) return
+    const res = await fetch('/api/coach/templates', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: t.id }),
+    })
+    if (res.ok) {
+      setTemplates(prev => prev.filter(x => x.id !== t.id))
+      setDeleteConfirm(null)
+      setMsg('Template deleted.')
+      setTimeout(() => setMsg(''), 3000)
+    } else {
+      const d = await res.json()
+      setMsg(d.error ?? 'Delete failed')
+      setDeleteConfirm(null)
+    }
   }
 
   const filteredEx = exercises.filter(e => e.name.toLowerCase().includes(exSearch.toLowerCase()))
@@ -225,6 +246,7 @@ export default function TemplatesPage() {
                 </div>
                 {t.description && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t.description}</div>}
               </div>
+              <button onClick={() => setDeleteConfirm(t)} style={{ padding: '0.4rem 0.875rem', fontSize: '0.85rem', flexShrink: 0, background: 'none', border: '1.5px solid rgba(248,113,113,0.4)', borderRadius: 8, color: '#f87171', cursor: 'pointer', fontWeight: 600 }}>Delete</button>
               <button onClick={() => {
                 fetch(`/api/coach/templates?id=${t.id}`).then(r => r.json()).then(d => {
                   const tmpl = d.template
@@ -250,6 +272,23 @@ export default function TemplatesPage() {
           )
         })}
       </div>
+
+      {/* Delete confirm modal */}
+      {deleteConfirm && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}
+          onClick={e => { if (e.target === e.currentTarget) setDeleteConfirm(null) }}>
+          <div className="card" style={{ width: '100%', maxWidth: 420, padding: '1.75rem' }}>
+            <h3 style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 800, marginBottom: '0.5rem' }}>Delete "{deleteConfirm.name}"?</h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginBottom: '1.25rem' }}>
+              This will permanently remove the template and all its blocks. Any schedule entries that used this template will remain but lose their template reference.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <button className="btn-ghost" onClick={() => setDeleteConfirm(null)} style={{ flex: 1, padding: '0.75rem' }}>Cancel</button>
+              <button onClick={() => deleteTemplate(deleteConfirm)} style={{ flex: 1, padding: '0.75rem', background: 'var(--danger)', color: '#fff', border: 'none', borderRadius: 8, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem', cursor: 'pointer' }}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
