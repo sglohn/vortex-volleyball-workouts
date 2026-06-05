@@ -5,7 +5,7 @@ import Link from 'next/link'
 interface Team { id: string; name: string; age_group?: string; color: string; is_active: boolean; playerCount?: number; is_open_gym?: boolean }
 
 const COLORS = ['#56a0d3','#111827','#ef4444','#f97316','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16']
-const AGE_GROUPS = ['12s','13s','14s','15-16s','17-18s','Boys 14s','Boys 16s','Boys 18s','Open']
+const AGE_GROUPS = ['12s','13s','14s','15s','16s','17s','18s','Boys 13s','Boys 14s','Boys 15s','Boys 16s','Boys 17s','Boys 18s','Open']
 
 export default function CoachTeamsPage() {
   const [teams, setTeams] = useState<Team[]>([])
