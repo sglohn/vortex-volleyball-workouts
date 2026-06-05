@@ -13,51 +13,44 @@ interface Player {
   standing_reach_in?: number | null
   approach_vertical_in?: number | null
   standing_vertical_in?: number | null
-  best_squat?: number | null
-  best_bench?: number | null
-  best_deadlift?: number | null
 }
 
-type SortKey = 'name' | 'age_group' | 'position' | 'height_in' | 'approach_vertical_in' | 'standing_vertical_in' | 'best_squat' | 'best_bench' | 'best_deadlift' | 'sessionCount'
+type SortKey = 'name' | 'age_group' | 'position' | 'height_in' | 'approach_vertical_in' | 'standing_vertical_in' | 'sessionCount'
 type SortDir = 'asc' | 'desc'
 type ViewMode = 'leaderboard' | 'grouped'
 type ScopeKey = 'all' | 'gender' | 'ageGroup' | 'position' | 'team'
 
 const POSITIONS = ['Setter','Outside Hitter','Middle Blocker','Opposite','Libero','Defensive Specialist','Other']
 
-const COLUMNS: { key: SortKey; label: string; short?: string; numeric?: boolean; unit?: string }[] = [
-  { key: 'name',                 label: 'Player',      short: 'Player' },
-  { key: 'age_group',            label: 'Age Group',   short: 'Age Grp' },
-  { key: 'position',             label: 'Position',    short: 'Pos' },
-  { key: 'height_in',            label: 'Height',      short: 'Ht',  numeric: true },
-  { key: 'approach_vertical_in', label: 'App. Touch',  short: 'App', numeric: true },
-  { key: 'standing_vertical_in', label: 'Stand. Vert', short: 'Svert', numeric: true, unit: '"' },
-  { key: 'best_squat',           label: 'Squat 1RM',   short: 'Squat', numeric: true, unit: 'lbs' },
-  { key: 'best_bench',           label: 'Bench 1RM',   short: 'Bench', numeric: true, unit: 'lbs' },
-  { key: 'best_deadlift',        label: 'DL 1RM',      short: 'Dead',  numeric: true, unit: 'lbs' },
-  { key: 'sessionCount',         label: 'Sessions',    short: 'Sess',  numeric: true },
+const COLUMNS: { key: SortKey; label: string; short?: string; numeric?: boolean; fmt?: 'fi' | 'in' }[] = [
+  { key: 'name',                 label: 'Player',        short: 'Player' },
+  { key: 'age_group',            label: 'Age Group',     short: 'Age Grp' },
+  { key: 'position',             label: 'Position',      short: 'Position' },
+  { key: 'height_in',            label: 'Height',        short: 'Height',    numeric: true, fmt: 'fi' },
+  { key: 'approach_vertical_in', label: 'App. Touch',    short: 'App Touch', numeric: true, fmt: 'fi' },
+  { key: 'standing_vertical_in', label: 'Stand. Vertical', short: 'Stand Vert', numeric: true, fmt: 'in' },
+  { key: 'sessionCount',         label: 'Sessions',      short: 'Sessions',  numeric: true },
 ]
 
+// Format inches → feet and inches  e.g. 67 → 5'7"
 function fi(inches: number | null | undefined): string {
   if (!inches) return '—'
-  const totalInches = Math.round(inches)
-  const ft = Math.floor(totalInches / 12)
-  const ins = totalInches % 12
-  return `${ft}'${ins}"`
+  const total = Math.round(inches)
+  return `${Math.floor(total / 12)}'${total % 12}"`
 }
 
-function fmtNum(val: number | null | undefined, unit = ''): string {
-  if (!val) return '—'
-  return unit ? `${val} ${unit}` : `${val}`
+// Format a raw number with optional inch suffix  e.g. 24 → 24"
+function fmtIn(val: number | null | undefined): string {
+  if (val == null || val === 0) return '—'
+  return `${val}"`
 }
 
-function getRank(players: Player[], key: SortKey, value: number | string | null | undefined): number {
-  if (value == null || value === '') return 0
-  const col = COLUMNS.find(c => c.key === key)
-  if (!col?.numeric) return 0
-  const vals = players.map(p => p[key] as number | null).filter((v): v is number => v != null && v > 0)
-  const sorted = [...vals].sort((a, b) => b - a)
-  return sorted.indexOf(value as number) + 1
+function dispVal(col: typeof COLUMNS[number], p: Player): string {
+  const v = p[col.key as keyof Player] as number | string | null | undefined
+  if (col.fmt === 'fi')  return fi(v as number | null)
+  if (col.fmt === 'in')  return fmtIn(v as number | null)
+  if (col.numeric)       return v != null ? String(v) : '—'
+  return (v as string) || '—'
 }
 
 function FF({ label, children }: { label: string; children: React.ReactNode }) {
@@ -109,59 +102,52 @@ export default function CoachPlayersPage() {
     }
   }
 
-  // Scope options derived from player data
-  const genderOptions = useMemo(() => [...new Set(players.map(p => p.gender).filter(Boolean))].sort() as string[], [players])
+  const genderOptions  = useMemo(() => [...new Set(players.map(p => p.gender).filter(Boolean))].sort() as string[], [players])
   const ageGroupOptions = useMemo(() => [...new Set(players.map(p => p.age_group).filter(Boolean))].sort() as string[], [players])
   const positionOptions = useMemo(() => [...new Set(players.map(p => p.position).filter(Boolean))].sort() as string[], [players])
-  const teamOptions = useMemo(() => teams, [teams])
 
-  // Reset scope value when scope type changes
-  function setScope(key: ScopeKey) {
-    setScopeKey(key)
-    setScopeValue('')
-  }
+  function setScope(key: ScopeKey) { setScopeKey(key); setScopeValue('') }
 
   const scopedPlayers = useMemo(() => {
     let result = players
-    if (scopeKey === 'gender' && scopeValue) result = result.filter(p => p.gender === scopeValue)
-    else if (scopeKey === 'ageGroup' && scopeValue) result = result.filter(p => p.age_group === scopeValue)
-    else if (scopeKey === 'position' && scopeValue) result = result.filter(p => p.position === scopeValue)
-    else if (scopeKey === 'team' && scopeValue) result = result.filter(p => p.teamId === scopeValue)
+    if (scopeKey === 'gender'   && scopeValue) result = result.filter(p => p.gender    === scopeValue)
+    if (scopeKey === 'ageGroup' && scopeValue) result = result.filter(p => p.age_group === scopeValue)
+    if (scopeKey === 'position' && scopeValue) result = result.filter(p => p.position  === scopeValue)
+    if (scopeKey === 'team'     && scopeValue) result = result.filter(p => p.teamId    === scopeValue)
     if (search) result = result.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
     return result
   }, [players, scopeKey, scopeValue, search])
 
   const sortedPlayers = useMemo(() => {
     return [...scopedPlayers].sort((a, b) => {
-      const av = a[sortKey]
-      const bv = b[sortKey]
       const col = COLUMNS.find(c => c.key === sortKey)
       if (col?.numeric) {
-        const an = (av as number | null) ?? -1
-        const bn = (bv as number | null) ?? -1
+        const an = (a[sortKey as keyof Player] as number | null) ?? -1
+        const bn = (b[sortKey as keyof Player] as number | null) ?? -1
         return sortDir === 'desc' ? bn - an : an - bn
       }
-      const as_ = (av as string | null) ?? ''
-      const bs_ = (bv as string | null) ?? ''
+      const as_ = (a[sortKey as keyof Player] as string | null) ?? ''
+      const bs_ = (b[sortKey as keyof Player] as string | null) ?? ''
       return sortDir === 'asc' ? as_.localeCompare(bs_) : bs_.localeCompare(as_)
     })
   }, [scopedPlayers, sortKey, sortDir])
 
-  function openAdd() { setForm({ name:'', jersey_number:'', position:'', pin:'', team_id:'' }); setEditTarget(null); setModal('add'); setMsg('') }
+  function openAdd() {
+    setForm({ name:'', jersey_number:'', position:'', pin:'', team_id:'' })
+    setEditTarget(null); setModal('add'); setMsg('')
+  }
   function openEdit(p: Player) {
     setForm({ name: p.name, jersey_number: p.jersey_number ?? '', position: p.position ?? '', pin: '', team_id: p.teamId ?? '' })
     setMeasurements({ height_in:'', wingspan_in:'', standing_reach_in:'', standing_vertical_in:'', approach_vertical_in:'' })
-    setEditTarget(p)
-    setModal('edit')
-    setMsg('')
+    setEditTarget(p); setModal('edit'); setMsg('')
     fetch(`/api/player/measurements?playerId=${p.id}`)
       .then(r => r.json())
       .then(d => {
         const latest = d.measurements?.[0]
         if (latest) setMeasurements({
-          height_in: latest.height_in?.toString() ?? '',
-          wingspan_in: latest.wingspan_in?.toString() ?? '',
-          standing_reach_in: latest.standing_reach_in?.toString() ?? '',
+          height_in:            latest.height_in?.toString()            ?? '',
+          wingspan_in:          latest.wingspan_in?.toString()          ?? '',
+          standing_reach_in:    latest.standing_reach_in?.toString()    ?? '',
           standing_vertical_in: latest.standing_vertical_in?.toString() ?? '',
           approach_vertical_in: latest.approach_vertical_in?.toString() ?? '',
         })
@@ -211,7 +197,6 @@ export default function CoachPlayersPage() {
     setDeleteConfirm(null); setMsg('Player removed'); setMsgErr(false); setTimeout(() => setMsg(''), 3000)
   }
 
-  // Grouped view data
   const groupedView = useMemo(() => {
     const teamOrder = teams.map(t => t.id)
     const groups: { label: string; color?: string; players: Player[] }[] = []
@@ -220,13 +205,13 @@ export default function CoachPlayersPage() {
       if (tp.length > 0) groups.push({ label: `${team.name}${team.age_group ? ` ${team.age_group}` : ''}`, color: team.color, players: tp })
     }
     const unassigned = sortedPlayers.filter(p => !p.teamId || !teamOrder.includes(p.teamId))
-    if (unassigned.length > 0) groups.push({ label: 'Unassigned', color: undefined, players: unassigned })
+    if (unassigned.length > 0) groups.push({ label: 'Unassigned', players: unassigned })
     return groups
   }, [teams, sortedPlayers])
 
   const scopeLabel = useMemo(() => {
-    if (scopeKey === 'all') return 'Whole Club'
-    if (scopeKey === 'gender') return scopeValue ? `${scopeValue === 'M' ? 'Boys' : 'Girls'} Only` : 'By Gender'
+    if (scopeKey === 'all')      return 'Whole Club'
+    if (scopeKey === 'gender')   return scopeValue ? (scopeValue === 'M' ? 'Boys Only' : 'Girls Only') : 'By Gender'
     if (scopeKey === 'ageGroup') return scopeValue ? `Age Group: ${scopeValue}` : 'By Age Group'
     if (scopeKey === 'position') return scopeValue ? `Position: ${scopeValue}` : 'By Position'
     if (scopeKey === 'team') {
@@ -236,46 +221,42 @@ export default function CoachPlayersPage() {
     return ''
   }, [scopeKey, scopeValue, teams])
 
-  const needsScopeValue = scopeKey !== 'all' && !scopeValue
-
+  // ── Sortable column header ───────────────────────────────────────────────────
   function SortTh({ col }: { col: typeof COLUMNS[number] }) {
     const active = sortKey === col.key
     return (
       <th
         onClick={() => handleSort(col.key)}
         style={{
-          padding:'0.7rem 0.75rem',
+          padding: '0.7rem 0.75rem',
           textAlign: col.numeric ? 'right' : 'left',
-          fontSize:'0.7rem',
+          fontSize: '0.7rem',
           color: active ? 'var(--carolina-deep)' : 'var(--text-muted)',
-          textTransform:'uppercase',
-          letterSpacing:'0.05em',
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
           fontWeight: active ? 800 : 600,
-          cursor:'pointer',
-          userSelect:'none',
-          whiteSpace:'nowrap',
+          cursor: 'pointer',
+          userSelect: 'none',
+          whiteSpace: 'nowrap',
           background: active ? 'var(--carolina-light)' : 'transparent',
           borderBottom: active ? '2px solid var(--carolina)' : '1.5px solid var(--gray-border)',
-          transition:'background 0.15s',
         }}
       >
         <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem' }}>
           {col.short ?? col.label}
-          {active && (
-            <span style={{ fontSize:'0.8rem', opacity:0.8 }}>{sortDir === 'desc' ? '↓' : '↑'}</span>
-          )}
-          {!active && <span style={{ fontSize:'0.75rem', opacity:0.25 }}>↕</span>}
+          <span style={{ fontSize:'0.8rem', opacity: active ? 0.8 : 0.25 }}>
+            {active ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+          </span>
         </span>
       </th>
     )
   }
 
+  // ── Player row ───────────────────────────────────────────────────────────────
   function PlayerRow({ p, rank }: { p: Player; rank: number }) {
-    const col = COLUMNS.find(c => c.key === sortKey)
-    const isNumericSort = col?.numeric && sortKey !== 'sessionCount'
     return (
       <tr style={{ borderBottom:'1px solid var(--gray-border)' }}>
-        {/* Rank */}
+        {/* Rank badge */}
         <td style={{ padding:'0.75rem 0.5rem 0.75rem 0.875rem', textAlign:'center', width:38 }}>
           <span style={{
             display:'inline-flex', alignItems:'center', justifyContent:'center',
@@ -289,8 +270,8 @@ export default function CoachPlayersPage() {
             {rank}
           </span>
         </td>
-        {/* Player */}
-        <td style={{ padding:'0.75rem 0.75rem' }}>
+        {/* Name / team */}
+        <td style={{ padding:'0.75rem' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
             <div style={{ width:32, height:32, borderRadius:'50%', background: p.teamColor ? `${p.teamColor}22` : 'var(--carolina-light)', border:`1.5px solid ${p.teamColor ?? 'var(--carolina-border)'}`, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, color: p.teamColor ?? 'var(--carolina-deep)', fontSize:'0.8rem', flexShrink:0 }}>
               {p.jersey_number || p.name.charAt(0)}
@@ -312,32 +293,22 @@ export default function CoachPlayersPage() {
         <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.age_group || '—'}</td>
         {/* Position */}
         <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.position || '—'}</td>
-        {/* Height */}
+        {/* Height  (feet & inches) */}
         <td style={{ padding:'0.75rem', textAlign:'right', fontSize:'0.85rem', fontWeight: sortKey==='height_in' ? 700 : 400, color: sortKey==='height_in' ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }}>
           {fi(p.height_in)}
         </td>
-        {/* App Touch */}
+        {/* Approach Touch  (feet & inches) */}
         <td style={{ padding:'0.75rem', textAlign:'right', fontSize:'0.85rem', fontWeight: sortKey==='approach_vertical_in' ? 700 : 400, color: sortKey==='approach_vertical_in' ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }}>
           {fi(p.approach_vertical_in)}
         </td>
-        {/* Stand Vert */}
+        {/* Standing Vertical  (inches) */}
         <td style={{ padding:'0.75rem', textAlign:'right', fontSize:'0.85rem', fontWeight: sortKey==='standing_vertical_in' ? 700 : 400, color: sortKey==='standing_vertical_in' ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }}>
-          {fmtNum(p.standing_vertical_in, '"')}
-        </td>
-        {/* Squat */}
-        <td style={{ padding:'0.75rem', textAlign:'right', fontSize:'0.85rem', fontWeight: sortKey==='best_squat' ? 700 : 400, color: sortKey==='best_squat' ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }}>
-          {fmtNum(p.best_squat, 'lbs')}
-        </td>
-        {/* Bench */}
-        <td style={{ padding:'0.75rem', textAlign:'right', fontSize:'0.85rem', fontWeight: sortKey==='best_bench' ? 700 : 400, color: sortKey==='best_bench' ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }}>
-          {fmtNum(p.best_bench, 'lbs')}
-        </td>
-        {/* Deadlift */}
-        <td style={{ padding:'0.75rem', textAlign:'right', fontSize:'0.85rem', fontWeight: sortKey==='best_deadlift' ? 700 : 400, color: sortKey==='best_deadlift' ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }}>
-          {fmtNum(p.best_deadlift, 'lbs')}
+          {fmtIn(p.standing_vertical_in)}
         </td>
         {/* Sessions */}
-        <td style={{ padding:'0.75rem', textAlign:'right', fontSize:'0.82rem', color:'var(--text-muted)' }}>{p.sessionCount ?? 0}</td>
+        <td style={{ padding:'0.75rem', textAlign:'right', fontSize:'0.82rem', color:'var(--text-muted)' }}>
+          {p.sessionCount ?? 0}
+        </td>
         {/* Actions */}
         <td style={{ padding:'0.75rem 0.875rem', whiteSpace:'nowrap' }}>
           <button onClick={() => openEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Edit</button>
@@ -348,11 +319,26 @@ export default function CoachPlayersPage() {
     )
   }
 
+  // ── Scope pill row ───────────────────────────────────────────────────────────
+  function ScopePills({ options, render }: { options: { value: string; label: string; color?: string }[]; render?: (o: { value: string; label: string; color?: string }) => React.ReactNode }) {
+    return (
+      <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', alignItems:'center' }}>
+        <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Filter:</span>
+        {[{ value:'', label:'All' }, ...options].map(o => (
+          <button key={o.value} onClick={() => setScopeValue(o.value)}
+            style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===o.value ? (o.color ?? 'var(--carolina)') : 'var(--gray-border)'}`, background: scopeValue===o.value ? (o.color ? `${o.color}22` : 'var(--carolina-light)') : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight: scopeValue===o.value ? 700 : 400, color: scopeValue===o.value ? (o.color ?? 'var(--carolina-deep)') : 'var(--text-secondary)', display:'flex', alignItems:'center', gap:'0.35rem' }}>
+            {render ? render(o) : o.label}
+          </button>
+        ))}
+      </div>
+    )
+  }
+
   if (loading) return <div style={{ padding:'2rem', color:'var(--text-muted)' }}>Loading…</div>
 
   return (
-    <div style={{ padding:'2rem', maxWidth:1100 }}>
-      {/* Header */}
+    <div style={{ padding:'2rem', maxWidth:1050 }}>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' }}>
         <div>
           <h1 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:800 }}>Players</h1>
@@ -361,32 +347,35 @@ export default function CoachPlayersPage() {
         <button className="btn-volt" onClick={openAdd} style={{ padding:'0.625rem 1.25rem' }}>+ Add Player</button>
       </div>
 
-      {msg && <div style={{ background: msgErr ? 'var(--danger-light)' : 'var(--carolina-light)', border:`1.5px solid ${msgErr ? '#fecaca' : 'var(--carolina-border)'}`, borderRadius:8, padding:'0.75rem', marginBottom:'1rem', color: msgErr ? 'var(--danger)' : 'var(--carolina-deep)', fontSize:'0.9rem' }}>{msg}</div>}
+      {msg && (
+        <div style={{ background: msgErr ? 'var(--danger-light)' : 'var(--carolina-light)', border:`1.5px solid ${msgErr ? '#fecaca' : 'var(--carolina-border)'}`, borderRadius:8, padding:'0.75rem', marginBottom:'1rem', color: msgErr ? 'var(--danger)' : 'var(--carolina-deep)', fontSize:'0.9rem' }}>
+          {msg}
+        </div>
+      )}
 
-      {/* Controls bar */}
-      <div style={{ display:'flex', gap:'0.75rem', marginBottom:'1rem', flexWrap:'wrap', alignItems:'center' }}>
-        {/* Search */}
+      {/* ── Controls ───────────────────────────────────────────────────────── */}
+      <div style={{ display:'flex', gap:'0.75rem', marginBottom:'0.875rem', flexWrap:'wrap', alignItems:'center' }}>
         <input className="input" placeholder="Search players…" value={search} onChange={e => setSearch(e.target.value)} style={{ width:200 }} />
 
-        {/* View mode toggle */}
-        <div style={{ display:'flex', gap:0, border:'1.5px solid var(--gray-border)', borderRadius:8, overflow:'hidden' }}>
-          {(['leaderboard','grouped'] as ViewMode[]).map(v => (
-            <button key={v} onClick={() => setViewMode(v)} style={{ padding:'0.45rem 0.875rem', background: viewMode===v ? 'var(--carolina-light)' : 'transparent', color: viewMode===v ? 'var(--carolina-deep)' : 'var(--text-muted)', border:'none', cursor:'pointer', fontSize:'0.8rem', fontWeight: viewMode===v ? 700 : 500, borderRight: v==='leaderboard' ? '1.5px solid var(--gray-border)' : 'none' }}>
+        {/* View toggle */}
+        <div style={{ display:'flex', border:'1.5px solid var(--gray-border)', borderRadius:8, overflow:'hidden' }}>
+          {(['leaderboard','grouped'] as ViewMode[]).map((v, i) => (
+            <button key={v} onClick={() => setViewMode(v)} style={{ padding:'0.45rem 0.875rem', background: viewMode===v ? 'var(--carolina-light)' : 'transparent', color: viewMode===v ? 'var(--carolina-deep)' : 'var(--text-muted)', border:'none', borderRight: i===0 ? '1.5px solid var(--gray-border)' : 'none', cursor:'pointer', fontSize:'0.8rem', fontWeight: viewMode===v ? 700 : 500 }}>
               {v === 'leaderboard' ? '📊 Leaderboard' : '👥 By Team'}
             </button>
           ))}
         </div>
 
-        {/* Scope selector — only meaningful in leaderboard mode */}
+        {/* Scope buttons — leaderboard only */}
         {viewMode === 'leaderboard' && (
-          <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', marginLeft:'auto' }}>
+          <div style={{ display:'flex', gap:'0.4rem', alignItems:'center', marginLeft:'auto', flexWrap:'wrap' }}>
             <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.04em' }}>Scope:</span>
             {([
-              { key:'all', label:'Whole Club' },
-              { key:'gender', label:'Gender' },
+              { key:'all',      label:'Whole Club' },
+              { key:'gender',   label:'Gender' },
               { key:'ageGroup', label:'Age Group' },
               { key:'position', label:'Position' },
-              { key:'team', label:'Team' },
+              { key:'team',     label:'Team' },
             ] as { key: ScopeKey; label: string }[]).map(s => (
               <button key={s.key} onClick={() => setScope(s.key)} style={{ padding:'0.35rem 0.7rem', borderRadius:6, border:`1.5px solid ${scopeKey===s.key ? 'var(--carolina)' : 'var(--gray-border)'}`, background: scopeKey===s.key ? 'var(--carolina-light)' : 'transparent', color: scopeKey===s.key ? 'var(--carolina-deep)' : 'var(--text-secondary)', cursor:'pointer', fontSize:'0.78rem', fontWeight: scopeKey===s.key ? 700 : 500 }}>
                 {s.label}
@@ -396,62 +385,38 @@ export default function CoachPlayersPage() {
         )}
       </div>
 
-      {/* Scope value picker */}
+      {/* ── Scope value pills ──────────────────────────────────────────────── */}
       {viewMode === 'leaderboard' && scopeKey !== 'all' && (
-        <div style={{ display:'flex', gap:'0.5rem', marginBottom:'1rem', flexWrap:'wrap', alignItems:'center' }}>
-          <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Filter by:</span>
+        <div style={{ marginBottom:'0.875rem' }}>
           {scopeKey === 'gender' && (
-            <>
-              <button onClick={() => setScopeValue('')} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${!scopeValue ? 'var(--carolina)' : 'var(--gray-border)'}`, background:!scopeValue ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight:!scopeValue ? 700 : 400, color:!scopeValue ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>All</button>
-              {genderOptions.map(g => (
-                <button key={g} onClick={() => setScopeValue(g)} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===g ? 'var(--carolina)' : 'var(--gray-border)'}`, background:scopeValue===g ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight:scopeValue===g ? 700 : 400, color:scopeValue===g ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>
-                  {g === 'M' ? '♂ Boys' : '♀ Girls'}
-                </button>
-              ))}
-            </>
+            <ScopePills options={genderOptions.map(g => ({ value:g, label: g==='M' ? '♂ Boys' : '♀ Girls' }))} />
           )}
           {scopeKey === 'ageGroup' && (
-            <>
-              <button onClick={() => setScopeValue('')} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${!scopeValue ? 'var(--carolina)' : 'var(--gray-border)'}`, background:!scopeValue ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight:!scopeValue ? 700 : 400, color:!scopeValue ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>All</button>
-              {ageGroupOptions.map(ag => (
-                <button key={ag} onClick={() => setScopeValue(ag)} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===ag ? 'var(--carolina)' : 'var(--gray-border)'}`, background:scopeValue===ag ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight:scopeValue===ag ? 700 : 400, color:scopeValue===ag ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>
-                  {ag}
-                </button>
-              ))}
-            </>
+            <ScopePills options={ageGroupOptions.map(g => ({ value:g, label:g }))} />
           )}
           {scopeKey === 'position' && (
-            <>
-              <button onClick={() => setScopeValue('')} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${!scopeValue ? 'var(--carolina)' : 'var(--gray-border)'}`, background:!scopeValue ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight:!scopeValue ? 700 : 400, color:!scopeValue ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>All</button>
-              {positionOptions.map(pos => (
-                <button key={pos} onClick={() => setScopeValue(pos)} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===pos ? 'var(--carolina)' : 'var(--gray-border)'}`, background:scopeValue===pos ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight:scopeValue===pos ? 700 : 400, color:scopeValue===pos ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>
-                  {pos}
-                </button>
-              ))}
-            </>
+            <ScopePills options={positionOptions.map(p => ({ value:p, label:p }))} />
           )}
           {scopeKey === 'team' && (
-            <>
-              <button onClick={() => setScopeValue('')} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${!scopeValue ? 'var(--carolina)' : 'var(--gray-border)'}`, background:!scopeValue ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight:!scopeValue ? 700 : 400, color:!scopeValue ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>All</button>
-              {teamOptions.map(t => (
-                <button key={t.id} onClick={() => setScopeValue(t.id)} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===t.id ? (t.color ?? 'var(--carolina)') : 'var(--gray-border)'}`, background:scopeValue===t.id ? `${t.color}22` : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight:scopeValue===t.id ? 700 : 400, color:scopeValue===t.id ? (t.color ?? 'var(--carolina-deep)') : 'var(--text-secondary)', display:'flex', alignItems:'center', gap:'0.35rem' }}>
-                  <span style={{ width:8, height:8, borderRadius:'50%', background:t.color, display:'inline-block' }} />
-                  {t.name}{t.age_group ? ` ${t.age_group}` : ''}
-                </button>
-              ))}
-            </>
+            <ScopePills
+              options={teams.map(t => ({ value:t.id, label:`${t.name}${t.age_group ? ` ${t.age_group}` : ''}`, color:t.color }))}
+              render={o => (
+                <>
+                  <span style={{ width:8, height:8, borderRadius:'50%', background:o.color, display:'inline-block' }} />
+                  {o.label}
+                </>
+              )}
+            />
           )}
         </div>
       )}
 
-      {/* Status line */}
+      {/* ── Status line ────────────────────────────────────────────────────── */}
       {viewMode === 'leaderboard' && (
-        <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.75rem' }}>
-          <span style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>
-            Showing <strong style={{ color:'var(--carolina-deep)' }}>{sortedPlayers.length}</strong> players
-            {' '}ranked by <strong style={{ color:'var(--carolina-deep)' }}>{COLUMNS.find(c => c.key === sortKey)?.label}</strong>
-            {' '}({sortDir === 'desc' ? 'highest first' : 'lowest first'}) · {scopeLabel}
-          </span>
+        <div style={{ marginBottom:'0.75rem', fontSize:'0.8rem', color:'var(--text-muted)' }}>
+          Showing <strong style={{ color:'var(--carolina-deep)' }}>{sortedPlayers.length}</strong> players
+          {' '}ranked by <strong style={{ color:'var(--carolina-deep)' }}>{COLUMNS.find(c => c.key === sortKey)?.label}</strong>
+          {' '}({sortDir === 'desc' ? 'highest first' : 'lowest first'}) · {scopeLabel}
         </div>
       )}
 
@@ -459,27 +424,25 @@ export default function CoachPlayersPage() {
         <div className="card" style={{ padding:'2rem', textAlign:'center', color:'var(--text-muted)' }}>No players found.</div>
       )}
 
-      {/* LEADERBOARD VIEW */}
+      {/* ── LEADERBOARD VIEW ───────────────────────────────────────────────── */}
       {viewMode === 'leaderboard' && sortedPlayers.length > 0 && (
         <div className="card" style={{ overflow:'auto' }}>
-          <table style={{ width:'100%', borderCollapse:'collapse', minWidth:900 }}>
+          <table style={{ width:'100%', borderCollapse:'collapse', minWidth:780 }}>
             <thead>
               <tr style={{ background:'var(--carolina-light)' }}>
-                <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38, borderBottom:'1.5px solid var(--gray-border)' }}></th>
+                <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38, borderBottom:'1.5px solid var(--gray-border)' }} />
                 {COLUMNS.map(col => <SortTh key={col.key} col={col} />)}
                 <th style={{ padding:'0.7rem 0.875rem', textAlign:'left', fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, borderBottom:'1.5px solid var(--gray-border)', whiteSpace:'nowrap' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {sortedPlayers.map((p, i) => (
-                <PlayerRow key={p.id} p={p} rank={i + 1} />
-              ))}
+              {sortedPlayers.map((p, i) => <PlayerRow key={p.id} p={p} rank={i + 1} />)}
             </tbody>
           </table>
         </div>
       )}
 
-      {/* GROUPED BY TEAM VIEW */}
+      {/* ── GROUPED BY TEAM VIEW ───────────────────────────────────────────── */}
       {viewMode === 'grouped' && groupedView.map(group => (
         <div key={group.label} style={{ marginBottom:'1.5rem' }}>
           <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', marginBottom:'0.5rem' }}>
@@ -488,25 +451,23 @@ export default function CoachPlayersPage() {
             <span style={{ fontSize:'0.75rem', color:'var(--text-muted)', fontWeight:500 }}>— {group.players.length} player{group.players.length !== 1 ? 's' : ''}</span>
           </div>
           <div className="card" style={{ overflow:'auto' }}>
-            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:900 }}>
+            <table style={{ width:'100%', borderCollapse:'collapse', minWidth:780 }}>
               <thead>
-                <tr style={{ borderBottom:'1.5px solid var(--gray-border)', background:'var(--carolina-light)' }}>
-                  <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38 }}></th>
+                <tr style={{ background:'var(--carolina-light)', borderBottom:'1.5px solid var(--gray-border)' }}>
+                  <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38 }} />
                   {COLUMNS.map(col => <SortTh key={col.key} col={col} />)}
                   <th style={{ padding:'0.7rem 0.875rem', textAlign:'left', fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, whiteSpace:'nowrap' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {group.players.map((p, i) => (
-                  <PlayerRow key={p.id} p={p} rank={i + 1} />
-                ))}
+                {group.players.map((p, i) => <PlayerRow key={p.id} p={p} rank={i + 1} />)}
               </tbody>
             </table>
           </div>
         </div>
       ))}
 
-      {/* Add/Edit Modal */}
+      {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}
       {modal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:'1rem' }}
           onClick={e => { if (e.target === e.currentTarget) closeModal() }}>
@@ -518,7 +479,9 @@ export default function CoachPlayersPage() {
             {msg && <div style={{ background:'var(--danger-light)', border:'1.5px solid #fecaca', borderRadius:8, padding:'0.625rem', marginBottom:'1rem', color:'var(--danger)', fontSize:'0.85rem' }}>{msg}</div>}
             <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.875rem', marginBottom:'0.875rem' }}>
               <div style={{ gridColumn:'1/-1' }}>
-                <FF label="Full Name *"><input className="input" placeholder="Player's full name" value={form.name} onChange={e => setForm(p => ({ ...p, name:e.target.value }))} /></FF>
+                <FF label="Full Name *">
+                  <input className="input" placeholder="Player's full name" value={form.name} onChange={e => setForm(p => ({ ...p, name:e.target.value }))} />
+                </FF>
               </div>
               <FF label={modal==='add' ? '4-Digit PIN *' : 'New PIN (blank = keep current)'}>
                 <input className="input" type="number" placeholder="e.g. 1234" value={form.pin} onChange={e => setForm(p => ({ ...p, pin:e.target.value.slice(0,4) }))} />
@@ -539,30 +502,30 @@ export default function CoachPlayersPage() {
                 </select>
               </FF>
             </div>
+
             {modal === 'edit' && (
-              <>
-                <div style={{ borderTop:'1.5px solid var(--gray-border)', margin:'0.5rem 0 1rem', paddingTop:'1rem' }}>
-                  <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:700, marginBottom:'0.75rem' }}>Measurements (leave blank to keep current)</p>
-                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
-                    <FF label="Height">
-                      <FeetInchesInput value={measurements.height_in} onChange={v => setMeasurements(m => ({ ...m, height_in: v }))} placeholder="e.g. 67" />
-                    </FF>
-                    <FF label="Wingspan">
-                      <FeetInchesInput value={measurements.wingspan_in} onChange={v => setMeasurements(m => ({ ...m, wingspan_in: v }))} placeholder="e.g. 68" />
-                    </FF>
-                    <FF label="Standing Reach">
-                      <FeetInchesInput value={measurements.standing_reach_in} onChange={v => setMeasurements(m => ({ ...m, standing_reach_in: v }))} placeholder="e.g. 84" />
-                    </FF>
-                    <FF label="Stand. Vertical">
-                      <input className="input" type="number" step="0.5" placeholder="e.g. 20" value={measurements.standing_vertical_in} onChange={e => setMeasurements(m => ({ ...m, standing_vertical_in: e.target.value }))} />
-                    </FF>
-                    <FF label="App. Touch Height">
-                      <FeetInchesInput value={measurements.approach_vertical_in} onChange={v => setMeasurements(m => ({ ...m, approach_vertical_in: v }))} placeholder="e.g. 108" />
-                    </FF>
-                  </div>
+              <div style={{ borderTop:'1.5px solid var(--gray-border)', paddingTop:'1rem', marginBottom:'0.875rem' }}>
+                <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:700, marginBottom:'0.75rem' }}>Measurements (leave blank to keep current)</p>
+                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>
+                  <FF label="Height">
+                    <FeetInchesInput value={measurements.height_in} onChange={v => setMeasurements(m => ({ ...m, height_in: v }))} placeholder="e.g. 67" />
+                  </FF>
+                  <FF label="Wingspan">
+                    <FeetInchesInput value={measurements.wingspan_in} onChange={v => setMeasurements(m => ({ ...m, wingspan_in: v }))} placeholder="e.g. 68" />
+                  </FF>
+                  <FF label="Standing Reach">
+                    <FeetInchesInput value={measurements.standing_reach_in} onChange={v => setMeasurements(m => ({ ...m, standing_reach_in: v }))} placeholder="e.g. 84" />
+                  </FF>
+                  <FF label={`Stand. Vertical (inches)`}>
+                    <input className="input" type="number" step="0.5" placeholder='e.g. 24"' value={measurements.standing_vertical_in} onChange={e => setMeasurements(m => ({ ...m, standing_vertical_in: e.target.value }))} />
+                  </FF>
+                  <FF label="App. Touch Height">
+                    <FeetInchesInput value={measurements.approach_vertical_in} onChange={v => setMeasurements(m => ({ ...m, approach_vertical_in: v }))} placeholder="e.g. 108" />
+                  </FF>
                 </div>
-              </>
+              </div>
             )}
+
             <div style={{ display:'flex', gap:'0.75rem' }}>
               <button className="btn-ghost" onClick={closeModal} style={{ flex:1, padding:'0.75rem' }}>Cancel</button>
               <button className="btn-volt" onClick={save} disabled={saving||!form.name} style={{ flex:2, padding:'0.75rem' }}>{saving ? 'Saving…' : modal==='add' ? 'Add Player' : 'Save Changes'}</button>
@@ -571,7 +534,7 @@ export default function CoachPlayersPage() {
         </div>
       )}
 
-      {/* Delete confirm */}
+      {/* ── Delete confirm ────────────────────────────────────────────────── */}
       {deleteConfirm && (
         <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:'1rem' }}
           onClick={e => { if (e.target === e.currentTarget) setDeleteConfirm(null) }}>
@@ -585,7 +548,7 @@ export default function CoachPlayersPage() {
             </p>
             <div style={{ display:'flex', gap:'0.75rem' }}>
               <button className="btn-ghost" onClick={() => setDeleteConfirm(null)} style={{ flex:1, padding:'0.75rem' }}>Cancel</button>
-              <button onClick={deletePlayer} style={{ flex:1, padding:'0.75rem', background:'var(--danger)', color:'var(--white)', border:'none', borderRadius:8, fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.95rem', cursor:'pointer', letterSpacing:'0.04em' }}>Remove</button>
+              <button onClick={deletePlayer} style={{ flex:1, padding:'0.75rem', background:'var(--danger)', color:'var(--white)', border:'none', borderRadius:8, fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.95rem', cursor:'pointer' }}>Remove</button>
             </div>
           </div>
         </div>
