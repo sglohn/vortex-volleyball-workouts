@@ -84,6 +84,7 @@ export default function CoachPlayersPage() {
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [scopeKey, setScopeKey] = useState<ScopeKey>('all')
   const [scopeValue, setScopeValue] = useState<string>('')
+  const [genderFilter, setGenderFilter] = useState<'all' | 'M' | 'F'>('all')
   const [measurements, setMeasurements] = useState({
     height_in: '', wingspan_in: '', standing_reach_in: '',
     standing_vertical_in: '', approach_vertical_in: '',
@@ -117,6 +118,7 @@ export default function CoachPlayersPage() {
 
   const scopedPlayers = useMemo(() => {
     let r = players
+    if (genderFilter !== 'all') r = r.filter(p => p.gender === genderFilter)
     if (scopeKey === 'gender'   && scopeValue) r = r.filter(p => p.gender    === scopeValue)
     if (scopeKey === 'ageGroup' && scopeValue) r = r.filter(p => p.age_group === scopeValue)
     if (scopeKey === 'position' && scopeValue) r = r.filter(p => p.position  === scopeValue)
@@ -434,7 +436,31 @@ export default function CoachPlayersPage() {
         )}
       </div>
 
-      {/* ── Scope value pills ──────────────────────────────────────────────── */}
+      {/* ── Gender toggle ──────────────────────────────────────────────────── */}
+      <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', marginBottom:'0.75rem' }}>
+        <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.04em' }}>Gender:</span>
+        {([
+          { value: 'all', label: 'Both' },
+          { value: 'F',   label: '♀ Girls' },
+          { value: 'M',   label: '♂ Boys' },
+        ] as { value: 'all' | 'M' | 'F'; label: string }[]).map(opt => (
+          <button key={opt.value} onClick={() => setGenderFilter(opt.value)} style={{
+            padding: '0.3rem 0.75rem', borderRadius: 20,
+            border: `1.5px solid ${genderFilter === opt.value ? 'var(--carolina)' : 'var(--gray-border)'}`,
+            background: genderFilter === opt.value ? 'var(--carolina-light)' : 'transparent',
+            color: genderFilter === opt.value ? 'var(--carolina-deep)' : 'var(--text-secondary)',
+            fontWeight: genderFilter === opt.value ? 700 : 500,
+            fontSize: '0.82rem', cursor: 'pointer',
+          }}>{opt.label}</button>
+        ))}
+        {genderFilter !== 'all' && (
+          <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginLeft:'0.25rem' }}>
+            — {sortedPlayers.length} player{sortedPlayers.length !== 1 ? 's' : ''}
+          </span>
+        )}
+      </div>
+
+
       {viewMode === 'leaderboard' && scopeKey !== 'all' && (
         <div style={{ marginBottom:'0.875rem' }}>
           {scopeKey === 'gender'   && <ScopePills options={genderOptions.map(g => ({ value:g, label: g==='M' ? '♂ Boys' : '♀ Girls' }))} />}
