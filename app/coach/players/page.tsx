@@ -28,7 +28,7 @@ function maxVertical(p: Player): number | null {
 type SortKey = 'name' | 'age_group' | 'position' | 'height_in' | 'standing_vertical_in' | 'approach_vertical_in' | 'standingVert' | 'maxVert' | 'sessionCount'
 type SortDir = 'asc' | 'desc'
 type ViewMode = 'leaderboard' | 'grouped'
-type ScopeKey = 'all' | 'gender' | 'ageGroup' | 'position' | 'team'
+type ScopeKey = 'all' | 'ageGroup' | 'position' | 'team'
 
 const POSITIONS = ['Setter','Outside Hitter','Middle Blocker','Opposite','Libero','Defensive Specialist','Other']
 
@@ -110,7 +110,6 @@ export default function CoachPlayersPage() {
     }
   }
 
-  const genderOptions   = useMemo(() => [...new Set(players.map(p => p.gender).filter(Boolean))].sort() as string[], [players])
   const ageGroupOptions = useMemo(() => [...new Set(players.map(p => p.age_group).filter(Boolean))].sort() as string[], [players])
   const positionOptions = useMemo(() => [...new Set(players.map(p => p.position).filter(Boolean))].sort() as string[], [players])
 
@@ -119,7 +118,6 @@ export default function CoachPlayersPage() {
   const scopedPlayers = useMemo(() => {
     let r = players
     if (genderFilter !== 'all') r = r.filter(p => p.gender === genderFilter)
-    if (scopeKey === 'gender'   && scopeValue) r = r.filter(p => p.gender    === scopeValue)
     if (scopeKey === 'ageGroup' && scopeValue) r = r.filter(p => p.age_group === scopeValue)
     if (scopeKey === 'position' && scopeValue) r = r.filter(p => p.position  === scopeValue)
     if (scopeKey === 'team'     && scopeValue) r = r.filter(p => p.teamId    === scopeValue)
@@ -239,7 +237,6 @@ export default function CoachPlayersPage() {
 
   const scopeLabel = useMemo(() => {
     if (scopeKey === 'all')      return 'Whole Club'
-    if (scopeKey === 'gender')   return scopeValue ? (scopeValue === 'M' ? 'Boys Only' : 'Girls Only') : 'By Gender'
     if (scopeKey === 'ageGroup') return scopeValue ? `Age Group: ${scopeValue}` : 'By Age Group'
     if (scopeKey === 'position') return scopeValue ? `Position: ${scopeValue}` : 'By Position'
     if (scopeKey === 'team') {
@@ -423,7 +420,6 @@ export default function CoachPlayersPage() {
             <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.04em' }}>Scope:</span>
             {([
               { key:'all',      label:'Whole Club' },
-              { key:'gender',   label:'Gender' },
               { key:'ageGroup', label:'Age Group' },
               { key:'position', label:'Position' },
               { key:'team',     label:'Team' },
@@ -463,7 +459,6 @@ export default function CoachPlayersPage() {
 
       {viewMode === 'leaderboard' && scopeKey !== 'all' && (
         <div style={{ marginBottom:'0.875rem' }}>
-          {scopeKey === 'gender'   && <ScopePills options={genderOptions.map(g => ({ value:g, label: g==='M' ? '♂ Boys' : '♀ Girls' }))} />}
           {scopeKey === 'ageGroup' && <ScopePills options={ageGroupOptions.map(g => ({ value:g, label:g }))} />}
           {scopeKey === 'position' && <ScopePills options={positionOptions.map(p => ({ value:p, label:p }))} />}
           {scopeKey === 'team' && (
