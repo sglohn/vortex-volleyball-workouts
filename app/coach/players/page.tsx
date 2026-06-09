@@ -1,5 +1,5 @@
 'use client'
-import { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
 
@@ -368,23 +368,74 @@ export default function CoachPlayersPage() {
     )
   }
 
-  // ── Table wrapper (shared by both view modes) ────────────────────────────────
+  // ── Table wrapper with sticky bottom scrollbar ───────────────────────────────
   function PlayerTable({ rows }: { rows: Player[] }) {
+    const tableRef = React.useRef<HTMLDivElement>(null)
+    const phantomRef = React.useRef<HTMLDivElement>(null)
+    const tableInnerRef = React.useRef<HTMLTableElement>(null)
+    const syncing = React.useRef(false)
+
+    React.useEffect(() => {
+      const table = tableRef.current
+      const phantom = phantomRef.current
+      if (!table || !phantom) return
+      const syncFromTable = () => {
+        if (syncing.current) return
+        syncing.current = true
+        phantom.scrollLeft = table.scrollLeft
+        syncing.current = false
+      }
+      const syncFromPhantom = () => {
+        if (syncing.current) return
+        syncing.current = true
+        table.scrollLeft = phantom.scrollLeft
+        syncing.current = false
+      }
+      table.addEventListener('scroll', syncFromTable)
+      phantom.addEventListener('scroll', syncFromPhantom)
+      return () => {
+        table.removeEventListener('scroll', syncFromTable)
+        phantom.removeEventListener('scroll', syncFromPhantom)
+      }
+    }, [])
+
+    React.useEffect(() => {
+      const inner = tableInnerRef.current
+      const phantom = phantomRef.current
+      if (!inner || !phantom) return
+      const phantomInner = phantom.firstElementChild as HTMLElement | null
+      const update = () => { if (phantomInner) phantomInner.style.width = inner.scrollWidth + 'px' }
+      update()
+      const observer = new ResizeObserver(update)
+      observer.observe(inner)
+      return () => observer.disconnect()
+    }, [rows])
+
     return (
-      <div className="card" style={{ overflow:'auto' }}>
-        <table style={{ width:'100%', borderCollapse:'collapse', minWidth:900 }}>
-          <thead>
-            <tr style={{ background:'var(--carolina-light)' }}>
-              <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38, borderBottom:'1.5px solid var(--gray-border)' }} />
-              {COLUMNS.map(col => <SortTh key={col.key} col={col} />)}
-              <th style={{ padding:'0.7rem 0.875rem', textAlign:'left', fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, borderBottom:'1.5px solid var(--gray-border)', whiteSpace:'nowrap' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p, i) => <PlayerRow key={p.id} p={p} rank={i + 1} />)}
-          </tbody>
-        </table>
-      </div>
+      <>
+        <div className="card" ref={tableRef} style={{ overflowX:'auto', overflowY:'visible' }}>
+          <table ref={tableInnerRef} style={{ width:'100%', borderCollapse:'collapse', minWidth:1050 }}>
+            <thead>
+              <tr style={{ background:'var(--carolina-light)' }}>
+                <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38, borderBottom:'1.5px solid var(--gray-border)' }} />
+                {COLUMNS.map(col => <SortTh key={col.key} col={col} />)}
+                <th style={{ padding:'0.7rem 0.875rem', textAlign:'left', fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, borderBottom:'1.5px solid var(--gray-border)', whiteSpace:'nowrap' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((p, i) => <PlayerRow key={p.id} p={p} rank={i + 1} />)}
+            </tbody>
+          </table>
+        </div>
+        {/* Sticky phantom scrollbar — always visible at bottom of viewport */}
+        <div ref={phantomRef} style={{
+          position:'sticky', bottom:0, overflowX:'auto', overflowY:'hidden',
+          height:14, zIndex:10, marginTop:2,
+          background:'var(--bg)', borderTop:'1px solid var(--gray-border)',
+        }}>
+          <div style={{ height:1 }} />
+        </div>
+      </>
     )
   }
 
