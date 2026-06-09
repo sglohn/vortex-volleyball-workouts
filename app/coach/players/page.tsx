@@ -123,7 +123,7 @@ export default function CoachPlayersPage() {
     if (scopeKey === 'team'     && scopeValue) r = r.filter(p => p.teamId    === scopeValue)
     if (search) r = r.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
     return r
-  }, [players, scopeKey, scopeValue, search])
+  }, [players, scopeKey, scopeValue, search, genderFilter])
 
   const sortedPlayers = useMemo(() => {
     return [...scopedPlayers].sort((a, b) => {
