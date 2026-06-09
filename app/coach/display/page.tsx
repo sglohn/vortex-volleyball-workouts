@@ -208,11 +208,13 @@ function DisplayContent() {
 
                         {/* Left — number badge + name + reps + notes */}
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', padding: '0.75vh 1.25vh', minWidth: 0, overflow: 'hidden', gap: '0.5vh' }}>
-                          <div style={{ display: 'inline-flex', alignSelf: 'flex-start', background: CAROLINA, borderRadius: '0.4vh', minWidth: '3.2vh', height: '3.2vh', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2vh', color: '#fff', padding: '0 0.6vh', marginBottom: '0.2vh' }}>
-                            {ei + 1}
-                          </div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.2rem, 5vh, 3.8rem)', color: '#fff', lineHeight: 1.0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
-                            {lib.name}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75vh', minWidth: 0 }}>
+                            <div style={{ flexShrink: 0, background: CAROLINA, borderRadius: '0.4vh', minWidth: '2.4vh', height: '2.4vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5vh', color: '#fff', padding: '0 0.5vh' }}>
+                              {ei + 1}
+                            </div>
+                            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.4rem, 6vh, 4.5rem)', color: '#fff', lineHeight: 1.0, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical' }}>
+                              {lib.name}
+                            </div>
                           </div>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '1vh', flexWrap: 'nowrap' }}>
                             <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(1.1rem, 4.2vh, 3rem)', color: YELLOW, lineHeight: 1 }}>
