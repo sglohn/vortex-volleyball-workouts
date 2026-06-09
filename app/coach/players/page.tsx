@@ -10,6 +10,7 @@ interface Player {
   age_group?: string; gender?: string
   sessionCount?: number; lastSeen?: string; hasHealthFlag?: boolean
   height_in?: number | null
+  wingspan_in?: number | null
   standing_reach_in?: number | null
   standing_vertical_in?: number | null   // stored as standing JUMP TOUCH height (ft/in)
   approach_vertical_in?: number | null   // stored as approach TOUCH height (ft/in)
@@ -25,7 +26,7 @@ function maxVertical(p: Player): number | null {
   return Math.round((p.approach_vertical_in - p.standing_reach_in) * 10) / 10
 }
 
-type SortKey = 'name' | 'age_group' | 'position' | 'height_in' | 'standing_vertical_in' | 'approach_vertical_in' | 'standingVert' | 'maxVert' | 'sessionCount'
+type SortKey = 'name' | 'age_group' | 'position' | 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in' | 'standingVert' | 'maxVert' | 'sessionCount'
 type SortDir = 'asc' | 'desc'
 type ViewMode = 'leaderboard' | 'grouped'
 type ScopeKey = 'all' | 'ageGroup' | 'position' | 'team'
@@ -38,11 +39,12 @@ const COLUMNS: { key: SortKey; label: string; short: string; numeric?: boolean; 
   { key: 'age_group',            label: 'Age Group',         short: 'Age Grp',     fmt: 'text' },
   { key: 'position',             label: 'Position',          short: 'Position',    fmt: 'text' },
   { key: 'height_in',            label: 'Height',            short: 'Height',      numeric: true, fmt: 'fi' },
-  { key: 'standing_vertical_in', label: 'Stand. Jump Touch', short: 'Stn Touch',   numeric: true, fmt: 'fi' },
+  { key: 'wingspan_in',          label: 'Wingspan',          short: 'Wingspan',    numeric: true, fmt: 'fi' },
+  { key: 'standing_reach_in',    label: 'Standing Reach',    short: 'Stn Reach',   numeric: true, fmt: 'fi' },
+  { key: 'standing_vertical_in', label: 'Block Touch',       short: 'Blk Touch',   numeric: true, fmt: 'fi' },
   { key: 'standingVert',         label: 'Stand. Vertical',   short: 'Stn Vert',    numeric: true, fmt: 'in' },
   { key: 'approach_vertical_in', label: 'App. Touch',        short: 'App Touch',   numeric: true, fmt: 'fi' },
   { key: 'maxVert',              label: 'Max Vertical',      short: 'Max Vert',    numeric: true, fmt: 'in' },
-  { key: 'sessionCount',         label: 'Sessions',          short: 'Sessions',    numeric: true, fmt: 'text' },
 ]
 
 // ft/in display: 67 → 5'7"
@@ -319,7 +321,11 @@ export default function CoachPlayersPage() {
         <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.position || '—'}</td>
         {/* Height — ft/in */}
         <td style={cellStyle('height_in')}>{fi(p.height_in)}</td>
-        {/* Standing Jump Touch — ft/in */}
+        {/* Wingspan — ft/in */}
+        <td style={cellStyle('wingspan_in')}>{fi(p.wingspan_in)}</td>
+        {/* Standing Reach — ft/in */}
+        <td style={cellStyle('standing_reach_in')}>{fi(p.standing_reach_in)}</td>
+        {/* Block Touch — ft/in */}
         <td style={cellStyle('standing_vertical_in')}>{fi(p.standing_vertical_in)}</td>
         {/* Standing Vertical (calculated) — inches */}
         <td style={cellStyle('standingVert')}>{fmtIn(sv)}</td>
@@ -327,8 +333,6 @@ export default function CoachPlayersPage() {
         <td style={cellStyle('approach_vertical_in')}>{fi(p.approach_vertical_in)}</td>
         {/* Max Vertical (calculated) — inches */}
         <td style={cellStyle('maxVert')}>{fmtIn(mv)}</td>
-        {/* Sessions */}
-        <td style={{ padding:'0.75rem', textAlign:'right', fontSize:'0.82rem', color:'var(--text-muted)' }}>{p.sessionCount ?? 0}</td>
         {/* Actions */}
         <td style={{ padding:'0.75rem 0.875rem', whiteSpace:'nowrap' }}>
           <button onClick={() => openEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Edit</button>
