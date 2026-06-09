@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
 
@@ -168,83 +168,28 @@ function PlayerTable({ rows, sortKey, sortDir, onSort, onEdit, onDelete }: {
   onEdit: (p: Player) => void
   onDelete: (p: Player) => void
 }) {
-  const tableRef = useRef<HTMLDivElement>(null)
-  const phantomRef = useRef<HTMLDivElement>(null)
-  const tableInnerRef = useRef<HTMLTableElement>(null)
-  const syncing = useRef(false)
-
-  useEffect(() => {
-    const table = tableRef.current
-    const phantom = phantomRef.current
-    if (!table || !phantom) return
-    const syncFromTable = () => {
-      if (syncing.current) return
-      syncing.current = true
-      phantom.scrollLeft = table.scrollLeft
-      syncing.current = false
-    }
-    const syncFromPhantom = () => {
-      if (syncing.current) return
-      syncing.current = true
-      table.scrollLeft = phantom.scrollLeft
-      syncing.current = false
-    }
-    table.addEventListener('scroll', syncFromTable)
-    phantom.addEventListener('scroll', syncFromPhantom)
-    return () => {
-      table.removeEventListener('scroll', syncFromTable)
-      phantom.removeEventListener('scroll', syncFromPhantom)
-    }
-  }, [])
-
-  useEffect(() => {
-    const inner = tableInnerRef.current
-    const phantom = phantomRef.current
-    if (!inner || !phantom) return
-    const phantomInner = phantom.firstElementChild as HTMLElement | null
-    const update = () => { if (phantomInner) phantomInner.style.width = inner.scrollWidth + 'px' }
-    update()
-    const observer = new ResizeObserver(update)
-    observer.observe(inner)
-    return () => observer.disconnect()
-  }, [rows])
-
   return (
-    <div style={{ marginBottom:'1rem' }}>
-      <div className="card" ref={tableRef} style={{ overflowX:'auto', overflowY:'visible', marginBottom:0, borderBottomLeftRadius:0, borderBottomRightRadius:0 }}>
-        <table ref={tableInnerRef} style={{ width:'100%', borderCollapse:'collapse', minWidth:1050 }}>
-          <thead>
-            <tr style={{ background:'var(--carolina-light)' }}>
-              <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38, borderBottom:'1.5px solid var(--gray-border)' }} />
-              {COLUMNS.map(col => (
-                <SortTh key={col.key} col={col} sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
-              ))}
-              <th style={{ padding:'0.7rem 0.875rem', textAlign:'left', fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, borderBottom:'1.5px solid var(--gray-border)', whiteSpace:'nowrap' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((p, i) => (
-              <PlayerRow key={p.id} p={p} rank={i + 1} sortKey={sortKey} onEdit={onEdit} onDelete={onDelete} />
+    <div className="card" style={{
+      overflow: 'auto',
+      maxHeight: 'calc(100vh - 280px)',
+      marginBottom: '1.5rem',
+    }}>
+      <table style={{ width:'100%', borderCollapse:'collapse', minWidth:1050 }}>
+        <thead>
+          <tr style={{ background:'var(--carolina-light)', position:'sticky', top:0, zIndex:1 }}>
+            <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38, borderBottom:'1.5px solid var(--gray-border)' }} />
+            {COLUMNS.map(col => (
+              <SortTh key={col.key} col={col} sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             ))}
-          </tbody>
-        </table>
-      </div>
-      {/* Sticky phantom scrollbar — pinned to bottom of viewport */}
-      <div ref={phantomRef} style={{
-        position: 'sticky',
-        bottom: 0,
-        overflowX: 'auto',
-        overflowY: 'hidden',
-        height: 16,
-        zIndex: 10,
-        background: 'var(--surface, #f8fafc)',
-        borderTop: '1px solid var(--gray-border)',
-        borderBottomLeftRadius: 8,
-        borderBottomRightRadius: 8,
-        boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-      }}>
-        <div style={{ height: 1 }} />
-      </div>
+            <th style={{ padding:'0.7rem 0.875rem', textAlign:'left', fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, borderBottom:'1.5px solid var(--gray-border)', whiteSpace:'nowrap' }}>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((p, i) => (
+            <PlayerRow key={p.id} p={p} rank={i + 1} sortKey={sortKey} onEdit={onEdit} onDelete={onDelete} />
+          ))}
+        </tbody>
+      </table>
     </div>
   )
 }
