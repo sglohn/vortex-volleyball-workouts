@@ -1,5 +1,5 @@
 'use client'
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
 
@@ -33,28 +33,24 @@ type ScopeKey = 'all' | 'ageGroup' | 'position' | 'team'
 
 const POSITIONS = ['Setter','Outside Hitter','Middle Blocker','Opposite','Libero','Defensive Specialist','Other']
 
-// Column definitions — fmt drives display formatting in the row
 const COLUMNS: { key: SortKey; label: string; short: string; numeric?: boolean; fmt: 'text' | 'fi' | 'in' }[] = [
-  { key: 'name',                 label: 'Player',            short: 'Player',      fmt: 'text' },
-  { key: 'age_group',            label: 'Age Group',         short: 'Age Grp',     fmt: 'text' },
-  { key: 'position',             label: 'Position',          short: 'Position',    fmt: 'text' },
-  { key: 'height_in',            label: 'Height',            short: 'Height',      numeric: true, fmt: 'fi' },
-  { key: 'wingspan_in',          label: 'Wingspan',          short: 'Wingspan',    numeric: true, fmt: 'fi' },
-  { key: 'standing_reach_in',    label: 'Standing Reach',    short: 'Stn Reach',   numeric: true, fmt: 'fi' },
-  { key: 'standing_vertical_in', label: 'Block Touch',       short: 'Blk Touch',   numeric: true, fmt: 'fi' },
-  { key: 'standingVert',         label: 'Stand. Vertical',   short: 'Stn Vert',    numeric: true, fmt: 'in' },
-  { key: 'approach_vertical_in', label: 'App. Touch',        short: 'App Touch',   numeric: true, fmt: 'fi' },
-  { key: 'maxVert',              label: 'Max Vertical',      short: 'Max Vert',    numeric: true, fmt: 'in' },
+  { key: 'name',                 label: 'Player',          short: 'Player',    fmt: 'text' },
+  { key: 'age_group',            label: 'Age Group',       short: 'Age Grp',   fmt: 'text' },
+  { key: 'position',             label: 'Position',        short: 'Position',  fmt: 'text' },
+  { key: 'height_in',            label: 'Height',          short: 'Height',    numeric: true, fmt: 'fi' },
+  { key: 'wingspan_in',          label: 'Wingspan',        short: 'Wingspan',  numeric: true, fmt: 'fi' },
+  { key: 'standing_reach_in',    label: 'Standing Reach',  short: 'Stn Reach', numeric: true, fmt: 'fi' },
+  { key: 'standing_vertical_in', label: 'Block Touch',     short: 'Blk Touch', numeric: true, fmt: 'fi' },
+  { key: 'standingVert',         label: 'Stand. Vertical', short: 'Stn Vert',  numeric: true, fmt: 'in' },
+  { key: 'approach_vertical_in', label: 'App. Touch',      short: 'App Touch', numeric: true, fmt: 'fi' },
+  { key: 'maxVert',              label: 'Max Vertical',    short: 'Max Vert',  numeric: true, fmt: 'in' },
 ]
 
-// ft/in display: 67 → 5'7"
 function fi(inches: number | null | undefined): string {
   if (!inches) return '—'
   const total = Math.round(inches)
   return `${Math.floor(total / 12)}'${total % 12}"`
 }
-
-// inches display: 24.5 → 24.5"
 function fmtIn(val: number | null | undefined): string {
   if (val == null) return '—'
   return `${val}"`
@@ -69,6 +65,191 @@ function FF({ label, children }: { label: string; children: React.ReactNode }) {
   )
 }
 
+// ── Module-level SortTh ──────────────────────────────────────────────────────
+function SortTh({ col, sortKey, sortDir, onSort }: {
+  col: typeof COLUMNS[number]
+  sortKey: SortKey
+  sortDir: SortDir
+  onSort: (k: SortKey) => void
+}) {
+  const active = sortKey === col.key
+  return (
+    <th onClick={() => onSort(col.key)} style={{
+      padding: '0.7rem 0.75rem',
+      textAlign: col.numeric ? 'right' : 'left',
+      fontSize: '0.7rem',
+      color: active ? 'var(--carolina-deep)' : 'var(--text-muted)',
+      textTransform: 'uppercase',
+      letterSpacing: '0.05em',
+      fontWeight: active ? 800 : 600,
+      cursor: 'pointer',
+      userSelect: 'none',
+      whiteSpace: 'nowrap',
+      background: active ? 'var(--carolina-light)' : 'transparent',
+      borderBottom: active ? '2px solid var(--carolina)' : '1.5px solid var(--gray-border)',
+    }}>
+      <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem' }}>
+        {col.short}
+        <span style={{ fontSize:'0.8rem', opacity: active ? 0.8 : 0.25 }}>
+          {active ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
+        </span>
+      </span>
+    </th>
+  )
+}
+
+// ── Module-level PlayerRow ───────────────────────────────────────────────────
+function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
+  p: Player
+  rank: number
+  sortKey: SortKey
+  onEdit: (p: Player) => void
+  onDelete: (p: Player) => void
+}) {
+  const sv = standingVertical(p)
+  const mv = maxVertical(p)
+  function cellStyle(key: SortKey) {
+    const active = sortKey === key
+    return { padding:'0.75rem', textAlign:'right' as const, fontSize:'0.85rem', fontWeight: active ? 700 : 400, color: active ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }
+  }
+  return (
+    <tr style={{ borderBottom:'1px solid var(--gray-border)' }}>
+      <td style={{ padding:'0.75rem 0.5rem 0.75rem 0.875rem', textAlign:'center', width:38 }}>
+        <span style={{
+          display:'inline-flex', alignItems:'center', justifyContent:'center',
+          width:26, height:26, borderRadius:'50%',
+          background: rank===1 ? '#f59e0b' : rank===2 ? '#9ca3af' : rank===3 ? '#cd7c2f' : 'transparent',
+          color: rank<=3 ? '#fff' : 'var(--text-muted)',
+          fontWeight: rank<=3 ? 800 : 500, fontSize:'0.72rem', fontFamily:'var(--font-display)',
+        }}>{rank}</span>
+      </td>
+      <td style={{ padding:'0.75rem' }}>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
+          <div style={{ width:32, height:32, borderRadius:'50%', background: p.teamColor ? `${p.teamColor}22` : 'var(--carolina-light)', border:`1.5px solid ${p.teamColor ?? 'var(--carolina-border)'}`, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, color: p.teamColor ?? 'var(--carolina-deep)', fontSize:'0.8rem', flexShrink:0 }}>
+            {p.jersey_number || p.name.charAt(0)}
+          </div>
+          <div>
+            <Link href={`/coach/players/${p.id}`} style={{ fontWeight:700, color:'var(--carolina-dark)', textDecoration:'none', fontSize:'0.9rem' }}
+              onMouseEnter={e => (e.currentTarget.style.textDecoration='underline')}
+              onMouseLeave={e => (e.currentTarget.style.textDecoration='none')}>
+              {p.name}
+            </Link>
+            <div style={{ fontSize:'0.7rem', color:'var(--text-muted)' }}>
+              {[p.teamName, p.age_group].filter(Boolean).join(' · ')}
+              {p.hasHealthFlag && <span style={{ color:'var(--danger)', marginLeft:'0.35rem' }}>⚠</span>}
+            </div>
+          </div>
+        </div>
+      </td>
+      <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.age_group || '—'}</td>
+      <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.position || '—'}</td>
+      <td style={cellStyle('height_in')}>{fi(p.height_in)}</td>
+      <td style={cellStyle('wingspan_in')}>{fi(p.wingspan_in)}</td>
+      <td style={cellStyle('standing_reach_in')}>{fi(p.standing_reach_in)}</td>
+      <td style={cellStyle('standing_vertical_in')}>{fi(p.standing_vertical_in)}</td>
+      <td style={cellStyle('standingVert')}>{fmtIn(sv)}</td>
+      <td style={cellStyle('approach_vertical_in')}>{fi(p.approach_vertical_in)}</td>
+      <td style={cellStyle('maxVert')}>{fmtIn(mv)}</td>
+      <td style={{ padding:'0.75rem 0.875rem', whiteSpace:'nowrap' }}>
+        <button onClick={() => onEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Edit</button>
+        <span style={{ color:'var(--gray-border)', margin:'0 0.4rem' }}>|</span>
+        <button onClick={() => onDelete(p)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Remove</button>
+      </td>
+    </tr>
+  )
+}
+
+// ── Module-level PlayerTable with sticky scrollbar ───────────────────────────
+function PlayerTable({ rows, sortKey, sortDir, onSort, onEdit, onDelete }: {
+  rows: Player[]
+  sortKey: SortKey
+  sortDir: SortDir
+  onSort: (k: SortKey) => void
+  onEdit: (p: Player) => void
+  onDelete: (p: Player) => void
+}) {
+  const tableRef = useRef<HTMLDivElement>(null)
+  const phantomRef = useRef<HTMLDivElement>(null)
+  const tableInnerRef = useRef<HTMLTableElement>(null)
+  const syncing = useRef(false)
+
+  useEffect(() => {
+    const table = tableRef.current
+    const phantom = phantomRef.current
+    if (!table || !phantom) return
+    const syncFromTable = () => {
+      if (syncing.current) return
+      syncing.current = true
+      phantom.scrollLeft = table.scrollLeft
+      syncing.current = false
+    }
+    const syncFromPhantom = () => {
+      if (syncing.current) return
+      syncing.current = true
+      table.scrollLeft = phantom.scrollLeft
+      syncing.current = false
+    }
+    table.addEventListener('scroll', syncFromTable)
+    phantom.addEventListener('scroll', syncFromPhantom)
+    return () => {
+      table.removeEventListener('scroll', syncFromTable)
+      phantom.removeEventListener('scroll', syncFromPhantom)
+    }
+  }, [])
+
+  useEffect(() => {
+    const inner = tableInnerRef.current
+    const phantom = phantomRef.current
+    if (!inner || !phantom) return
+    const phantomInner = phantom.firstElementChild as HTMLElement | null
+    const update = () => { if (phantomInner) phantomInner.style.width = inner.scrollWidth + 'px' }
+    update()
+    const observer = new ResizeObserver(update)
+    observer.observe(inner)
+    return () => observer.disconnect()
+  }, [rows])
+
+  return (
+    <div style={{ marginBottom:'1rem' }}>
+      <div className="card" ref={tableRef} style={{ overflowX:'auto', overflowY:'visible', marginBottom:0, borderBottomLeftRadius:0, borderBottomRightRadius:0 }}>
+        <table ref={tableInnerRef} style={{ width:'100%', borderCollapse:'collapse', minWidth:1050 }}>
+          <thead>
+            <tr style={{ background:'var(--carolina-light)' }}>
+              <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38, borderBottom:'1.5px solid var(--gray-border)' }} />
+              {COLUMNS.map(col => (
+                <SortTh key={col.key} col={col} sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
+              ))}
+              <th style={{ padding:'0.7rem 0.875rem', textAlign:'left', fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, borderBottom:'1.5px solid var(--gray-border)', whiteSpace:'nowrap' }}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p, i) => (
+              <PlayerRow key={p.id} p={p} rank={i + 1} sortKey={sortKey} onEdit={onEdit} onDelete={onDelete} />
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {/* Sticky phantom scrollbar — pinned to bottom of viewport */}
+      <div ref={phantomRef} style={{
+        position: 'sticky',
+        bottom: 0,
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        height: 16,
+        zIndex: 10,
+        background: 'var(--surface, #f8fafc)',
+        borderTop: '1px solid var(--gray-border)',
+        borderBottomLeftRadius: 8,
+        borderBottomRightRadius: 8,
+        boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+      }}>
+        <div style={{ height: 1 }} />
+      </div>
+    </div>
+  )
+}
+
+// ── Main page ────────────────────────────────────────────────────────────────
 export default function CoachPlayersPage() {
   const [players, setPlayers] = useState<Player[]>([])
   const [teams, setTeams] = useState<Team[]>([])
@@ -130,8 +311,6 @@ export default function CoachPlayersPage() {
   const sortedPlayers = useMemo(() => {
     return [...scopedPlayers].sort((a, b) => {
       const col = COLUMNS.find(c => c.key === sortKey)
-
-      // Calculated columns
       if (sortKey === 'standingVert') {
         const av = standingVertical(a) ?? -1
         const bv = standingVertical(b) ?? -1
@@ -142,15 +321,11 @@ export default function CoachPlayersPage() {
         const bv = maxVertical(b) ?? -1
         return sortDir === 'desc' ? bv - av : av - bv
       }
-
-      // Stored numeric columns
       if (col?.numeric) {
         const an = (a[sortKey as keyof Player] as number | null) ?? -1
         const bn = (b[sortKey as keyof Player] as number | null) ?? -1
         return sortDir === 'desc' ? bn - an : an - bn
       }
-
-      // Text columns
       const as_ = (a[sortKey as keyof Player] as string | null) ?? ''
       const bs_ = (b[sortKey as keyof Player] as string | null) ?? ''
       return sortDir === 'asc' ? as_.localeCompare(bs_) : bs_.localeCompare(as_)
@@ -248,196 +423,8 @@ export default function CoachPlayersPage() {
     return ''
   }, [scopeKey, scopeValue, teams])
 
-  // ── Sortable header ──────────────────────────────────────────────────────────
-  function SortTh({ col }: { col: typeof COLUMNS[number] }) {
-    const active = sortKey === col.key
-    return (
-      <th onClick={() => handleSort(col.key)} style={{
-        padding: '0.7rem 0.75rem',
-        textAlign: col.numeric ? 'right' : 'left',
-        fontSize: '0.7rem',
-        color: active ? 'var(--carolina-deep)' : 'var(--text-muted)',
-        textTransform: 'uppercase',
-        letterSpacing: '0.05em',
-        fontWeight: active ? 800 : 600,
-        cursor: 'pointer',
-        userSelect: 'none',
-        whiteSpace: 'nowrap',
-        background: active ? 'var(--carolina-light)' : 'transparent',
-        borderBottom: active ? '2px solid var(--carolina)' : '1.5px solid var(--gray-border)',
-      }}>
-        <span style={{ display:'inline-flex', alignItems:'center', gap:'0.3rem' }}>
-          {col.short}
-          <span style={{ fontSize:'0.8rem', opacity: active ? 0.8 : 0.25 }}>
-            {active ? (sortDir === 'desc' ? '↓' : '↑') : '↕'}
-          </span>
-        </span>
-      </th>
-    )
-  }
-
-  // ── Player row ───────────────────────────────────────────────────────────────
-  function PlayerRow({ p, rank }: { p: Player; rank: number }) {
-    const sv = standingVertical(p)
-    const mv = maxVertical(p)
-    function cellStyle(key: SortKey) {
-      const active = sortKey === key
-      return { padding:'0.75rem', textAlign:'right' as const, fontSize:'0.85rem', fontWeight: active ? 700 : 400, color: active ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }
-    }
-    return (
-      <tr style={{ borderBottom:'1px solid var(--gray-border)' }}>
-        {/* Rank */}
-        <td style={{ padding:'0.75rem 0.5rem 0.75rem 0.875rem', textAlign:'center', width:38 }}>
-          <span style={{
-            display:'inline-flex', alignItems:'center', justifyContent:'center',
-            width:26, height:26, borderRadius:'50%',
-            background: rank===1 ? '#f59e0b' : rank===2 ? '#9ca3af' : rank===3 ? '#cd7c2f' : 'transparent',
-            color: rank<=3 ? '#fff' : 'var(--text-muted)',
-            fontWeight: rank<=3 ? 800 : 500, fontSize:'0.72rem', fontFamily:'var(--font-display)',
-          }}>{rank}</span>
-        </td>
-        {/* Name */}
-        <td style={{ padding:'0.75rem' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
-            <div style={{ width:32, height:32, borderRadius:'50%', background: p.teamColor ? `${p.teamColor}22` : 'var(--carolina-light)', border:`1.5px solid ${p.teamColor ?? 'var(--carolina-border)'}`, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, color: p.teamColor ?? 'var(--carolina-deep)', fontSize:'0.8rem', flexShrink:0 }}>
-              {p.jersey_number || p.name.charAt(0)}
-            </div>
-            <div>
-              <Link href={`/coach/players/${p.id}`} style={{ fontWeight:700, color:'var(--carolina-dark)', textDecoration:'none', fontSize:'0.9rem' }}
-                onMouseEnter={e => (e.currentTarget.style.textDecoration='underline')}
-                onMouseLeave={e => (e.currentTarget.style.textDecoration='none')}>
-                {p.name}
-              </Link>
-              <div style={{ fontSize:'0.7rem', color:'var(--text-muted)' }}>
-                {[p.teamName, p.age_group].filter(Boolean).join(' · ')}
-                {p.hasHealthFlag && <span style={{ color:'var(--danger)', marginLeft:'0.35rem' }}>⚠</span>}
-              </div>
-            </div>
-          </div>
-        </td>
-        {/* Age Group */}
-        <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.age_group || '—'}</td>
-        {/* Position */}
-        <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.position || '—'}</td>
-        {/* Height — ft/in */}
-        <td style={cellStyle('height_in')}>{fi(p.height_in)}</td>
-        {/* Wingspan — ft/in */}
-        <td style={cellStyle('wingspan_in')}>{fi(p.wingspan_in)}</td>
-        {/* Standing Reach — ft/in */}
-        <td style={cellStyle('standing_reach_in')}>{fi(p.standing_reach_in)}</td>
-        {/* Block Touch — ft/in */}
-        <td style={cellStyle('standing_vertical_in')}>{fi(p.standing_vertical_in)}</td>
-        {/* Standing Vertical (calculated) — inches */}
-        <td style={cellStyle('standingVert')}>{fmtIn(sv)}</td>
-        {/* Approach Touch — ft/in */}
-        <td style={cellStyle('approach_vertical_in')}>{fi(p.approach_vertical_in)}</td>
-        {/* Max Vertical (calculated) — inches */}
-        <td style={cellStyle('maxVert')}>{fmtIn(mv)}</td>
-        {/* Actions */}
-        <td style={{ padding:'0.75rem 0.875rem', whiteSpace:'nowrap' }}>
-          <button onClick={() => openEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Edit</button>
-          <span style={{ color:'var(--gray-border)', margin:'0 0.4rem' }}>|</span>
-          <button onClick={() => setDeleteConfirm(p)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Remove</button>
-        </td>
-      </tr>
-    )
-  }
-
-  // ── Scope pill row ───────────────────────────────────────────────────────────
-  function ScopePills({ options, render }: {
-    options: { value: string; label: string; color?: string }[]
-    render?: (o: { value: string; label: string; color?: string }) => React.ReactNode
-  }) {
-    return (
-      <div style={{ display:'flex', gap:'0.4rem', flexWrap:'wrap', alignItems:'center' }}>
-        <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Filter:</span>
-        {[{ value:'', label:'All' }, ...options].map(o => (
-          <button key={o.value} onClick={() => setScopeValue(o.value)} style={{
-            padding:'0.3rem 0.65rem', borderRadius:20,
-            border:`1.5px solid ${scopeValue===o.value ? (o.color ?? 'var(--carolina)') : 'var(--gray-border)'}`,
-            background: scopeValue===o.value ? (o.color ? `${o.color}22` : 'var(--carolina-light)') : 'transparent',
-            cursor:'pointer', fontSize:'0.78rem',
-            fontWeight: scopeValue===o.value ? 700 : 400,
-            color: scopeValue===o.value ? (o.color ?? 'var(--carolina-deep)') : 'var(--text-secondary)',
-            display:'flex', alignItems:'center', gap:'0.35rem',
-          }}>
-            {render ? render(o) : o.label}
-          </button>
-        ))}
-      </div>
-    )
-  }
-
-  // ── Table wrapper with sticky bottom scrollbar ───────────────────────────────
-  function PlayerTable({ rows }: { rows: Player[] }) {
-    const tableRef = React.useRef<HTMLDivElement>(null)
-    const phantomRef = React.useRef<HTMLDivElement>(null)
-    const tableInnerRef = React.useRef<HTMLTableElement>(null)
-    const syncing = React.useRef(false)
-
-    React.useEffect(() => {
-      const table = tableRef.current
-      const phantom = phantomRef.current
-      if (!table || !phantom) return
-      const syncFromTable = () => {
-        if (syncing.current) return
-        syncing.current = true
-        phantom.scrollLeft = table.scrollLeft
-        syncing.current = false
-      }
-      const syncFromPhantom = () => {
-        if (syncing.current) return
-        syncing.current = true
-        table.scrollLeft = phantom.scrollLeft
-        syncing.current = false
-      }
-      table.addEventListener('scroll', syncFromTable)
-      phantom.addEventListener('scroll', syncFromPhantom)
-      return () => {
-        table.removeEventListener('scroll', syncFromTable)
-        phantom.removeEventListener('scroll', syncFromPhantom)
-      }
-    }, [])
-
-    React.useEffect(() => {
-      const inner = tableInnerRef.current
-      const phantom = phantomRef.current
-      if (!inner || !phantom) return
-      const phantomInner = phantom.firstElementChild as HTMLElement | null
-      const update = () => { if (phantomInner) phantomInner.style.width = inner.scrollWidth + 'px' }
-      update()
-      const observer = new ResizeObserver(update)
-      observer.observe(inner)
-      return () => observer.disconnect()
-    }, [rows])
-
-    return (
-      <>
-        <div className="card" ref={tableRef} style={{ overflowX:'auto', overflowY:'visible' }}>
-          <table ref={tableInnerRef} style={{ width:'100%', borderCollapse:'collapse', minWidth:1050 }}>
-            <thead>
-              <tr style={{ background:'var(--carolina-light)' }}>
-                <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38, borderBottom:'1.5px solid var(--gray-border)' }} />
-                {COLUMNS.map(col => <SortTh key={col.key} col={col} />)}
-                <th style={{ padding:'0.7rem 0.875rem', textAlign:'left', fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, borderBottom:'1.5px solid var(--gray-border)', whiteSpace:'nowrap' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p, i) => <PlayerRow key={p.id} p={p} rank={i + 1} />)}
-            </tbody>
-          </table>
-        </div>
-        {/* Sticky phantom scrollbar — always visible at bottom of viewport */}
-        <div ref={phantomRef} style={{
-          position:'sticky', bottom:0, overflowX:'auto', overflowY:'hidden',
-          height:14, zIndex:10, marginTop:2,
-          background:'var(--bg)', borderTop:'1px solid var(--gray-border)',
-        }}>
-          <div style={{ height:1 }} />
-        </div>
-      </>
-    )
-  }
+  // Shared table props
+  const tableProps = { sortKey, sortDir, onSort: handleSort, onEdit: openEdit, onDelete: setDeleteConfirm }
 
   if (loading) return <div style={{ padding:'2rem', color:'var(--text-muted)' }}>Loading…</div>
 
@@ -511,17 +498,22 @@ export default function CoachPlayersPage() {
         )}
       </div>
 
-
+      {/* ── Scope value pills ──────────────────────────────────────────────── */}
       {viewMode === 'leaderboard' && scopeKey !== 'all' && (
-        <div style={{ marginBottom:'0.875rem' }}>
-          {scopeKey === 'ageGroup' && <ScopePills options={ageGroupOptions.map(g => ({ value:g, label:g }))} />}
-          {scopeKey === 'position' && <ScopePills options={positionOptions.map(p => ({ value:p, label:p }))} />}
-          {scopeKey === 'team' && (
-            <ScopePills
-              options={teams.map(t => ({ value:t.id, label:`${t.name}${t.age_group ? ` ${t.age_group}` : ''}`, color:t.color }))}
-              render={o => <><span style={{ width:8, height:8, borderRadius:'50%', background:o.color, display:'inline-block' }} />{o.label}</>}
-            />
-          )}
+        <div style={{ marginBottom:'0.875rem', display:'flex', gap:'0.4rem', flexWrap:'wrap', alignItems:'center' }}>
+          <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Filter:</span>
+          {scopeKey === 'ageGroup' && ageGroupOptions.map(g => (
+            <button key={g} onClick={() => setScopeValue(g)} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===g ? 'var(--carolina)' : 'var(--gray-border)'}`, background: scopeValue===g ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight: scopeValue===g ? 700 : 400, color: scopeValue===g ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>{g}</button>
+          ))}
+          {scopeKey === 'position' && positionOptions.map(p => (
+            <button key={p} onClick={() => setScopeValue(p)} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===p ? 'var(--carolina)' : 'var(--gray-border)'}`, background: scopeValue===p ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight: scopeValue===p ? 700 : 400, color: scopeValue===p ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>{p}</button>
+          ))}
+          {scopeKey === 'team' && teams.map(t => (
+            <button key={t.id} onClick={() => setScopeValue(t.id)} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===t.id ? (t.color ?? 'var(--carolina)') : 'var(--gray-border)'}`, background: scopeValue===t.id ? `${t.color}22` : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight: scopeValue===t.id ? 700 : 400, color: scopeValue===t.id ? t.color : 'var(--text-secondary)', display:'flex', alignItems:'center', gap:'0.35rem' }}>
+              <span style={{ width:8, height:8, borderRadius:'50%', background:t.color, display:'inline-block' }} />
+              {t.name}{t.age_group ? ` ${t.age_group}` : ''}
+            </button>
+          ))}
         </div>
       )}
 
@@ -540,7 +532,7 @@ export default function CoachPlayersPage() {
 
       {/* ── LEADERBOARD VIEW ───────────────────────────────────────────────── */}
       {viewMode === 'leaderboard' && sortedPlayers.length > 0 && (
-        <PlayerTable rows={sortedPlayers} />
+        <PlayerTable rows={sortedPlayers} {...tableProps} />
       )}
 
       {/* ── GROUPED BY TEAM VIEW ───────────────────────────────────────────── */}
@@ -551,7 +543,7 @@ export default function CoachPlayersPage() {
             <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'0.85rem', color: group.color ?? 'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.07em' }}>{group.label}</span>
             <span style={{ fontSize:'0.75rem', color:'var(--text-muted)', fontWeight:500 }}>— {group.players.length} player{group.players.length !== 1 ? 's' : ''}</span>
           </div>
-          <PlayerTable rows={group.players} />
+          <PlayerTable rows={group.players} {...tableProps} />
         </div>
       ))}
 
