@@ -7,7 +7,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient } from '@/lib/supabase'
 
 // POST — upsert ratio
 export async function POST(req: NextRequest) {
