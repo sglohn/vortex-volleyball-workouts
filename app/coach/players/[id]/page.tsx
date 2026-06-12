@@ -2,10 +2,11 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
-import { inchesToFeetInches, painLevelColor, painLevelLabel } from '@/lib/fitness'
+import { inchesToFeetInches } from '@/lib/fitness'
 import FeetInchesInput from '@/components/FeetInchesInput'
 import MeasurementHistoryModal from '@/components/MeasurementHistoryModal'
 import PlayerHealthCard from '@/components/PlayerHealthCard'
+import VbtPanel from '@/components/VbtPanel'
 
 const MEASUREMENT_FIELDS = [
   { key: 'height_in', label: 'Height', showFt: true },
@@ -79,14 +80,14 @@ export default function CoachPlayerDetailPage() {
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading…</div>
   if (!data) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Player not found</div>
 
-  const player = data.player as Record<string, string>
-  const team = data.team as Record<string, string> | null
-  const exercises = (data.exerciseProgress as Array<Record<string, unknown>>) ?? []
+  const player       = data.player as Record<string, string>
+  const team         = data.team as Record<string, string> | null
+  const exercises    = (data.exerciseProgress as Array<Record<string, unknown>>) ?? []
   const measurements = (data.measurements as Array<Record<string, unknown>>) ?? []
   const healthReports = (data.healthReports as Array<Record<string, unknown>>) ?? []
-  const bodyChecks = (data.bodyChecks as Array<{ regions: Record<string, string>; checked_at: string }>) ?? []
-  const sessions = (data.sessions as Array<Record<string, unknown>>) ?? []
-  const latestMeas = measurements[0] as Record<string, number | string> | undefined
+  const bodyChecks   = (data.bodyChecks as Array<{ regions: Record<string, string>; checked_at: string }>) ?? []
+  const sessions     = (data.sessions as Array<Record<string, unknown>>) ?? []
+  const latestMeas   = measurements[0] as Record<string, number | string> | undefined
   const activeHealth = healthReports.filter(r => r.status === 'active' || r.status === 'monitoring')
 
   return (
@@ -111,55 +112,63 @@ export default function CoachPlayerDetailPage() {
       {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--volt)', fontSize: '0.9rem' }}>{msg}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
-        {/* Health card */}
-        <PlayerHealthCard
-          healthReports={healthReports as never}
-          bodyChecks={bodyChecks}
-          playerId={id}
-          onUpdate={() => fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)}
-        />
+        {/* Left col: health + measurements */}
+        <div>
+          {/* Health card */}
+          <PlayerHealthCard
+            healthReports={healthReports as never}
+            bodyChecks={bodyChecks}
+            playerId={id}
+            onUpdate={() => fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)}
+          />
 
-        {/* Measurements */}
-        <div className="card" style={{ padding: '1.25rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h2>
-            <button className="btn-ghost" onClick={() => setShowMeasForm(!showMeasForm)} style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}>{showMeasForm ? 'Cancel' : '+ Record'}</button>
-          </div>
-
-          {showMeasForm && (
-            <div style={{ marginBottom: '1rem' }}>
-              {MEASUREMENT_FIELDS.map(f => (
-                <div key={f.key} style={{ marginBottom: '0.625rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>{f.label}</label>
-                  <FeetInchesInput
-                    value={measForm[f.key] ?? ''}
-                    onChange={val => setMeasForm(p => ({ ...p, [f.key]: val }))}
-                  />
-                </div>
-              ))}
-              <button className="btn-volt" onClick={saveMeasurement} disabled={savingMeas} style={{ width: '100%', padding: '0.625rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>{savingMeas ? 'Saving…' : 'Save Measurements'}</button>
+          {/* Measurements */}
+          <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h2>
+              <button className="btn-ghost" onClick={() => setShowMeasForm(!showMeasForm)} style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}>{showMeasForm ? 'Cancel' : '+ Record'}</button>
             </div>
-          )}
 
-          {latestMeas ? (
-            <div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Recorded: {new Date(latestMeas.measured_at as string).toLocaleDateString()}</div>
-              {MEASUREMENT_FIELDS.map(f => {
-                const val = latestMeas[f.key] as number | undefined
-                return (
-                  <div key={f.key} onClick={() => setHistoryModal({ key: f.key, label: f.label })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid var(--gray-border)', cursor: 'pointer' }}>
-                    <div>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{f.label}</span>
-                      <span style={{ fontSize: '0.65rem', color: 'var(--carolina)', marginLeft: '0.4rem', fontWeight: 500 }}>history →</span>
-                    </div>
-                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '0.95rem' }}>
-                      {val ? inchesToFeetInches(val) : '—'}
-                    </span>
+            {showMeasForm && (
+              <div style={{ marginBottom: '1rem' }}>
+                {MEASUREMENT_FIELDS.map(f => (
+                  <div key={f.key} style={{ marginBottom: '0.625rem' }}>
+                    <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>{f.label}</label>
+                    <FeetInchesInput
+                      value={measForm[f.key] ?? ''}
+                      onChange={val => setMeasForm(p => ({ ...p, [f.key]: val }))}
+                    />
                   </div>
-                )
-              })}
-            </div>
-          ) : <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No measurements yet.</p>}
+                ))}
+                <button className="btn-volt" onClick={saveMeasurement} disabled={savingMeas} style={{ width: '100%', padding: '0.625rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>{savingMeas ? 'Saving…' : 'Save Measurements'}</button>
+              </div>
+            )}
+
+            {latestMeas ? (
+              <div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Recorded: {new Date(latestMeas.measured_at as string).toLocaleDateString()}</div>
+                {MEASUREMENT_FIELDS.map(f => {
+                  const val = latestMeas[f.key] as number | undefined
+                  return (
+                    <div key={f.key} onClick={() => setHistoryModal({ key: f.key, label: f.label })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid var(--gray-border)', cursor: 'pointer' }}>
+                      <div>
+                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{f.label}</span>
+                        <span style={{ fontSize: '0.65rem', color: 'var(--carolina)', marginLeft: '0.4rem', fontWeight: 500 }}>history →</span>
+                      </div>
+                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '0.95rem' }}>
+                        {val ? inchesToFeetInches(val) : '—'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            ) : <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No measurements yet.</p>}
+          </div>
+        </div>
+
+        {/* Right col: VBT panel */}
+        <div>
+          <VbtPanel playerId={id as string} />
         </div>
       </div>
 
@@ -180,7 +189,7 @@ export default function CoachPlayerDetailPage() {
 
       {/* Strength charts */}
       {exercises.length > 0 && (
-        <div className="card" style={{ padding: '1.25rem' }}>
+        <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1.25rem' }}>Strength Progress</h2>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
             {exercises.map((ex: Record<string, unknown>) => {
@@ -212,17 +221,15 @@ export default function CoachPlayerDetailPage() {
           </div>
         </div>
       )}
-    </div>
 
       {/* ── WORKOUT ADJUSTMENTS ── */}
-      <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
+      <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showOverrides ? '1.25rem' : 0 }}>
           <div>
             <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem' }}>Workout Adjustments</h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem' }}>
-              {skips.length > 0 && `${skips.length} exercise skip${skips.length > 1 ? 's' : ''} active · `}
-              {overrides.length > 0 && `${overrides.length} date override${overrides.length > 1 ? 's' : ''}`}
-              {skips.length === 0 && overrides.length === 0 && 'No adjustments — player follows team workout'}
+              {skips.length > 0 ? `${skips.length} exercise skip${skips.length > 1 ? 's' : ''}` : 'No skips'}
+              {overrides.length > 0 ? ` · ${overrides.length} date override${overrides.length > 1 ? 's' : ''}` : ''}
             </p>
           </div>
           <button onClick={() => setShowOverrides(o => !o)} className="btn-ghost" style={{ padding: '0.4rem 0.875rem', fontSize: '0.82rem' }}>
@@ -231,121 +238,68 @@ export default function CoachPlayerDetailPage() {
         </div>
 
         {showOverrides && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-
-            {/* Exercise Skips */}
-            <div>
+          <div>
+            {/* Exercise Skips / Replacements */}
+            <div style={{ marginBottom: '1.5rem' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--carolina-deep)', marginBottom: '0.625rem' }}>
-                Skip Exercises (Injury / Limitation)
+                Exercise Skips &amp; Replacements
               </div>
               <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-                These exercises will be automatically removed from this player's workout. Other players are unaffected.
+                Skip or replace a specific exercise for this player. Useful for injuries or individual limitations.
               </p>
 
-              {skips.map(skip => {
-                const skipAny = skip as Record<string, unknown>
-                const repLib = skipAny.replacement_library as { name: string } | undefined
-                const skipTypeLabel = skipAny.skip_type === 'rehab' ? 'Rehab/Modified' : 'Avoid Area'
-                return (
-                  <div key={skip.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', padding: '0.625rem 0.875rem', background: 'var(--danger-light)', border: '1px solid #fecaca', borderRadius: 8, marginBottom: '0.4rem' }}>
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.2rem' }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.88rem' }}>{skip.exercise_library?.name ?? skip.exercise_id}</div>
-                        <span style={{ fontSize: '0.65rem', background: skipAny.skip_type === 'rehab' ? 'rgba(139,92,246,0.1)' : 'rgba(239,68,68,0.1)', color: skipAny.skip_type === 'rehab' ? '#7c3aed' : 'var(--danger)', border: `1px solid ${skipAny.skip_type === 'rehab' ? '#c4b5fd' : '#fecaca'}`, borderRadius: 4, padding: '0.1rem 0.4rem', fontWeight: 600 }}>{skipTypeLabel}</span>
-                      </div>
-                      {skip.reason && <div style={{ fontSize: '0.72rem', color: 'var(--danger)', fontStyle: 'italic', marginBottom: '0.2rem' }}>{skip.reason}</div>}
-                      {repLib && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600 }}>
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
-                          Replaced with: {repLib.name}
-                        </div>
-                      )}
-                      {!repLib && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>No replacement — exercise removed</div>}
-                      {skip.ends_on && <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>Expires {new Date(skip.ends_on + 'T12:00:00').toLocaleDateString()}</div>}
-                    </div>
-                    <button onClick={async () => {
-                      await fetch('/api/coach/overrides', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_skip', id: skip.id }) })
-                      setSkips(prev => prev.filter(s => s.id !== skip.id))
-                    }} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', flexShrink: 0 }}>Remove</button>
+              {skips.map(sk => (
+                <div key={sk.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, marginBottom: '0.4rem' }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{sk.exercise_library?.name ?? sk.exercise_id}</div>
+                    {sk.reason && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{sk.reason}</div>}
+                    {sk.ends_on && <div style={{ fontSize: '0.7rem', color: 'var(--carolina-dark)' }}>Until {new Date(sk.ends_on + 'T12:00:00').toLocaleDateString()}</div>}
                   </div>
-                )
-              })}
+                  <button onClick={async () => {
+                    await fetch('/api/coach/overrides', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'exercise_skip', id: sk.id }) })
+                    setSkips(prev => prev.filter(s => s.id !== sk.id))
+                  }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem' }}>Remove</button>
+                </div>
+              ))}
 
-              <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 10, padding: '1rem', marginTop: '0.75rem', background: 'rgba(255,255,255,0.6)' }}>
-                <div style={{ fontSize: '0.75rem', color: 'var(--carolina-deep)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.875rem' }}>Add New Modification</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
-
-                  {/* Skip type */}
-                  <div style={{ gridColumn: '1/-1' }}>
-                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Type of modification</label>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      {[['avoid','Avoid Area Entirely','Move to different body part'],['rehab','Rehab / Modified','Different exercise for same area']] .map(([val, label, desc]) => (
-                        <button key={val} onClick={() => setNewSkip(p => ({ ...p, skipType: val }))}
-                          style={{ flex: 1, padding: '0.5rem 0.75rem', borderRadius: 8, border: `1.5px solid ${newSkip.skipType === val ? (val === 'rehab' ? '#7c3aed' : 'var(--danger)') : 'var(--gray-border)'}`, background: newSkip.skipType === val ? (val === 'rehab' ? 'rgba(139,92,246,0.08)' : 'var(--danger-light)') : 'transparent', cursor: 'pointer', textAlign: 'left' }}>
-                          <div style={{ fontSize: '0.82rem', fontWeight: 700, color: newSkip.skipType === val ? (val === 'rehab' ? '#7c3aed' : 'var(--danger)') : 'var(--black)' }}>{label}</div>
-                          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{desc}</div>
-                        </button>
+              {/* Add skip form */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.75rem' }}>
+                <div style={{ gridColumn: '1/-1' }}>
+                  <input className="input" placeholder="Search exercise to skip…" value={skipSearch} onChange={e => setSkipSearch(e.target.value)} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                  {skipSearch && (
+                    <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, marginTop: '0.25rem', maxHeight: 160, overflowY: 'auto', background: 'var(--white)' }}>
+                      {allExercises.filter(e => e.name.toLowerCase().includes(skipSearch.toLowerCase())).slice(0, 8).map(e => (
+                        <button key={e.id} onClick={() => { setNewSkip(p => ({ ...p, exerciseId: e.id })); setSkipSearch(e.name) }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.75rem', border: 'none', background: newSkip.exerciseId === e.id ? 'var(--carolina-light)' : 'transparent', fontSize: '0.82rem', cursor: 'pointer' }}>{e.name}</button>
                       ))}
                     </div>
-                  </div>
-
-                  {/* Exercise to skip */}
+                  )}
+                </div>
+                <div>
+                  <select className="input" value={newSkip.skipType} onChange={e => setNewSkip(p => ({ ...p, skipType: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }}>
+                    <option value="avoid">Skip / Avoid</option>
+                    <option value="replace">Replace with…</option>
+                  </select>
+                </div>
+                {newSkip.skipType === 'replace' && (
                   <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Exercise to remove</label>
-                    <input className="input" placeholder="Search…" value={skipSearch} onChange={e => setSkipSearch(e.target.value)} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
-                    {skipSearch && !newSkip.exerciseId && (
-                      <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, maxHeight: 140, overflowY: 'auto', background: 'var(--white)', marginTop: '0.2rem', position: 'relative', zIndex: 10 }}>
-                        {allExercises.filter(e => e.name.toLowerCase().includes(skipSearch.toLowerCase())).map(e => (
-                          <button key={e.id} onClick={() => { setNewSkip(p => ({ ...p, exerciseId: e.id })); setSkipSearch(e.name) }}
-                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.45rem 0.75rem', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.82rem' }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'var(--carolina-light)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                            {e.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{e.category}</span>
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {newSkip.exerciseId && <div style={{ fontSize: '0.72rem', color: 'var(--danger)', marginTop: '0.2rem', fontWeight: 600 }}>✓ {skipSearch}</div>}
-                  </div>
-
-                  {/* Replacement exercise */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Replace with <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
                     <input className="input" placeholder="Search replacement…" value={replacementSearch} onChange={e => setReplacementSearch(e.target.value)} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
-                    {replacementSearch && !newSkip.replacementId && (
-                      <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, maxHeight: 140, overflowY: 'auto', background: 'var(--white)', marginTop: '0.2rem', position: 'relative', zIndex: 10 }}>
-                        {allExercises.filter(e => e.name.toLowerCase().includes(replacementSearch.toLowerCase()) && e.id !== newSkip.exerciseId).map(e => (
-                          <button key={e.id} onClick={() => { setNewSkip(p => ({ ...p, replacementId: e.id })); setReplacementSearch(e.name) }}
-                            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.45rem 0.75rem', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.82rem' }}
-                            onMouseEnter={e => e.currentTarget.style.background = 'var(--carolina-light)'}
-                            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                            {e.name} <span style={{ color: 'var(--text-muted)', fontSize: '0.7rem' }}>{e.category}</span>
-                          </button>
+                    {replacementSearch && (
+                      <div style={{ border: '1.5px solid var(--gray-border)', borderRadius: 8, marginTop: '0.25rem', maxHeight: 120, overflowY: 'auto', background: 'var(--white)' }}>
+                        {allExercises.filter(e => e.name.toLowerCase().includes(replacementSearch.toLowerCase())).slice(0, 6).map(e => (
+                          <button key={e.id} onClick={() => { setNewSkip(p => ({ ...p, replacementId: e.id })); setReplacementSearch(e.name) }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '0.4rem 0.75rem', border: 'none', background: newSkip.replacementId === e.id ? 'var(--carolina-light)' : 'transparent', fontSize: '0.82rem', cursor: 'pointer' }}>{e.name}</button>
                         ))}
                       </div>
                     )}
-                    {newSkip.replacementId && <div style={{ fontSize: '0.72rem', color: 'var(--success)', marginTop: '0.2rem', fontWeight: 600 }}>✓ {replacementSearch}</div>}
                   </div>
-
-                  {/* Reason */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Reason</label>
-                    <input className="input" placeholder="e.g. Left knee pain" value={newSkip.reason} onChange={e => setNewSkip(p => ({ ...p, reason: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
-                  </div>
-
-                  {/* Expiry */}
-                  <div>
-                    <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>Auto-expire on <span style={{ fontWeight: 400, textTransform: 'none' }}>(optional)</span></label>
-                    <input type="date" className="input" value={newSkip.endsOn} onChange={e => setNewSkip(p => ({ ...p, endsOn: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
-                  </div>
-
-                  <div style={{ gridColumn: '1/-1', display: 'flex', justifyContent: 'flex-end', marginTop: '0.25rem' }}>
-                    <button className="btn-volt" disabled={!newSkip.exerciseId} onClick={async () => {
-                      const res = await fetch('/api/coach/overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_skip', playerId: id, exerciseId: newSkip.exerciseId, replacementId: newSkip.replacementId || null, skipType: newSkip.skipType, reason: newSkip.reason, endsOn: newSkip.endsOn || null }) })
-                      const d = await res.json()
-                      if (d.skip) { setSkips(prev => [...prev, d.skip]); setNewSkip({ exerciseId: '', replacementId: '', reason: '', skipType: 'avoid', endsOn: '' }); setSkipSearch(''); setReplacementSearch('') }
-                    }} style={{ padding: '0.625rem 1.5rem' }}>Save Modification</button>
-                  </div>
+                )}
+                <div style={{ gridColumn: '1/-1', display: 'flex', gap: '0.5rem' }}>
+                  <input className="input" placeholder="Reason (optional)" value={newSkip.reason} onChange={e => setNewSkip(p => ({ ...p, reason: e.target.value }))} style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
+                  <input type="date" className="input" value={newSkip.endsOn} onChange={e => setNewSkip(p => ({ ...p, endsOn: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem', width: 140 }} placeholder="Ends on" />
+                  <button className="btn-volt" disabled={!newSkip.exerciseId} onClick={async () => {
+                    const res = await fetch('/api/coach/overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'exercise_skip', playerId: id, exerciseId: newSkip.exerciseId, replacementId: newSkip.replacementId || null, reason: newSkip.reason, skipType: newSkip.skipType, endsOn: newSkip.endsOn || null }) })
+                    const d = await res.json()
+                    if (d.skip) { setSkips(prev => [...prev, d.skip]); setNewSkip({ exerciseId: '', replacementId: '', reason: '', skipType: 'avoid', endsOn: '' }); setSkipSearch(''); setReplacementSearch('') }
+                  }} style={{ padding: '0.5rem 1rem', flexShrink: 0 }}>Add</button>
                 </div>
               </div>
             </div>
@@ -417,7 +371,6 @@ export default function CoachPlayerDetailPage() {
 
         {showPrograms && (
           <div>
-            {/* Active programs */}
             {programs.map(prog => (
               <div key={prog.id} style={{ border: `1.5px solid ${prog.is_active ? 'var(--carolina)' : 'var(--gray-border)'}`, borderRadius: 10, padding: '0.875rem 1rem', marginBottom: '0.625rem', background: prog.is_active ? 'var(--carolina-light)' : 'transparent' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -447,7 +400,6 @@ export default function CoachPlayerDetailPage() {
               </div>
             ))}
 
-            {/* New program form */}
             <div style={{ borderTop: programs.length > 0 ? '1.5px solid var(--gray-border)' : 'none', paddingTop: programs.length > 0 ? '1.25rem' : 0, marginTop: programs.length > 0 ? '0.75rem' : 0 }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--carolina-deep)', marginBottom: '0.875rem' }}>
                 {programs.filter(p => p.is_active).length > 0 ? 'Add Another Program' : 'Start Individual Program'}
@@ -459,7 +411,6 @@ export default function CoachPlayerDetailPage() {
                   <input className="input" value={newProgram.name} onChange={e => setNewProgram(p => ({ ...p, name: e.target.value }))} style={{ padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
                 </div>
 
-                {/* Template sequence builder */}
                 <div style={{ gridColumn: '1/-1' }}>
                   <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>
                     Workout Sequence <span style={{ fontWeight: 400, textTransform: 'none' }}>(player cycles through these in order, repeating)</span>
@@ -482,7 +433,6 @@ export default function CoachPlayerDetailPage() {
                   </select>
                 </div>
 
-                {/* Auto periodization */}
                 <div style={{ gridColumn: '1/-1' }}>
                   <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem', fontWeight: 600 }}>Periodization Cycle (auto)</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
@@ -510,7 +460,7 @@ export default function CoachPlayerDetailPage() {
                       + Add Phase
                     </button>
                     <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>
-                      Total cycle: {newProgram.phaseCycle.reduce((s, p) => s + p.weeks, 0)} weeks, then repeats. Weight recommendations shift automatically each phase.
+                      Total cycle: {newProgram.phaseCycle.reduce((s, p) => s + p.weeks, 0)} weeks, then repeats.
                     </p>
                   </div>
                 </div>
@@ -551,6 +501,7 @@ export default function CoachPlayerDetailPage() {
           </div>
         )}
       </div>
+    </div>
 
       {historyModal && (
         <MeasurementHistoryModal
