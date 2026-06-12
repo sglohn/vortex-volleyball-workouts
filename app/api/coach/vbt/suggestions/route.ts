@@ -13,7 +13,7 @@
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@/lib/supabase-server'
+import { createServerClient } from '@/lib/supabase'
 import { buildWeightSuggestion, epley1RM } from '@/lib/vbt'
 
 export async function GET(req: NextRequest) {
