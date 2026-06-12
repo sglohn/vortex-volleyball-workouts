@@ -35,6 +35,17 @@ interface Exercise {
   end_image_position?: string
   logs_weight: boolean
   logs_velocity: boolean
+  // VBT ratio (joined from exercise_anchor_ratios)
+  anchor_exercise_id?: string | null
+  vbt_ratio?: number | null
+  vbt_confidence?: string | null
+}
+
+interface AnchorExercise {
+  id: string
+  name: string
+  slug: string
+  category: string
 }
 
 const BLANK = {
@@ -42,48 +53,77 @@ const BLANK = {
   coaching_notes: '', demo_url: '', logs_weight: true, logs_velocity: false,
 }
 
+const CONFIDENCE_OPTIONS = [
+  { value: 'high',   label: 'High — closely related movement' },
+  { value: 'medium', label: 'Medium — similar pattern' },
+  { value: 'low',    label: 'Low — rough estimate only' },
+]
+
 export default function ExercisesPage() {
   const [exercises, setExercises] = useState<Exercise[]>([])
-  const [loading, setLoading] = useState(true)
-  const [modal, setModal] = useState<'add' | 'edit' | null>(null)
+  const [anchors, setAnchors]     = useState<AnchorExercise[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [modal, setModal]         = useState<'add' | 'edit' | null>(null)
   const [editTarget, setEditTarget] = useState<Exercise | null>(null)
-  const [form, setForm] = useState<typeof BLANK & { demo_url?: string }>(BLANK)
+  const [form, setForm]           = useState<typeof BLANK & { demo_url?: string }>(BLANK)
   const [filterCat, setFilterCat] = useState('all')
-  const [search, setSearch] = useState('')
-  const [saving, setSaving] = useState(false)
-  const [msg, setMsg] = useState('')
+  const [search, setSearch]       = useState('')
+  const [saving, setSaving]       = useState(false)
+  const [msg, setMsg]             = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<Exercise | null>(null)
 
+  // VBT ratio fields in modal
+  const [ratioAnchorId,   setRatioAnchorId]   = useState<string>('')
+  const [ratioValue,      setRatioValue]       = useState<string>('')
+  const [ratioConfidence, setRatioConfidence] = useState<string>('medium')
+
   // Photo upload state
-  const [startImg, setStartImg] = useState<File | null>(null)
-  const [endImg, setEndImg] = useState<File | null>(null)
-  const [startPreview, setStartPreview] = useState('')
-  const [endPreview, setEndPreview] = useState('')
-  const [startPos, setStartPos] = useState('50% 50%')
-  const [endPos, setEndPos] = useState('50% 50%')
+  const [startImg, setStartImg]           = useState<File | null>(null)
+  const [endImg, setEndImg]               = useState<File | null>(null)
+  const [startPreview, setStartPreview]   = useState('')
+  const [endPreview, setEndPreview]       = useState('')
+  const [startPos, setStartPos]           = useState('50% 50%')
+  const [endPos, setEndPos]               = useState('50% 50%')
   const [uploadingStart, setUploadingStart] = useState(false)
-  const [uploadingEnd, setUploadingEnd] = useState(false)
+  const [uploadingEnd, setUploadingEnd]     = useState(false)
   const startRef = useRef<HTMLInputElement>(null)
-  const endRef = useRef<HTMLInputElement>(null)
+  const endRef   = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    fetch('/api/coach/exercises').then(r => r.json()).then(d => { setExercises(d.exercises ?? []); setLoading(false) })
+    fetch('/api/coach/exercises').then(r => r.json()).then(d => {
+      setExercises(d.exercises ?? [])
+      setLoading(false)
+    })
+    // Fetch anchor exercises for the ratio dropdown
+    fetch('/api/coach/vbt/anchors').then(r => r.json()).then(d => {
+      setAnchors(d.anchors ?? [])
+    })
   }, [])
 
   function openAdd() {
     setForm(BLANK); setEditTarget(null)
     setStartImg(null); setEndImg(null); setStartPreview(''); setEndPreview('')
     setStartPos('50% 50%'); setEndPos('50% 50%')
+    setRatioAnchorId(''); setRatioValue(''); setRatioConfidence('medium')
     setModal('add'); setMsg('')
   }
 
   function openEdit(ex: Exercise) {
-    setForm({ name: ex.name, category: ex.category, default_sets: ex.default_sets ?? 3, default_reps: ex.default_reps ?? '8', coaching_notes: ex.coaching_notes ?? '', demo_url: ex.demo_url ?? '', logs_weight: ex.logs_weight, logs_velocity: ex.logs_velocity })
+    setForm({
+      name: ex.name, category: ex.category,
+      default_sets: ex.default_sets ?? 3, default_reps: ex.default_reps ?? '8',
+      coaching_notes: ex.coaching_notes ?? '', demo_url: ex.demo_url ?? '',
+      logs_weight: ex.logs_weight, logs_velocity: ex.logs_velocity,
+    })
     setStartImg(null); setEndImg(null)
     setStartPreview(ex.start_image_url ?? ex.demo_image_url ?? '')
     setEndPreview(ex.end_image_url ?? '')
     setStartPos(ex.start_image_position ?? '50% 50%')
     setEndPos(ex.end_image_position ?? '50% 50%')
+    // Pre-fill VBT ratio if set
+    setRatioAnchorId(ex.anchor_exercise_id ?? '')
+    setRatioValue(ex.vbt_ratio != null ? String(ex.vbt_ratio) : '')
+    setRatioConfidence(ex.vbt_confidence ?? 'medium')
     setEditTarget(ex); setModal('edit'); setMsg('')
   }
 
@@ -122,7 +162,6 @@ export default function ExercisesPage() {
   async function uploadPhoto(file: File, exerciseId: string, which: 'start' | 'end'): Promise<string | null> {
     const path = `exercises/${exerciseId}/${which}_${Date.now()}.jpg`
     const { supabase } = await import('@/lib/supabase')
-    // Resize to max 1800px on longest side at 92% JPEG quality before uploading
     const blob = await resizeImage(file, 1800)
     const { error } = await supabase.storage.from('exercise-media').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
     if (error) { console.error('Upload error:', error); return null }
@@ -135,18 +174,16 @@ export default function ExercisesPage() {
     setSaving(true); setMsg('')
 
     try {
-      // Save exercise record first
       const method = modal === 'add' ? 'POST' : 'PUT'
       const body = modal === 'edit' && editTarget ? { id: editTarget.id, ...form } : form
-      const res = await fetch('/api/coach/exercises', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      const res  = await fetch('/api/coach/exercises', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) { setMsg(data.error || 'Error saving'); setSaving(false); return }
 
       const exerciseId = data.exercise?.id ?? editTarget?.id
       let startUrl = editTarget?.start_image_url ?? editTarget?.demo_image_url ?? ''
-      let endUrl = editTarget?.end_image_url ?? ''
+      let endUrl   = editTarget?.end_image_url ?? ''
 
-      // Upload photos if selected
       if (startImg && exerciseId) {
         setUploadingStart(true)
         const url = await uploadPhoto(startImg, exerciseId, 'start')
@@ -162,7 +199,6 @@ export default function ExercisesPage() {
         setUploadingEnd(false)
       }
 
-      // Update with photo URLs if we have them
       if ((startImg || endImg) && exerciseId) {
         await fetch('/api/coach/exercises', {
           method: 'PUT',
@@ -171,11 +207,35 @@ export default function ExercisesPage() {
         })
       }
 
+      // Save VBT anchor ratio if filled in
+      if (exerciseId && ratioAnchorId && ratioValue) {
+        await fetch('/api/coach/vbt/ratios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            exercise_id:        exerciseId,
+            anchor_exercise_id: ratioAnchorId,
+            ratio:              parseFloat(ratioValue),
+            confidence:         ratioConfidence,
+          }),
+        })
+      } else if (exerciseId && !ratioAnchorId && editTarget?.anchor_exercise_id) {
+        // Anchor was cleared — remove the ratio
+        await fetch('/api/coach/vbt/ratios', {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ exercise_id: exerciseId }),
+        })
+      }
+
       const updated: Exercise = {
         ...data.exercise,
         start_image_url: startUrl,
-        end_image_url: endUrl,
-        demo_image_url: startUrl || data.exercise?.demo_image_url || '',
+        end_image_url:   endUrl,
+        demo_image_url:  startUrl || data.exercise?.demo_image_url || '',
+        anchor_exercise_id: ratioAnchorId || null,
+        vbt_ratio:          ratioValue ? parseFloat(ratioValue) : null,
+        vbt_confidence:     ratioConfidence,
       }
 
       if (modal === 'add') setExercises(prev => [...prev, updated])
@@ -197,12 +257,11 @@ export default function ExercisesPage() {
   }
 
   const filtered = exercises.filter(e => {
-    const matchCat = filterCat === 'all' || e.category === filterCat
+    const matchCat    = filterCat === 'all' || e.category === filterCat
     const matchSearch = e.name.toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
   })
 
-  // Group filtered exercises by category
   const grouped = CATEGORIES.reduce<Record<string, Exercise[]>>((acc, cat) => {
     const items = filtered.filter(e => e.category === cat)
     if (items.length) acc[cat] = items
@@ -213,7 +272,10 @@ export default function ExercisesPage() {
     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>{children}</label>
   )
 
-  const PhotoUpload = ({ which, preview, uploading, inputRef, pos, onPosChange }: { which: 'start' | 'end'; preview: string; uploading: boolean; inputRef: React.RefObject<HTMLInputElement | null>; pos: string; onPosChange: (p: string) => void }) => {
+  const PhotoUpload = ({ which, preview, uploading, inputRef, pos, onPosChange }: {
+    which: 'start' | 'end'; preview: string; uploading: boolean
+    inputRef: React.RefObject<HTMLInputElement | null>; pos: string; onPosChange: (p: string) => void
+  }) => {
     function handleClick(e: React.MouseEvent<HTMLDivElement>) {
       if (!preview) { inputRef.current?.click(); return }
       const rect = e.currentTarget.getBoundingClientRect()
@@ -235,7 +297,6 @@ export default function ExercisesPage() {
               <div style={{ fontSize: '0.65rem', marginTop: '0.2rem' }}>from camera or files</div>
             </div>
           )}
-          {/* Focus point indicator */}
           {preview && (() => {
             const [px, py] = pos.split(' ').map(p => parseFloat(p))
             return <div style={{ position: 'absolute', width: 18, height: 18, borderRadius: '50%', border: '2.5px solid white', boxShadow: '0 0 0 1.5px var(--carolina)', pointerEvents: 'none', left: `${px}%`, top: `${py}%`, transform: 'translate(-50%,-50%)', transition: 'left 0.1s, top 0.1s' }} />
@@ -264,7 +325,12 @@ export default function ExercisesPage() {
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800 }}>Exercise Library</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{exercises.length} exercises</p>
         </div>
-        <button className="btn-volt" onClick={openAdd} style={{ padding: '0.625rem 1.25rem' }}>+ Add Exercise</button>
+        <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <a href="/coach/vbt/mapping" style={{ padding: '0.625rem 1rem', borderRadius: 8, border: '1.5px solid var(--carolina)', color: 'var(--carolina-dark)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', textDecoration: 'none' }}>
+            ⚡ VBT Mapping
+          </a>
+          <button className="btn-volt" onClick={openAdd} style={{ padding: '0.625rem 1.25rem' }}>+ Add Exercise</button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -292,7 +358,6 @@ export default function ExercisesPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.625rem' }}>
             {exs.map(ex => (
               <div key={ex.id} className="card" style={{ padding: '0.875rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                {/* Photos or placeholder */}
                 <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
                   {(ex.start_image_url || ex.demo_image_url) ? (
                     <img src={ex.start_image_url || ex.demo_image_url} alt="start" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6 }} />
@@ -309,6 +374,9 @@ export default function ExercisesPage() {
                     {ex.default_sets}×{ex.default_reps}
                     {ex.logs_weight && ' · weight'}
                     {ex.logs_velocity && ' · velocity'}
+                    {ex.anchor_exercise_id && ex.vbt_ratio && (
+                      <span style={{ color: 'var(--carolina)', fontWeight: 600 }}> · ⚡ VBT</span>
+                    )}
                   </div>
                   {ex.coaching_notes && <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontStyle: 'italic', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{ex.coaching_notes}</div>}
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
@@ -377,6 +445,61 @@ export default function ExercisesPage() {
                   Log velocity
                 </label>
               </div>
+            </div>
+
+            {/* ── VBT ANCHOR RATIO ── */}
+            <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1rem', marginBottom: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.5rem' }}>
+                ⚡ Weight Suggestion — VBT Anchor
+              </div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.875rem' }}>
+                Link this exercise to one of your 4 anchor lifts so VBT-based 1RM estimates carry over to weight suggestions.
+                The ratio is what fraction of the anchor&apos;s 1RM a typical athlete can lift on this exercise.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                <div>
+                  <Label>Anchor Lift</Label>
+                  <select
+                    className="input"
+                    value={ratioAnchorId}
+                    onChange={e => setRatioAnchorId(e.target.value)}
+                  >
+                    <option value="">— No anchor (Epley only) —</option>
+                    {anchors.map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <Label>Ratio</Label>
+                  <input
+                    className="input"
+                    type="number"
+                    step="0.05"
+                    min="0.1"
+                    max="2.0"
+                    placeholder="e.g. 0.85"
+                    value={ratioValue}
+                    onChange={e => setRatioValue(e.target.value)}
+                    disabled={!ratioAnchorId}
+                  />
+                </div>
+              </div>
+              {ratioAnchorId && (
+                <div>
+                  <Label>Confidence</Label>
+                  <select className="input" value={ratioConfidence} onChange={e => setRatioConfidence(e.target.value)}>
+                    {CONFIDENCE_OPTIONS.map(o => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {ratioAnchorId && ratioValue && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--carolina-dark)', marginTop: '0.5rem', fontStyle: 'italic' }}>
+                  Example: If a player&apos;s {anchors.find(a => a.id === ratioAnchorId)?.name} 1RM is 200 lbs, this exercise suggestion starts at {Math.round(200 * parseFloat(ratioValue))} lbs.
+                </p>
+              )}
             </div>
 
             {/* Photos */}
