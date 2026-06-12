@@ -73,12 +73,12 @@ export async function GET(req: NextRequest) {
 
     if (anchor_1rm) {
       // Check if this exercise IS the anchor (ratio would be 1.0 and exercise_id matches an anchor)
-      if (ratio_row.ratio === 1.0) {
+      if (ratio_row?.ratio === 1.0) {
         vbt_1rm = anchor_1rm
       } else {
         vbt_ratio_1rm = anchor_1rm
-        vbt_ratio = ratio_row.ratio
-        vbt_ratio_confidence = (ratio_row.confidence as 'high' | 'medium' | 'low') ?? 'medium'
+        vbt_ratio = ratio_row?.ratio ?? null
+        vbt_ratio_confidence = (ratio_row?.confidence as 'high' | 'medium' | 'low') ?? 'medium'
       }
     }
   }
