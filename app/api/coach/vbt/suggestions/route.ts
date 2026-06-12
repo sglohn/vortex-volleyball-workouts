@@ -60,9 +60,13 @@ export async function GET(req: NextRequest) {
   let vbt_ratio_confidence: 'high' | 'medium' | 'low' = 'medium'
   let is_explosive = false
 
-  if (ratio_row?.anchor_exercise) {
-    const anchor_id = (ratio_row.anchor_exercise as { id: string; slug: string; category: string }).id
-    const anchor_category = (ratio_row.anchor_exercise as { id: string; slug: string; category: string }).category
+  const anchorExercise = Array.isArray(ratio_row?.anchor_exercise)
+    ? ratio_row?.anchor_exercise[0]
+    : ratio_row?.anchor_exercise as { id: string; slug: string; category: string } | undefined
+
+  if (anchorExercise) {
+    const anchor_id = anchorExercise.id
+    const anchor_category = anchorExercise.category
     is_explosive = anchor_category === 'explosive'
 
     const anchor_1rm = profileMap[anchor_id] ?? null
