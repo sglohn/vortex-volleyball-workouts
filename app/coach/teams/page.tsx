@@ -67,7 +67,12 @@ export default function CoachTeamsPage() {
           <h1 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:800 }}>Teams</h1>
           <p style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{teams.length} active teams</p>
         </div>
-        <button className="btn-volt" onClick={openAdd} style={{ padding:'0.625rem 1.25rem' }}>+ New Team</button>
+        <div style={{ display:'flex', gap:'0.625rem' }}>
+          <a href="/coach/season-rollover" style={{ padding:'0.625rem 1.25rem', border:'1.5px solid var(--carolina)', borderRadius:8, color:'var(--carolina-dark)', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', textDecoration:'none', display:'flex', alignItems:'center', gap:'0.4rem' }}>
+            🔄 Season Rollover
+          </a>
+          <button className="btn-volt" onClick={openAdd} style={{ padding:'0.625rem 1.25rem' }}>+ New Team</button>
+        </div>
       </div>
 
       {msg && <div style={{ background: msgErr?'var(--danger-light)':'var(--carolina-light)', border:`1.5px solid ${msgErr?'#fecaca':'var(--carolina-border)'}`, borderRadius:8, padding:'0.75rem', marginBottom:'1rem', color: msgErr?'var(--danger)':'var(--carolina-deep)', fontSize:'0.9rem' }}>{msg}</div>}
