@@ -6,7 +6,7 @@ import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 interface SetLog { id?: string; set_number: number; reps_completed?: number; weight_lbs?: number; velocity_ms?: number; completed: boolean }
 interface Exercise {
   id: string; name: string; default_reps?: string; coaching_notes?: string
-  demo_url?: string; demo_image_url?: string
+  demo_url?: string; demo_image_url?: string; start_image_url?: string; end_image_url?: string
   logs_weight: boolean; logs_velocity: boolean
   customReps?: string; customNotes?: string; skipped: boolean
   setLogs: SetLog[]
@@ -298,18 +298,39 @@ export default function PlayerWorkoutPage() {
         <div className="progress-bar" style={{ marginBottom: '1.25rem' }}><div className="progress-fill" style={{ width: `${blockProgress * 100}%` }} /></div>
 
         {/* Superset order indicator */}
-        <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
-          {Array.from({ length: block.sets }, (_, si) =>
-            activeExercises.map((e, ei) => {
-              const isThis = si + 1 === currentSet && ei === currentExIdx
-              const isDone = e.setLogs[si]?.completed
-              return (
-                <div key={`${si}-${ei}`} style={{ minWidth: 32, height: 32, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem', fontWeight: 700, flexShrink: 0, background: isDone ? 'rgba(74,222,128,0.2)' : isThis ? 'var(--volt)' : 'var(--court-raised)', color: isDone ? 'var(--volt)' : isThis ? '#0a0f0d' : 'var(--text-muted)', border: isThis ? 'none' : '1px solid var(--court-border)' }}>
-                  {isDone ? '✓' : `${si + 1}${String.fromCharCode(65 + ei)}`}
-                </div>
-              )
-            })
+        <div style={{ marginBottom: '1rem' }}>
+          {activeExercises.length > 1 && (
+            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: '0.4rem' }}>
+              Superset order
+            </div>
           )}
+          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+            {Array.from({ length: block.sets }, (_, si) =>
+              activeExercises.map((e, ei) => {
+                const isThis = si + 1 === currentSet && ei === currentExIdx
+                const isDone = e.setLogs[si]?.completed
+                return (
+                  <div key={`${si}-${ei}`} style={{
+                    minWidth: isThis ? 52 : 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: isThis ? '0.72rem' : '0.65rem', fontWeight: 700, flexShrink: 0,
+                    background: isDone ? 'rgba(74,222,128,0.15)' : isThis ? 'var(--volt)' : 'var(--court-raised)',
+                    color: isDone ? 'var(--volt)' : isThis ? '#0a0f0d' : 'var(--text-muted)',
+                    border: isThis ? 'none' : isDone ? '1px solid rgba(74,222,128,0.3)' : '1px solid var(--court-border)',
+                    transition: 'all 0.2s',
+                    boxShadow: isThis ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
+                    gap: isThis ? '0.25rem' : 0,
+                    padding: isThis ? '0 0.5rem' : 0,
+                  }}>
+                    {isDone ? '✓' : isThis ? (
+                      <><span style={{ fontSize: '0.9rem', fontWeight: 900 }}>{si + 1}</span><span style={{ opacity: 0.7 }}>{String.fromCharCode(65 + ei)}</span></>
+                    ) : (
+                      `${si + 1}${String.fromCharCode(65 + ei)}`
+                    )}
+                  </div>
+                )
+              })
+            )}
+          </div>
         </div>
 
         {/* Progress indicator */}
@@ -348,43 +369,73 @@ export default function PlayerWorkoutPage() {
 
         {/* Current exercise card */}
         <div className="card" style={{ padding: '1.25rem', marginBottom: '1rem' }}>
-          {/* Exercise image — shown inline if available */}
-          {ex.demo_image_url && (
-            <div style={{ margin: '-1.25rem -1.25rem 1rem -1.25rem', borderRadius: '12px 12px 0 0', overflow: 'hidden', background: 'var(--court-raised)', maxHeight: 200 }}>
-              <img src={ex.demo_image_url} alt={ex.name} style={{ width: '100%', height: 200, objectFit: 'cover', display: 'block' }} />
+
+          {/* ── SET BADGE + EXERCISE NAME ── */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
+            {/* Big set number badge */}
+            <div style={{ flexShrink: 0, background: 'var(--volt)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 900, borderRadius: 10, minWidth: 56, height: 56, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+              <span style={{ fontSize: '1.6rem', fontWeight: 900 }}>{currentSet}</span>
+              <span style={{ fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, opacity: 0.7 }}>of {block.sets}</span>
             </div>
-          )}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '0.75rem' }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
-                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', fontWeight: 800 }}>{ex.name}</h2>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.3rem', fontWeight: 800, lineHeight: 1.15 }}>{ex.name}</h2>
                 {ex.demo_url && (
                   <a href={ex.demo_url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--volt)', lineHeight: 1, flexShrink: 0 }} title="Watch demo video">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
                   </a>
                 )}
               </div>
-              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                Set {currentSet} · {ex.customReps ?? ex.default_reps ?? '—'} reps
+              <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
+                {ex.customReps ?? ex.default_reps ?? '—'} reps
               </div>
-              {(ex.customNotes || ex.coaching_notes) && (
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '0.4rem', fontStyle: 'italic' }}>
-                  💬 {ex.customNotes || ex.coaching_notes}
-                </div>
-              )}
             </div>
             {ex.recommendation && ex.recommendation.best1RM > 0 && (
-              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '0.75rem' }}>
+              <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '1.25rem' }}>{ex.recommendation.weight} lbs</div>
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{ex.recommendation.percent}% · suggested</div>
               </div>
             )}
             {ex.recommendation && ex.recommendation.best1RM === 0 && ex.logs_weight && (
-              <div style={{ textAlign: 'right', flexShrink: 0, marginLeft: '0.75rem', fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 100 }}>
-                Log first set to get recommendations
+              <div style={{ textAlign: 'right', flexShrink: 0, fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 90 }}>
+                Log first set to get suggestions
               </div>
             )}
           </div>
+
+          {/* ── START / FINISH IMAGES ── */}
+          {(() => {
+            const startUrl = ex.start_image_url ?? ex.demo_image_url
+            const endUrl = ex.end_image_url
+            if (!startUrl && !endUrl) return null
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: startUrl && endUrl ? '1fr 1fr' : '1fr', gap: '0.5rem', margin: '0 0 1rem 0' }}>
+                {startUrl && (
+                  <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--court-raised)', position: 'relative' }}>
+                    <img src={startUrl} alt={`${ex.name} start position`} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', padding: '0.5rem 0.5rem 0.4rem', textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Start</span>
+                    </div>
+                  </div>
+                )}
+                {endUrl && (
+                  <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--court-raised)', position: 'relative' }}>
+                    <img src={endUrl} alt={`${ex.name} finish position`} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', padding: '0.5rem 0.5rem 0.4rem', textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Finish</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
+          {/* Coaching notes */}
+          {(ex.customNotes || ex.coaching_notes) && (
+            <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.75rem', fontStyle: 'italic' }}>
+              💬 {ex.customNotes || ex.coaching_notes}
+            </div>
+          )}
 
           {ex.recommendation?.label && ex.recommendation.best1RM > 0 && phaseConfig && (
             <div style={{ background: `${phaseConfig.color}10`, border: `1px solid ${phaseConfig.color}25`, borderRadius: 8, padding: '0.5rem 0.875rem', marginBottom: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
@@ -440,8 +491,17 @@ export default function PlayerWorkoutPage() {
           )}
 
           <button className="btn-volt" onClick={() => saveSet(true)} disabled={saving}
-            style={{ width: '100%', padding: '1rem', fontSize: '1.1rem', letterSpacing: '0.05em' }}>
-            {saving ? 'Saving…' : currentExIdx < activeExercises.length - 1 ? `Done → ${activeExercises[currentExIdx + 1]?.name}` : currentSet < block.sets ? `Done → Set ${currentSet + 1}` : 'Complete Block ✓'}
+            style={{ width: '100%', padding: '1rem 1.25rem', fontSize: '1.1rem', letterSpacing: '0.04em', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem' }}>
+            {saving ? 'Saving…' : (() => {
+              if (currentExIdx < activeExercises.length - 1) {
+                const nextEx = activeExercises[currentExIdx + 1]
+                return <><span>Done</span><span style={{ opacity: 0.6 }}>→</span><span style={{ fontWeight: 700 }}>{nextEx?.name}</span></>
+              }
+              if (currentSet < block.sets) {
+                return <><span>Done</span><span style={{ opacity: 0.6 }}>→</span><span style={{ fontWeight: 700 }}>Set {currentSet + 1}</span></>
+              }
+              return <span>Complete Block ✓</span>
+            })()}
           </button>
         </div>
 
@@ -558,7 +618,31 @@ export default function PlayerWorkoutPage() {
               <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem' }}>{demoEx.name}</h3>
               <button onClick={() => setDemoEx(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
             </div>
-            {demoEx.demo_image_url && <img src={demoEx.demo_image_url} alt={demoEx.name} style={{ width: '100%', borderRadius: 8, marginBottom: '1rem', objectFit: 'cover', maxHeight: 240 }} />}
+            {(() => {
+              const startUrl = demoEx.start_image_url ?? demoEx.demo_image_url
+              const endUrl = demoEx.end_image_url
+              if (!startUrl && !endUrl) return null
+              return (
+                <div style={{ display: 'grid', gridTemplateColumns: startUrl && endUrl ? '1fr 1fr' : '1fr', gap: '0.5rem', marginBottom: '1rem' }}>
+                  {startUrl && (
+                    <div style={{ borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
+                      <img src={startUrl} alt={`${demoEx.name} start`} style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', padding: '0.4rem', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Start</span>
+                      </div>
+                    </div>
+                  )}
+                  {endUrl && (
+                    <div style={{ borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
+                      <img src={endUrl} alt={`${demoEx.name} finish`} style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
+                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', padding: '0.4rem', textAlign: 'center' }}>
+                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Finish</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
             {demoEx.demo_url && (
               <a href={demoEx.demo_url} target="_blank" rel="noopener noreferrer" className="btn-volt" style={{ display: 'block', padding: '0.75rem', textAlign: 'center', textDecoration: 'none', marginBottom: demoEx.coaching_notes ? '1rem' : 0, fontSize: '0.9rem' }}>
                 ▶ Watch Demo Video
