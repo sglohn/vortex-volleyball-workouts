@@ -49,6 +49,9 @@ export default function CoachPlayerDetailPage() {
     notes: '',
   })
   const [savingProgram, setSavingProgram] = useState(false)
+  const [allTeams, setAllTeams] = useState<Array<{ id: string; name: string; color: string; is_open_gym?: boolean }>>([])
+  const [teamSelectOpen, setTeamSelectOpen] = useState(false)
+  const [savingTeam, setSavingTeam] = useState(false)
   const [newOverride, setNewOverride] = useState({ date: '', templateId: '', notes: '' })
   const [newSkip, setNewSkip] = useState({ exerciseId: '', replacementId: '', reason: '', skipType: 'avoid', endsOn: '' })
   const [replacementSearch, setReplacementSearch] = useState('')
@@ -77,6 +80,18 @@ export default function CoachPlayerDetailPage() {
     fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)
   }
 
+  async function changeTeam(newTeamId: string | null) {
+    setSavingTeam(true)
+    await fetch('/api/coach/players/team', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ playerId: id, teamId: newTeamId }),
+    })
+    fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)
+    setSavingTeam(false)
+    setTeamSelectOpen(false)
+  }
+
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading…</div>
   if (!data) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Player not found</div>
 
@@ -94,19 +109,51 @@ export default function CoachPlayerDetailPage() {
     <>
     <div style={{ padding: '2rem', maxWidth: 960 }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
         <a href="/coach/players" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.9rem' }}>← Players</a>
         <div style={{ width: 52, height: 52, borderRadius: '50%', background: team?.color ? `${team.color}25` : 'rgba(74,222,128,0.15)', border: `2px solid ${team?.color ?? 'var(--volt)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, color: team?.color ?? 'var(--volt)', flexShrink: 0 }}>
           {player.jersey_number || String(player.name).charAt(0)}
         </div>
-        <div>
+        <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 800 }}>{player.name}</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            {team ? <span style={{ color: team.color }}>{team.name}</span> : 'No team assigned'}
-            {player.position ? ` · ${player.position}` : ''}
+            {player.position ? `${player.position}` : ''}
           </p>
         </div>
-        {activeHealth.length > 0 && <span className="tag tag-danger" style={{ marginLeft: 'auto' }}>⚠ {activeHealth.length} health flag{activeHealth.length > 1 ? 's' : ''}</span>}
+
+        {/* Team assignment */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            onClick={() => setTeamSelectOpen(o => !o)}
+            disabled={savingTeam}
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.875rem', border: `2px solid ${team?.color ?? 'var(--gray-border)'}`, borderRadius: 8, background: team?.color ? `${team.color}12` : 'var(--court-raised)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: team?.color ?? 'var(--text-muted)' }}>
+            <span style={{ width: 10, height: 10, borderRadius: '50%', background: team?.color ?? '#ccc', flexShrink: 0 }} />
+            {savingTeam ? 'Saving…' : (team?.name ?? 'No team')}
+            <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▼</span>
+          </button>
+          {teamSelectOpen && (
+            <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 20, background: 'var(--white)', border: '1.5px solid var(--gray-border)', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)', minWidth: 200, overflow: 'hidden' }}>
+              <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, borderBottom: '1px solid var(--gray-border)' }}>Move to team</div>
+              {allTeams.filter(t => !t.is_open_gym).map(t => (
+                <button key={t.id} onClick={() => changeTeam(t.id)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', width: '100%', padding: '0.5rem 0.75rem', border: 'none', background: team?.id === t.id ? `${t.color}12` : 'transparent', cursor: 'pointer', fontSize: '0.85rem', fontWeight: team?.id === t.id ? 700 : 400, color: 'var(--text-primary)', textAlign: 'left' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: t.color, flexShrink: 0 }} />
+                  {t.name}
+                  {team?.id === t.id && <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: t.color }}>current</span>}
+                </button>
+              ))}
+              <div style={{ borderTop: '1px solid var(--gray-border)' }}>
+                <button onClick={() => changeTeam(null)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', width: '100%', padding: '0.5rem 0.75rem', border: 'none', background: 'transparent', cursor: 'pointer', fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'left' }}>
+                  <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--gray-border)', flexShrink: 0 }} />
+                  Unassigned
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {activeHealth.length > 0 && <span className="tag tag-danger">⚠ {activeHealth.length} health flag{activeHealth.length > 1 ? 's' : ''}</span>}
       </div>
 
       {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--volt)', fontSize: '0.9rem' }}>{msg}</div>}
