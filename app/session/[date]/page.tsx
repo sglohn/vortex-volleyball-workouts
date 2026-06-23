@@ -65,7 +65,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   useEffect(() => { if (teamIds.length) loadData() }, [teamIds, loadData])
 
-  // Poll every 20s
+  // Poll every 5s
   useEffect(() => {
     const t = setInterval(loadData, 5000)
     return () => clearInterval(t)
@@ -77,12 +77,11 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   }
 
   async function selectPlayer(player: PlayerRow) {
-    if (!player.checkedIn && player.completed) return
+    if (player.completed) return
     setSelectedPlayer(player)
     setPin('')
     setPinError('')
     if (player.checkedIn && player.sessionId) {
-      // Already checked in — go straight to workout
       await loadWorkout(player)
     } else {
       setView('player_pin')
@@ -95,16 +94,13 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
       alert(`No workout scheduled today for this team. Please assign one in Coach → Schedule.`)
       return
     }
-    // Fetch template structure
     const res = await fetch(`/api/workout?sessionId=${player.sessionId}&templateId=${teamData.templateId}`)
     const d = await res.json()
     if (d.source === 'template' && d.template) {
-      // Also fetch existing set logs so player can see what they've already done
       const logsRes = await fetch(`/api/sets?sessionId=${player.sessionId}`)
       const logsData = logsRes.ok ? await logsRes.json() : { logs: [] }
       const existingLogs: Array<{exercise_id: string; set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean}> = logsData.logs ?? []
 
-      // Merge existing logs into template blocks
       const templateWithLogs = {
         ...d.template,
         blocks: d.template.blocks.map((block: {id: string; block_label: string; sets: number; exercises: Array<{id: string; name: string; logs_weight: boolean; default_reps?: string}>}) => ({
@@ -121,20 +117,19 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
       setWorkout(templateWithLogs)
       setSessionInfo({ sessionId: player.sessionId, playerId: player.id, playerName: player.name, templateId: teamData.templateId })
-      // Find first incomplete set — superset order: set1-ex1, set1-ex2, set2-ex1, set2-ex2...
-      // But respect block order — if they started block C, stay in block C
+
+      // Find first incomplete step
       let startBlock = templateWithLogs.blocks[0]?.id ?? null
       let startEx = 0
       let startSet = 1
       let found = false
 
-      // First: find the block they've started but not finished
+      // Prefer block they've started but not finished
       for (const block of templateWithLogs.blocks) {
         const hasStarted = block.exercises.some((e: {setLogs: Array<{completed: boolean}>}) => e.setLogs.some(l => l.completed))
         const isFinished = block.exercises.every((e: {setLogs: Array<{completed: boolean}>}) => e.setLogs.every(l => l.completed))
         if (hasStarted && !isFinished) {
           startBlock = block.id
-          // Find next incomplete step in superset order
           outerLoop: for (let si = 0; si < block.sets; si++) {
             for (let ei = 0; ei < block.exercises.length; ei++) {
               if (!block.exercises[ei].setLogs[si]?.completed) {
@@ -146,13 +141,12 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
         }
       }
 
-      // If no block started, find first incomplete anywhere
       if (!found) {
         outerLoop2: for (const block of templateWithLogs.blocks) {
           for (let si = 0; si < block.sets; si++) {
             for (let ei = 0; ei < block.exercises.length; ei++) {
               if (!block.exercises[ei].setLogs[si]?.completed) {
-                startBlock = block.id; startEx = ei; startSet = si + 1; found = true; break outerLoop2
+                startBlock = block.id; startEx = ei; startSet = si + 1; break outerLoop2
               }
             }
           }
@@ -204,25 +198,15 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     const result = await res.json()
 
     if (!res.ok || result.error) {
-      alert(`Save failed: ${result.error ?? res.status} | sessionId=${sessionInfo.sessionId} exId=${ex.id}`)
+      alert(`Save failed: ${result.error ?? res.status}`)
       setSavingSet(false)
       return
     }
 
-    // Update local workout state
-    setWorkout(prev => {
-      if (!prev) return prev
-      return { ...prev, blocks: prev.blocks.map(b => b.id !== activeBlock ? b : {
-        ...b, exercises: b.exercises.map((e, ei) => ei !== activeExIdx ? e : {
-          ...e, setLogs: e.setLogs.map(l => l.set_number === activeSetNum ? { ...l, weight_lbs: weightInput ? parseFloat(weightInput) : undefined, reps_completed: repsInput ? parseInt(repsInput) : undefined, completed } : l)
-        })
-      })}
-    })
-
     if (completed) {
-      // Refresh data then return to leaderboard so next player can step up
+      // Return to leaderboard immediately so next player can step up
       setSavingSet(false)
-      loadData() // fire and forget — don't await, it'll update in background
+      loadData()
       setView('leaderboard')
       setSelectedPlayer(null)
       setWorkout(null)
@@ -240,6 +224,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   }
 
   const keys = ['1','2','3','4','5','6','7','8','9','←','0','✓']
+
   // Inject pulse animation once
   if (typeof document !== 'undefined' && !document.getElementById('session-styles')) {
     const style = document.createElement('style')
@@ -257,6 +242,14 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   const { teams, roster, leaderboard } = data
   const activeTeam = teams.find(t => t.id === activeTeamId)
   const teamRoster = roster.filter(p => p.teamId === activeTeamId)
+
+  // Sort sidebar players: in-progress first, not-started last (greyed out)
+  const sortedTeamRoster = [...teamRoster].sort((a, b) => {
+    const rank = (p: PlayerRow) => p.completed ? 1 : p.checkedIn ? 0 : 2
+    const ra = rank(a), rb = rank(b)
+    if (ra !== rb) return ra - rb
+    return a.name.localeCompare(b.name)
+  })
 
   // ── PLAYER PIN ──
   if (view === 'player_pin' && selectedPlayer) return (
@@ -299,7 +292,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--page-bg)' }}>
         {/* Header */}
         <div style={{ background: 'var(--black)', padding: '0.75rem 1.25rem', display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
-          <button onClick={() => setView('team')} style={{ background: 'none', border: 'none', color: 'var(--yellow)', cursor: 'pointer', fontSize: '1rem' }}>←</button>
+          <button onClick={() => setView('leaderboard')} style={{ background: 'none', border: 'none', color: 'var(--yellow)', cursor: 'pointer', fontSize: '1rem' }}>←</button>
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: 'var(--yellow)', letterSpacing: '0.06em' }}>{sessionInfo.playerName}</div>
           <div style={{ flex: 1 }} />
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina-light)', fontSize: '0.9rem' }}>{doneSets}/{totalSets} sets</div>
@@ -381,8 +374,6 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                     {savingSet ? 'Saving…' : '✓ Log Set & Return to Board'}
                   </button>
 
-
-                  {/* Previous sets */}
                   {ex.setLogs.filter(l => l.completed).length > 0 && (
                     <div style={{ marginTop: '0.875rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                       {ex.setLogs.filter(l => l.completed).map((log, i) => (
@@ -436,31 +427,54 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
           )}
           {view === 'team' && activeTeam && (
             <>
-              <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.3)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, padding: '0.25rem 0.5rem 0.25rem' }}>
-                {teamRoster.filter(p => p.checkedIn).length}/{teamRoster.length} checked in
-              </div>
-              <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.25)', padding: '0 0.5rem 0.5rem', fontStyle: 'italic' }}>
-                Tap name to check in or log sets
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                {teamRoster.sort((a, b) => (b.checkedIn ? 1 : 0) - (a.checkedIn ? 1 : 0) || a.name.localeCompare(b.name)).map(p => (
+              {/* Checked-in section label */}
+              {sortedTeamRoster.some(p => p.checkedIn) && (
+                <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, padding: '0.35rem 0.5rem 0.2rem' }}>
+                  {sortedTeamRoster.filter(p => p.checkedIn).length}/{sortedTeamRoster.length} checked in · tap name to log sets
+                </div>
+              )}
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', marginBottom: '0.5rem' }}>
+                {sortedTeamRoster.filter(p => p.checkedIn).map(p => (
                   <button key={p.id} onClick={() => selectPlayer(p)}
-                    style={{ background: p.completed ? `${activeTeam.color}22` : p.checkedIn ? 'rgba(255,255,255,0.06)' : 'transparent', border: `1px solid ${p.completed ? activeTeam.color : p.checkedIn ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)'}`, borderRadius: 8, padding: '0.5rem 0.625rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', textAlign: 'left', width: '100%' }}>
-                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: p.checkedIn ? activeTeam.color : 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.8rem', color: p.checkedIn ? '#fff' : 'rgba(255,255,255,0.3)', flexShrink: 0 }}>
+                    style={{ background: p.completed ? `${activeTeam.color}22` : 'rgba(255,255,255,0.07)', border: `1px solid ${p.completed ? activeTeam.color : 'rgba(255,255,255,0.12)'}`, borderRadius: 8, padding: '0.5rem 0.625rem', cursor: p.completed ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', textAlign: 'left', width: '100%' }}>
+                    <div style={{ width: 28, height: 28, borderRadius: '50%', background: activeTeam.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.8rem', color: '#fff', flexShrink: 0 }}>
                       {p.completed ? '✓' : (p.jerseyNumber || p.name.charAt(0))}
                     </div>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: p.checkedIn ? '#fff' : 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 600, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
                       {p.checkedIn && (
                         <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.4)' }}>
                           {p.pct}% · {p.totalWeightLbs > 0 ? `${p.totalWeightLbs.toLocaleString()} lbs` : `${p.setsCompleted} sets`}
                         </div>
                       )}
                     </div>
-                    {p.checkedIn && !p.completed && <div style={{ fontSize: '0.7rem', color: activeTeam.color, fontWeight: 700 }}>→</div>}
+                    {!p.completed && <div style={{ fontSize: '0.7rem', color: activeTeam.color, fontWeight: 700 }}>→</div>}
                   </button>
                 ))}
               </div>
+
+              {/* Not checked in — greyed out */}
+              {sortedTeamRoster.some(p => !p.checkedIn) && (
+                <>
+                  <div style={{ fontSize: '0.62rem', color: 'rgba(255,255,255,0.2)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 600, padding: '0.35rem 0.5rem 0.2rem', borderTop: '1px solid rgba(255,255,255,0.06)', marginTop: '0.25rem' }}>
+                    Not checked in
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    {sortedTeamRoster.filter(p => !p.checkedIn).map(p => (
+                      <button key={p.id} onClick={() => selectPlayer(p)}
+                        style={{ background: 'transparent', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8, padding: '0.5rem 0.625rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.5rem', textAlign: 'left', width: '100%', opacity: 0.45 }}>
+                        <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.8rem', color: 'rgba(255,255,255,0.3)', flexShrink: 0 }}>
+                          {p.jerseyNumber || p.name.charAt(0)}
+                        </div>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.name}</div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
