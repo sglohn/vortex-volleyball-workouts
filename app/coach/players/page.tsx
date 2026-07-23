@@ -1,13 +1,16 @@
+// FILE: app/coach/players/page.tsx
 'use client'
 import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
+import { calculateAge } from '@/lib/age'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface Player {
   id: string; name: string; jersey_number?: string; position?: string
   is_active: boolean; teamName?: string; teamColor?: string; teamId?: string
   age_group?: string; gender?: string
+  date_of_birth?: string | null; age?: number | null
   sessionCount?: number; lastSeen?: string; hasHealthFlag?: boolean
   height_in?: number | null
   wingspan_in?: number | null
@@ -26,16 +29,17 @@ function maxVertical(p: Player): number | null {
   return Math.round((p.approach_vertical_in - p.standing_reach_in) * 10) / 10
 }
 
-type SortKey = 'name' | 'age_group' | 'position' | 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in' | 'standingVert' | 'maxVert' | 'sessionCount'
+type SortKey = 'name' | 'age_group' | 'age' | 'position' | 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in' | 'standingVert' | 'maxVert' | 'sessionCount'
 type SortDir = 'asc' | 'desc'
 type ViewMode = 'leaderboard' | 'grouped'
-type ScopeKey = 'all' | 'ageGroup' | 'position' | 'team'
+type ScopeKey = 'all' | 'ageGroup' | 'age' | 'position' | 'team'
 
 const POSITIONS = ['Setter','Outside Hitter','Middle Blocker','Opposite','Libero','Defensive Specialist','Other']
 
 const COLUMNS: { key: SortKey; label: string; short: string; numeric?: boolean; fmt: 'text' | 'fi' | 'in' }[] = [
   { key: 'name',                 label: 'Player',          short: 'Player',    fmt: 'text' },
-  { key: 'age_group',            label: 'Age Group',       short: 'Age Grp',   fmt: 'text' },
+  { key: 'age_group',            label: 'Team Age Group',  short: 'Team Grp',  fmt: 'text' },
+  { key: 'age',                  label: 'Age',             short: 'Age',       numeric: true, fmt: 'in' },
   { key: 'position',             label: 'Position',        short: 'Position',  fmt: 'text' },
   { key: 'height_in',            label: 'Height',          short: 'Height',    numeric: true, fmt: 'fi' },
   { key: 'wingspan_in',          label: 'Wingspan',        short: 'Wingspan',  numeric: true, fmt: 'fi' },
@@ -142,6 +146,7 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
         </div>
       </td>
       <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.age_group || '—'}</td>
+      <td style={cellStyle('age')}>{p.age != null ? p.age : '—'}</td>
       <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.position || '—'}</td>
       <td style={cellStyle('height_in')}>{fi(p.height_in)}</td>
       <td style={cellStyle('wingspan_in')}>{fi(p.wingspan_in)}</td>
@@ -202,7 +207,7 @@ export default function CoachPlayersPage() {
   const [modal, setModal] = useState<'add'|'edit'|null>(null)
   const [editTarget, setEditTarget] = useState<Player|null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Player|null>(null)
-  const [form, setForm] = useState({ name:'', jersey_number:'', position:'', pin:'', team_id:'' })
+  const [form, setForm] = useState({ name:'', jersey_number:'', position:'', pin:'', team_id:'', date_of_birth:'' })
   const [msg, setMsg] = useState('')
   const [msgErr, setMsgErr] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -238,7 +243,10 @@ export default function CoachPlayersPage() {
     }
   }
 
+  // Team's assigned age group (e.g. "17s roster") — includes players playing up/down
   const ageGroupOptions = useMemo(() => [...new Set(players.map(p => p.age_group).filter(Boolean))].sort() as string[], [players])
+  // Individual computed age from date of birth — the player's true age regardless of team
+  const ageOptions = useMemo(() => [...new Set(players.map(p => p.age).filter((a): a is number => a != null))].sort((a, b) => a - b), [players])
   const positionOptions = useMemo(() => [...new Set(players.map(p => p.position).filter(Boolean))].sort() as string[], [players])
 
   function setScope(key: ScopeKey) { setScopeKey(key); setScopeValue('') }
@@ -247,6 +255,7 @@ export default function CoachPlayersPage() {
     let r = players
     if (genderFilter !== 'all') r = r.filter(p => p.gender === genderFilter)
     if (scopeKey === 'ageGroup' && scopeValue) r = r.filter(p => p.age_group === scopeValue)
+    if (scopeKey === 'age'      && scopeValue) r = r.filter(p => String(p.age) === scopeValue)
     if (scopeKey === 'position' && scopeValue) r = r.filter(p => p.position  === scopeValue)
     if (scopeKey === 'team'     && scopeValue) r = r.filter(p => p.teamId    === scopeValue)
     if (search) r = r.filter(p => p.name.toLowerCase().includes(search.toLowerCase()))
@@ -278,11 +287,11 @@ export default function CoachPlayersPage() {
   }, [scopedPlayers, sortKey, sortDir])
 
   function openAdd() {
-    setForm({ name:'', jersey_number:'', position:'', pin:'', team_id:'' })
+    setForm({ name:'', jersey_number:'', position:'', pin:'', team_id:'', date_of_birth:'' })
     setEditTarget(null); setModal('add'); setMsg('')
   }
   function openEdit(p: Player) {
-    setForm({ name: p.name, jersey_number: p.jersey_number ?? '', position: p.position ?? '', pin: '', team_id: p.teamId ?? '' })
+    setForm({ name: p.name, jersey_number: p.jersey_number ?? '', position: p.position ?? '', pin: '', team_id: p.teamId ?? '', date_of_birth: p.date_of_birth ?? '' })
     setMeasurements({ height_in:'', wingspan_in:'', standing_reach_in:'', standing_vertical_in:'', approach_vertical_in:'' })
     setEditTarget(p); setModal('edit'); setMsg('')
     fetch(`/api/player/measurements?playerId=${p.id}`)
@@ -309,19 +318,19 @@ export default function CoachPlayersPage() {
       const data = await res.json()
       if (res.ok) {
         const team = teams.find(t => t.id === form.team_id)
-        setPlayers(prev => [...prev, { ...data.player, teamName: team?.name, teamColor: team?.color, teamId: team?.id }])
+        setPlayers(prev => [...prev, { ...data.player, age: calculateAge(data.player.date_of_birth), teamName: team?.name, teamColor: team?.color, teamId: team?.id }])
         closeModal()
       } else { setMsg(data.error || 'Error saving'); setMsgErr(true) }
     } else if (modal === 'edit' && editTarget) {
       if (form.pin && !/^\d{4}$/.test(form.pin)) { setMsg('New PIN must be 4 digits, or leave blank'); setMsgErr(true); setSaving(false); return }
-      const body: Record<string,string> = { id: editTarget.id, name: form.name, jersey_number: form.jersey_number, position: form.position, team_id: form.team_id }
+      const body: Record<string,string> = { id: editTarget.id, name: form.name, jersey_number: form.jersey_number, position: form.position, team_id: form.team_id, date_of_birth: form.date_of_birth }
       if (form.pin) body.pin = form.pin
       const res = await fetch('/api/coach/players/delete', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
       const data = await res.json()
       if (res.ok) {
         const team = teams.find(t => t.id === form.team_id)
         setPlayers(prev => prev.map(p => p.id === editTarget.id
-          ? { ...p, ...data.player, teamName: team?.name, teamColor: team?.color, teamId: team?.id }
+          ? { ...p, ...data.player, age: calculateAge(data.player.date_of_birth), teamName: team?.name, teamColor: team?.color, teamId: team?.id }
           : p
         ))
         const hasMeasurements = Object.values(measurements).some(v => v !== '')
@@ -359,7 +368,8 @@ export default function CoachPlayersPage() {
 
   const scopeLabel = useMemo(() => {
     if (scopeKey === 'all')      return 'Whole Club'
-    if (scopeKey === 'ageGroup') return scopeValue ? `Age Group: ${scopeValue}` : 'By Age Group'
+    if (scopeKey === 'ageGroup') return scopeValue ? `Team Age Group: ${scopeValue}` : 'By Team Age Group'
+    if (scopeKey === 'age')      return scopeValue ? `Age: ${scopeValue}` : 'By Age'
     if (scopeKey === 'position') return scopeValue ? `Position: ${scopeValue}` : 'By Position'
     if (scopeKey === 'team') {
       const t = teams.find(t => t.id === scopeValue)
@@ -407,7 +417,8 @@ export default function CoachPlayersPage() {
             <span style={{ fontSize:'0.78rem', color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.04em' }}>Scope:</span>
             {([
               { key:'all',      label:'Whole Club' },
-              { key:'ageGroup', label:'Age Group' },
+              { key:'ageGroup', label:'Team Age Group' },
+              { key:'age',      label:'Age' },
               { key:'position', label:'Position' },
               { key:'team',     label:'Team' },
             ] as { key: ScopeKey; label: string }[]).map(s => (
@@ -449,6 +460,9 @@ export default function CoachPlayersPage() {
           <span style={{ fontSize:'0.78rem', color:'var(--text-muted)' }}>Filter:</span>
           {scopeKey === 'ageGroup' && ageGroupOptions.map(g => (
             <button key={g} onClick={() => setScopeValue(g)} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===g ? 'var(--carolina)' : 'var(--gray-border)'}`, background: scopeValue===g ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight: scopeValue===g ? 700 : 400, color: scopeValue===g ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>{g}</button>
+          ))}
+          {scopeKey === 'age' && ageOptions.map(a => (
+            <button key={a} onClick={() => setScopeValue(String(a))} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===String(a) ? 'var(--carolina)' : 'var(--gray-border)'}`, background: scopeValue===String(a) ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight: scopeValue===String(a) ? 700 : 400, color: scopeValue===String(a) ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>{a}</button>
           ))}
           {scopeKey === 'position' && positionOptions.map(p => (
             <button key={p} onClick={() => setScopeValue(p)} style={{ padding:'0.3rem 0.65rem', borderRadius:20, border:`1.5px solid ${scopeValue===p ? 'var(--carolina)' : 'var(--gray-border)'}`, background: scopeValue===p ? 'var(--carolina-light)' : 'transparent', cursor:'pointer', fontSize:'0.78rem', fontWeight: scopeValue===p ? 700 : 400, color: scopeValue===p ? 'var(--carolina-deep)' : 'var(--text-secondary)' }}>{p}</button>
@@ -513,6 +527,9 @@ export default function CoachPlayersPage() {
               </FF>
               <FF label="Jersey #">
                 <input className="input" placeholder="e.g. 14" value={form.jersey_number} onChange={e => setForm(p => ({ ...p, jersey_number:e.target.value }))} />
+              </FF>
+              <FF label="Date of Birth">
+                <input className="input" type="date" value={form.date_of_birth} onChange={e => setForm(p => ({ ...p, date_of_birth:e.target.value }))} />
               </FF>
               <FF label="Team">
                 <select className="input" value={form.team_id} onChange={e => setForm(p => ({ ...p, team_id:e.target.value }))}>
