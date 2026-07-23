@@ -1,3 +1,4 @@
+// FILE: app/coach/comparisons/page.tsx
 'use client'
 import { useState, useEffect, useRef } from 'react'
 
@@ -10,7 +11,7 @@ const MALE_NET   = 95.5
 type CompGroup = 'team' | 'cf' | 'ca' | 'age' | 'pos' | 't25' | 'no'
 interface Player {
   id: string; name: string; jersey_number?: string
-  teamName?: string; gender?: string; age_group?: string; position?: string
+  teamName?: string; gender?: string; age_group?: string; age?: number | null; position?: string
   height_in?: number; standing_reach_in?: number; approach_vertical_in?: number
 }
 function fi(inches: number) {
@@ -25,7 +26,7 @@ function avgF(arr: Player[], key: keyof Player): number {
 }
 const GROUP_LABELS: Record<CompGroup,string> = {
   team:'My team', cf:'Club (same gender)', ca:'Whole club',
-  age:'Age group', pos:'Same position', t25:'Top 25%', no:'Solo',
+  age:'Same age', pos:'Same position', t25:'Top 25%', no:'Solo',
 }
 
 // Scene
@@ -91,7 +92,7 @@ export default function ComparisonsPage(){
     if(group==='team')return others.filter(p=>p.teamName===sp.teamName)
     if(group==='cf')return others
     if(group==='ca')return players.filter(p=>p.id!==selId)
-    if(group==='age')return others.filter(p=>p.age_group===sp.age_group)
+    if(group==='age')return others.filter(p=>p.age!=null&&sp.age!=null&&p.age===sp.age)
     if(group==='pos')return others.filter(p=>p.position===sp.position)
     if(group==='t25'){const s=[...others].sort((a,b)=>(b.approach_vertical_in??0)-(a.approach_vertical_in??0));return s.slice(0,Math.max(1,Math.ceil(others.length*.25)))}
     return[]
