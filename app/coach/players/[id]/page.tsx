@@ -1,3 +1,4 @@
+// FILE: app/coach/players/[id]/page.tsx
 'use client'
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
@@ -52,6 +53,9 @@ export default function CoachPlayerDetailPage() {
   const [allTeams, setAllTeams] = useState<Array<{ id: string; name: string; color: string; is_open_gym?: boolean }>>([])
   const [teamSelectOpen, setTeamSelectOpen] = useState(false)
   const [savingTeam, setSavingTeam] = useState(false)
+  const [showDobForm, setShowDobForm] = useState(false)
+  const [dobForm, setDobForm] = useState('')
+  const [savingDob, setSavingDob] = useState(false)
   const [newOverride, setNewOverride] = useState({ date: '', templateId: '', notes: '' })
   const [newSkip, setNewSkip] = useState({ exerciseId: '', replacementId: '', reason: '', skipType: 'avoid', endsOn: '' })
   const [replacementSearch, setReplacementSearch] = useState('')
@@ -92,6 +96,18 @@ export default function CoachPlayerDetailPage() {
     setTeamSelectOpen(false)
   }
 
+  async function saveDob() {
+    setSavingDob(true)
+    await fetch('/api/coach/players/delete', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, date_of_birth: dobForm || null }),
+    })
+    fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)
+    setSavingDob(false)
+    setShowDobForm(false)
+  }
+
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading…</div>
   if (!data) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Player not found</div>
 
@@ -116,9 +132,25 @@ export default function CoachPlayerDetailPage() {
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 800 }}>{player.name}</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             {player.position ? `${player.position}` : ''}
+            {player.position && ' · '}
+            {(player as unknown as { age?: number | null }).age != null ? `Age ${(player as unknown as { age?: number | null }).age}` : 'Age not set'}
+            {!showDobForm && (
+              <button
+                onClick={() => { setDobForm((player as unknown as { date_of_birth?: string }).date_of_birth ?? ''); setShowDobForm(true) }}
+                style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, padding: 0 }}>
+                {(player as unknown as { date_of_birth?: string }).date_of_birth ? 'Edit DOB' : '+ Add DOB'}
+              </button>
+            )}
           </p>
+          {showDobForm && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.4rem' }}>
+              <input type="date" className="input" value={dobForm} onChange={e => setDobForm(e.target.value)} style={{ padding: '0.35rem 0.6rem', fontSize: '0.8rem' }} />
+              <button className="btn-volt" onClick={saveDob} disabled={savingDob} style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>{savingDob ? 'Saving…' : 'Save'}</button>
+              <button className="btn-ghost" onClick={() => setShowDobForm(false)} style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>Cancel</button>
+            </div>
+          )}
         </div>
 
         {/* Team assignment */}
