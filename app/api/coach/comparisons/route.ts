@@ -1,12 +1,13 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { calculateAge } from '@/lib/age'
 
 export async function GET() {
   const db = createServerClient()
 
   const { data: players, error: pErr } = await db
     .from('players')
-    .select('id, name, jersey_number, position')
+    .select('id, name, jersey_number, position, date_of_birth')
     .eq('is_active', true)
     .order('name')
 
@@ -49,8 +50,10 @@ export async function GET() {
     const teamName = team?.name ?? 'No team'
     // Derive gender from team name — "boy" anywhere in name = M, else F
     const gender = teamName.toLowerCase().includes('boy') ? 'M' : 'F'
-    // Derive age group from team age_group field
+    // Team's assigned age group — still used for "My team" comparisons
     const age_group = team?.age_group ?? ''
+    // Individual computed age from date of birth — used for "same age" comparisons
+    const age = calculateAge(p.date_of_birth)
     return {
       id: p.id,
       name: p.name,
@@ -58,6 +61,7 @@ export async function GET() {
       position: p.position,
       gender,
       age_group,
+      age,
       teamName,
       teamColor: team?.color ?? '#888',
       height_in: meas.height_in,
