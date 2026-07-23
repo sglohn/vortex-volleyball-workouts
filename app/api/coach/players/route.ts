@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getBestOneRepMax, getTrend } from '@/lib/fitness'
+import { calculateAge } from '@/lib/age'
 
 export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
@@ -42,7 +43,9 @@ export async function GET(req: NextRequest) {
       return { exerciseId: ex.id, exerciseName: ex.name, history, trend: getTrend(vals), current: vals[vals.length - 1] ?? 0 }
     })
 
-    return NextResponse.json({ player, sessions: sessions?.slice(0, 10), measurements, healthReports, bodyChecks: bodyChecks ?? [], exerciseProgress, team: playerTeam?.teams ?? null })
+    const enrichedPlayer = player ? { ...player, age: calculateAge(player.date_of_birth) } : null
+
+    return NextResponse.json({ player: enrichedPlayer, sessions: sessions?.slice(0, 10), measurements, healthReports, bodyChecks: bodyChecks ?? [], exerciseProgress, team: playerTeam?.teams ?? null })
   }
 
   // Player list — now includes measurements + best lifts for leaderboard/sorting
@@ -148,6 +151,7 @@ export async function GET(req: NextRequest) {
       teamColor: team?.color,
       teamId: team?.id,
       age_group: team?.age_group ?? '',
+      age: calculateAge(p.date_of_birth),
       gender,
       sessionCount: sessionCountMap[p.id] ?? 0,
       lastSeen: lastSeenMap[p.id] ?? null,
@@ -167,17 +171,23 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, pin, jersey_number, position, team_id } = await req.json()
+  const { name, pin, jersey_number, position, team_id, date_of_birth } = await req.json()
   if (!name || !pin) return NextResponse.json({ error: 'Name and PIN required' }, { status: 400 })
   if (pin.length !== 4 || !/^\d{4}$/.test(pin)) return NextResponse.json({ error: 'PIN must be exactly 4 digits' }, { status: 400 })
 
   const db = createServerClient()
-  const { data: player, error } = await db.from('players').insert({ name, pin, jersey_number: jersey_number || null, position: position || null }).select().single()
+  const { data: player, error } = await db.from('players').insert({
+    name,
+    pin,
+    jersey_number: jersey_number || null,
+    position: position || null,
+    date_of_birth: date_of_birth || null,
+  }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   if (team_id) {
     await db.from('player_teams').insert({ player_id: player.id, team_id, is_primary: true })
   }
 
-  return NextResponse.json({ player })
+  return NextResponse.json({ player: { ...player, age: calculateAge(player.date_of_birth) } })
 }
