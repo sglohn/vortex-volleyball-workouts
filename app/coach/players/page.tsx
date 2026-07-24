@@ -20,6 +20,8 @@ interface Player {
   acceleration_sec?: number | null       // 5-yard acceleration sprint
   pro_agility_sec?: number | null        // 5-10-5 pro-agility shuttle
   swing_velocity_mph?: number | null     // SoloSpike/radar gun swing speed
+  athleticism_score?: number | null      // composite VPI-style score
+  athleticism_metrics_used?: number      // how many of 8 metrics fed the score
 }
 
 // Calculated fields — not stored, derived at display time
@@ -32,7 +34,7 @@ function maxVertical(p: Player): number | null {
   return Math.round((p.approach_vertical_in - p.standing_reach_in) * 10) / 10
 }
 
-type SortKey = 'name' | 'age_group' | 'age' | 'position' | 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in' | 'standingVert' | 'maxVert' | 'sessionCount' | 'acceleration_sec' | 'pro_agility_sec' | 'swing_velocity_mph'
+type SortKey = 'name' | 'age_group' | 'age' | 'position' | 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in' | 'standingVert' | 'maxVert' | 'sessionCount' | 'acceleration_sec' | 'pro_agility_sec' | 'swing_velocity_mph' | 'athleticism_score'
 type SortDir = 'asc' | 'desc'
 type ViewMode = 'leaderboard' | 'grouped'
 type ScopeKey = 'all' | 'ageGroup' | 'age' | 'position' | 'team'
@@ -41,6 +43,7 @@ const POSITIONS = ['Setter','Outside Hitter','Middle Blocker','Opposite','Libero
 
 const COLUMNS: { key: SortKey; label: string; short: string; numeric?: boolean; fmt: 'text' | 'fi' | 'in' }[] = [
   { key: 'name',                 label: 'Player',          short: 'Player',    fmt: 'text' },
+  { key: 'athleticism_score',    label: 'Athleticism Score', short: 'VPI',     numeric: true, fmt: 'in' },
   { key: 'age_group',            label: 'Team Age Group',  short: 'Team Grp',  fmt: 'text' },
   { key: 'age',                  label: 'Age',             short: 'Age',       numeric: true, fmt: 'in' },
   { key: 'position',             label: 'Position',        short: 'Position',  fmt: 'text' },
@@ -72,6 +75,10 @@ function fmtSec(val: number | null | undefined): string {
 function fmtMph(val: number | null | undefined): string {
   if (val == null) return '—'
   return `${val} mph`
+}
+function fmtScore(val: number | null | undefined): string {
+  if (val == null) return '—'
+  return val.toFixed(1)
 }
 
 function FF({ label, children }: { label: string; children: React.ReactNode }) {
@@ -158,6 +165,18 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
             </div>
           </div>
         </div>
+      </td>
+      <td style={cellStyle('athleticism_score')}>
+        {p.athleticism_score != null ? (
+          <>
+            {fmtScore(p.athleticism_score)}
+            <div style={{ fontSize: '0.62rem', fontWeight: 400, color: 'var(--text-muted)' }}>{p.athleticism_metrics_used ?? 0}/8 tests</div>
+          </>
+        ) : (
+          <span style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--text-muted)' }}>
+            {p.athleticism_metrics_used ? `${p.athleticism_metrics_used}/8 — need more` : 'No tests yet'}
+          </span>
+        )}
       </td>
       <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.age_group || '—'}</td>
       <td style={cellStyle('age')}>{p.age != null ? p.age : '—'}</td>
