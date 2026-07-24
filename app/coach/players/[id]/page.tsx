@@ -9,13 +9,25 @@ import MeasurementHistoryModal from '@/components/MeasurementHistoryModal'
 import PlayerHealthCard from '@/components/PlayerHealthCard'
 import VbtPanel from '@/components/VbtPanel'
 
-const MEASUREMENT_FIELDS = [
-  { key: 'height_in', label: 'Height', showFt: true },
-  { key: 'wingspan_in', label: 'Wingspan', showFt: true },
-  { key: 'standing_reach_in', label: 'Standing Reach', showFt: true },
-  { key: 'standing_vertical_in', label: 'Standing Vertical', showFt: false },
-  { key: 'approach_vertical_in', label: 'Approach Vertical', showFt: false },
+const MEASUREMENT_FIELDS: { key: string; label: string; unit: 'ft-in' | 'sec' | 'mph' }[] = [
+  { key: 'height_in', label: 'Height', unit: 'ft-in' },
+  { key: 'wingspan_in', label: 'Wingspan', unit: 'ft-in' },
+  { key: 'standing_reach_in', label: 'Standing Reach', unit: 'ft-in' },
+  { key: 'standing_vertical_in', label: 'Standing Vertical', unit: 'ft-in' },
+  { key: 'approach_vertical_in', label: 'Approach Vertical', unit: 'ft-in' },
+  { key: 'acceleration_sec', label: 'Acceleration (5yd)', unit: 'sec' },
+  { key: 'pro_agility_sec', label: 'Pro-Agility (5-10-5)', unit: 'sec' },
+  { key: 'swing_velocity_mph', label: 'Swing Velocity', unit: 'mph' },
 ]
+
+function fmtMeasVal(val: number | string | undefined, unit: 'ft-in' | 'sec' | 'mph'): string {
+  if (val == null || val === '') return '—'
+  const n = typeof val === 'string' ? parseFloat(val) : val
+  if (Number.isNaN(n)) return '—'
+  if (unit === 'ft-in') return inchesToFeetInches(n)
+  if (unit === 'sec') return `${n}s`
+  return `${n} mph`
+}
 
 export default function CoachPlayerDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -213,10 +225,21 @@ export default function CoachPlayerDetailPage() {
                 {MEASUREMENT_FIELDS.map(f => (
                   <div key={f.key} style={{ marginBottom: '0.625rem' }}>
                     <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>{f.label}</label>
-                    <FeetInchesInput
-                      value={measForm[f.key] ?? ''}
-                      onChange={val => setMeasForm(p => ({ ...p, [f.key]: val }))}
-                    />
+                    {f.unit === 'ft-in' ? (
+                      <FeetInchesInput
+                        value={measForm[f.key] ?? ''}
+                        onChange={val => setMeasForm(p => ({ ...p, [f.key]: val }))}
+                      />
+                    ) : (
+                      <input
+                        className="input"
+                        type="number"
+                        step={f.unit === 'sec' ? '0.01' : '0.1'}
+                        placeholder={f.unit === 'sec' ? 'e.g. 4.85' : 'e.g. 47.3'}
+                        value={measForm[f.key] ?? ''}
+                        onChange={e => setMeasForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      />
+                    )}
                   </div>
                 ))}
                 <button className="btn-volt" onClick={saveMeasurement} disabled={savingMeas} style={{ width: '100%', padding: '0.625rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>{savingMeas ? 'Saving…' : 'Save Measurements'}</button>
@@ -235,7 +258,7 @@ export default function CoachPlayerDetailPage() {
                         <span style={{ fontSize: '0.65rem', color: 'var(--carolina)', marginLeft: '0.4rem', fontWeight: 500 }}>history →</span>
                       </div>
                       <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '0.95rem' }}>
-                        {val ? inchesToFeetInches(val) : '—'}
+                        {fmtMeasVal(val, f.unit)}
                       </span>
                     </div>
                   )
