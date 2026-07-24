@@ -17,6 +17,9 @@ interface Player {
   standing_reach_in?: number | null
   standing_vertical_in?: number | null   // stored as standing JUMP TOUCH height (ft/in)
   approach_vertical_in?: number | null   // stored as approach TOUCH height (ft/in)
+  acceleration_sec?: number | null       // 5-yard acceleration sprint
+  pro_agility_sec?: number | null        // 5-10-5 pro-agility shuttle
+  swing_velocity_mph?: number | null     // SoloSpike/radar gun swing speed
 }
 
 // Calculated fields — not stored, derived at display time
@@ -29,7 +32,7 @@ function maxVertical(p: Player): number | null {
   return Math.round((p.approach_vertical_in - p.standing_reach_in) * 10) / 10
 }
 
-type SortKey = 'name' | 'age_group' | 'age' | 'position' | 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in' | 'standingVert' | 'maxVert' | 'sessionCount'
+type SortKey = 'name' | 'age_group' | 'age' | 'position' | 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in' | 'standingVert' | 'maxVert' | 'sessionCount' | 'acceleration_sec' | 'pro_agility_sec' | 'swing_velocity_mph'
 type SortDir = 'asc' | 'desc'
 type ViewMode = 'leaderboard' | 'grouped'
 type ScopeKey = 'all' | 'ageGroup' | 'age' | 'position' | 'team'
@@ -48,6 +51,9 @@ const COLUMNS: { key: SortKey; label: string; short: string; numeric?: boolean; 
   { key: 'standingVert',         label: 'Stand. Vertical', short: 'Stn Vert',  numeric: true, fmt: 'in' },
   { key: 'approach_vertical_in', label: 'App. Touch',      short: 'App Touch', numeric: true, fmt: 'fi' },
   { key: 'maxVert',              label: 'Max Vertical',    short: 'Max Vert',  numeric: true, fmt: 'in' },
+  { key: 'acceleration_sec',     label: 'Acceleration',    short: 'Accel',     numeric: true, fmt: 'in' },
+  { key: 'pro_agility_sec',      label: 'Pro-Agility',     short: 'Pro Agl',   numeric: true, fmt: 'in' },
+  { key: 'swing_velocity_mph',   label: 'Swing Velocity',  short: 'Swing MPH', numeric: true, fmt: 'in' },
 ]
 
 function fi(inches: number | null | undefined): string {
@@ -58,6 +64,14 @@ function fi(inches: number | null | undefined): string {
 function fmtIn(val: number | null | undefined): string {
   if (val == null) return '—'
   return `${val}"`
+}
+function fmtSec(val: number | null | undefined): string {
+  if (val == null) return '—'
+  return `${val}s`
+}
+function fmtMph(val: number | null | undefined): string {
+  if (val == null) return '—'
+  return `${val} mph`
 }
 
 function FF({ label, children }: { label: string; children: React.ReactNode }) {
@@ -155,6 +169,9 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
       <td style={cellStyle('standingVert')}>{fmtIn(sv)}</td>
       <td style={cellStyle('approach_vertical_in')}>{fi(p.approach_vertical_in)}</td>
       <td style={cellStyle('maxVert')}>{fmtIn(mv)}</td>
+      <td style={cellStyle('acceleration_sec')}>{fmtSec(p.acceleration_sec)}</td>
+      <td style={cellStyle('pro_agility_sec')}>{fmtSec(p.pro_agility_sec)}</td>
+      <td style={cellStyle('swing_velocity_mph')}>{fmtMph(p.swing_velocity_mph)}</td>
       <td style={{ padding:'0.75rem 0.875rem', whiteSpace:'nowrap' }}>
         <button onClick={() => onEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Edit</button>
         <span style={{ color:'var(--gray-border)', margin:'0 0.4rem' }}>|</span>
@@ -221,6 +238,7 @@ export default function CoachPlayersPage() {
   const [measurements, setMeasurements] = useState({
     height_in: '', wingspan_in: '', standing_reach_in: '',
     standing_vertical_in: '', approach_vertical_in: '',
+    acceleration_sec: '', pro_agility_sec: '', swing_velocity_mph: '',
   })
 
   useEffect(() => {
@@ -292,7 +310,7 @@ export default function CoachPlayersPage() {
   }
   function openEdit(p: Player) {
     setForm({ name: p.name, jersey_number: p.jersey_number ?? '', position: p.position ?? '', pin: '', team_id: p.teamId ?? '', date_of_birth: p.date_of_birth ?? '' })
-    setMeasurements({ height_in:'', wingspan_in:'', standing_reach_in:'', standing_vertical_in:'', approach_vertical_in:'' })
+    setMeasurements({ height_in:'', wingspan_in:'', standing_reach_in:'', standing_vertical_in:'', approach_vertical_in:'', acceleration_sec:'', pro_agility_sec:'', swing_velocity_mph:'' })
     setEditTarget(p); setModal('edit'); setMsg('')
     fetch(`/api/player/measurements?playerId=${p.id}`)
       .then(r => r.json())
@@ -304,6 +322,9 @@ export default function CoachPlayersPage() {
           standing_reach_in:    m.standing_reach_in?.toString()    ?? '',
           standing_vertical_in: m.standing_vertical_in?.toString() ?? '',
           approach_vertical_in: m.approach_vertical_in?.toString() ?? '',
+          acceleration_sec:     m.acceleration_sec?.toString()     ?? '',
+          pro_agility_sec:      m.pro_agility_sec?.toString()      ?? '',
+          swing_velocity_mph:   m.swing_velocity_mph?.toString()   ?? '',
         })
       })
   }
@@ -563,6 +584,15 @@ export default function CoachPlayersPage() {
                   </FF>
                   <FF label="Approach Touch">
                     <FeetInchesInput value={measurements.approach_vertical_in} onChange={v => setMeasurements(m => ({ ...m, approach_vertical_in: v }))} placeholder="e.g. 108" />
+                  </FF>
+                  <FF label="Acceleration (5yd, sec)">
+                    <input className="input" type="number" step="0.01" placeholder="e.g. 4.85" value={measurements.acceleration_sec} onChange={e => setMeasurements(m => ({ ...m, acceleration_sec: e.target.value }))} />
+                  </FF>
+                  <FF label="Pro-Agility (5-10-5, sec)">
+                    <input className="input" type="number" step="0.01" placeholder="e.g. 5.02" value={measurements.pro_agility_sec} onChange={e => setMeasurements(m => ({ ...m, pro_agility_sec: e.target.value }))} />
+                  </FF>
+                  <FF label="Swing Velocity (mph)">
+                    <input className="input" type="number" step="0.1" placeholder="e.g. 47.3" value={measurements.swing_velocity_mph} onChange={e => setMeasurements(m => ({ ...m, swing_velocity_mph: e.target.value }))} />
                   </FF>
                 </div>
                 <p style={{ fontSize:'0.73rem', color:'var(--text-muted)', marginTop:'0.6rem', fontStyle:'italic' }}>
