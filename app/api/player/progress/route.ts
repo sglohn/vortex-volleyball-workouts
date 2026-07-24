@@ -1,3 +1,4 @@
+// FILE: app/api/player/progress/route.ts  (best guess at the path — adjust to match wherever this route actually lives)
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getBestOneRepMax, getTrend, estimateOneRepMax } from '@/lib/fitness'
@@ -65,6 +66,9 @@ export async function GET(req: NextRequest) {
     { key: 'standing_reach_in', label: 'Standing Reach' },
     { key: 'standing_vertical_in', label: 'Standing Vertical' },
     { key: 'approach_vertical_in', label: 'Approach Vertical' },
+    { key: 'acceleration_sec', label: 'Acceleration (5yd)' },
+    { key: 'pro_agility_sec', label: 'Pro-Agility (5-10-5)' },
+    { key: 'swing_velocity_mph', label: 'Swing Velocity' },
   ]
 
   const measurementProgress = KEYS.map(({ key, label }) => {
