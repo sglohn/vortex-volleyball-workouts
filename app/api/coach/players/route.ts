@@ -1,3 +1,4 @@
+// FILE: app/api/coach/players/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getBestOneRepMax, getTrend } from '@/lib/fitness'
@@ -54,10 +55,10 @@ export async function GET(req: NextRequest) {
   const { data: activeHealth } = await db.from('health_reports').select('player_id').eq('status', 'active')
   const flaggedIds = new Set((activeHealth ?? []).map(h => h.player_id))
 
-  // Latest measurements for every player
+  // Latest measurements for every player — now includes combine metrics
   const { data: allMeasurements } = await db
     .from('measurements')
-    .select('player_id, height_in, wingspan_in, standing_reach_in, standing_vertical_in, approach_vertical_in, measured_at')
+    .select('player_id, height_in, wingspan_in, standing_reach_in, standing_vertical_in, approach_vertical_in, acceleration_sec, pro_agility_sec, swing_velocity_mph, measured_at')
     .order('measured_at', { ascending: false })
 
   // Build latest measurement per player (first row = most recent)
@@ -67,6 +68,9 @@ export async function GET(req: NextRequest) {
     standing_reach_in: number | null
     standing_vertical_in: number | null
     approach_vertical_in: number | null
+    acceleration_sec: number | null
+    pro_agility_sec: number | null
+    swing_velocity_mph: number | null
   }> = {}
   for (const m of (allMeasurements ?? [])) {
     if (!measMap[m.player_id]) {
@@ -76,6 +80,9 @@ export async function GET(req: NextRequest) {
         standing_reach_in: m.standing_reach_in,
         standing_vertical_in: m.standing_vertical_in,
         approach_vertical_in: m.approach_vertical_in,
+        acceleration_sec: m.acceleration_sec,
+        pro_agility_sec: m.pro_agility_sec,
+        swing_velocity_mph: m.swing_velocity_mph,
       }
     }
   }
@@ -141,7 +148,10 @@ export async function GET(req: NextRequest) {
 
   const enriched = (players ?? []).map(p => {
     const team = teamMap[p.id]
-    const meas = measMap[p.id] ?? { height_in: null, wingspan_in: null, standing_reach_in: null, standing_vertical_in: null, approach_vertical_in: null }
+    const meas = measMap[p.id] ?? {
+      height_in: null, wingspan_in: null, standing_reach_in: null, standing_vertical_in: null, approach_vertical_in: null,
+      acceleration_sec: null, pro_agility_sec: null, swing_velocity_mph: null,
+    }
     const lifts = playerBestLifts[p.id] ?? { squat: 0, bench: 0, deadlift: 0 }
     const teamName = team?.name ?? ''
     const gender = teamName.toLowerCase().includes('boy') ? 'M' : 'F'
@@ -161,6 +171,9 @@ export async function GET(req: NextRequest) {
       standing_reach_in: meas.standing_reach_in,
       standing_vertical_in: meas.standing_vertical_in,
       approach_vertical_in: meas.approach_vertical_in,
+      acceleration_sec: meas.acceleration_sec,
+      pro_agility_sec: meas.pro_agility_sec,
+      swing_velocity_mph: meas.swing_velocity_mph,
       best_squat: lifts.squat || null,
       best_bench: lifts.bench || null,
       best_deadlift: lifts.deadlift || null,
