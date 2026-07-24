@@ -1,3 +1,4 @@
+// FILE: app/player/profile/page.tsx  (adjust path to match your actual player self-view route)
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -8,16 +9,28 @@ interface Measurement {
   id: string; measured_at: string
   height_in?: number; wingspan_in?: number; standing_reach_in?: number
   standing_vertical_in?: number; approach_vertical_in?: number
+  acceleration_sec?: number; pro_agility_sec?: number; swing_velocity_mph?: number
 }
-type MeasurementKey = 'height_in'|'wingspan_in'|'standing_reach_in'|'standing_vertical_in'|'approach_vertical_in'
+type MeasurementKey =
+  | 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in'
+  | 'acceleration_sec' | 'pro_agility_sec' | 'swing_velocity_mph'
 
-const FIELDS: Array<{ key: MeasurementKey; label: string; showFt: boolean }> = [
-  { key: 'height_in',            label: 'Height',         showFt: true  },
-  { key: 'wingspan_in',          label: 'Wingspan',        showFt: true  },
-  { key: 'standing_reach_in',    label: 'Standing Reach',  showFt: true  },
-  { key: 'standing_vertical_in', label: 'Block Touch',     showFt: true  },
-  { key: 'approach_vertical_in', label: 'Approach Touch',  showFt: true  },
+const FIELDS: Array<{ key: MeasurementKey; label: string; unit: 'in' | 'sec' | 'mph'; showFt: boolean }> = [
+  { key: 'height_in',            label: 'Height',           unit: 'in',  showFt: true  },
+  { key: 'wingspan_in',          label: 'Wingspan',          unit: 'in',  showFt: true  },
+  { key: 'standing_reach_in',    label: 'Standing Reach',    unit: 'in',  showFt: true  },
+  { key: 'standing_vertical_in', label: 'Block Touch',       unit: 'in',  showFt: true  },
+  { key: 'approach_vertical_in', label: 'Approach Touch',    unit: 'in',  showFt: true  },
+  { key: 'acceleration_sec',     label: 'Acceleration (5yd)',unit: 'sec', showFt: false },
+  { key: 'pro_agility_sec',      label: 'Pro-Agility (5-10-5)', unit: 'sec', showFt: false },
+  { key: 'swing_velocity_mph',   label: 'Swing Velocity',    unit: 'mph', showFt: false },
 ]
+
+function fmtVal(val: number, unit: 'in' | 'sec' | 'mph'): string {
+  if (unit === 'in') return `${val}"`
+  if (unit === 'sec') return `${val}s`
+  return `${val} mph`
+}
 
 export default function PlayerProfilePage() {
   const router = useRouter()
@@ -41,14 +54,19 @@ export default function PlayerProfilePage() {
 
   const latest = measurements[0]
 
-  function getTrend(key: MeasurementKey): string {
+  function getTrend(key: MeasurementKey, unit: 'in' | 'sec' | 'mph'): string {
     if (measurements.length < 2) return ''
     const vals = measurements.map(m => m[key] as number | undefined).filter((v): v is number => v != null)
     if (vals.length < 2) return ''
     const diff = vals[0] - vals[vals.length - 1]
-    const pct = Math.abs(diff / vals[vals.length - 1] * 100)
-    if (Math.abs(diff) < 0.5) return ''
-    return diff > 0 ? `↑ +${diff.toFixed(1)}" since you started` : `↓ ${diff.toFixed(1)}" since you started`
+    if (Math.abs(diff) < 0.05) return ''
+    const suffix = unit === 'in' ? '"' : unit === 'sec' ? 's' : ' mph'
+    // For sprint/agility times, a lower number is an improvement, so flip the arrow direction.
+    const improved = unit === 'sec' ? diff < 0 : diff > 0
+    const magnitude = Math.abs(diff).toFixed(unit === 'mph' ? 1 : 2)
+    return improved
+      ? `↑ +${magnitude}${suffix} since you started`
+      : `↓ ${diff > 0 ? '' : '-'}${magnitude}${suffix} since you started`
   }
 
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading…</div>
@@ -72,7 +90,7 @@ export default function PlayerProfilePage() {
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Your Measurements</h2>
           {FIELDS.map(f => {
             const val = latest[f.key]
-            const trend = getTrend(f.key)
+            const trend = getTrend(f.key, f.unit)
             return (
               <div key={f.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.625rem 0', borderBottom: '1px solid var(--court-border)' }}>
                 <div>
@@ -82,7 +100,7 @@ export default function PlayerProfilePage() {
                 <div style={{ textAlign: 'right' }}>
                   {val ? (
                     <>
-                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, color: 'var(--volt)' }}>{val}"</div>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, color: 'var(--volt)' }}>{fmtVal(val, f.unit)}</div>
                       {f.showFt && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{inchesToFeetInches(val)}</div>}
                     </>
                   ) : <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Not recorded</div>}
@@ -108,7 +126,7 @@ export default function PlayerProfilePage() {
                 {FIELDS.map(f => { const val = m[f.key]; if (!val) return null; return (
                   <div key={f.key}>
                     <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{f.label}</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{val}"</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.9rem' }}>{fmtVal(val, f.unit)}</div>
                   </div>
                 )})}
               </div>
