@@ -100,7 +100,7 @@ function SortTh({ col, sortKey, sortDir, onSort }: {
   const active = sortKey === col.key
   return (
     <th onClick={() => onSort(col.key)} style={{
-      padding: '0.7rem 0.75rem',
+      padding: '0.6rem 0.55rem',
       textAlign: col.numeric ? 'right' : 'left',
       fontSize: '0.7rem',
       color: active ? 'var(--carolina-deep)' : 'var(--text-muted)',
@@ -135,11 +135,11 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
   const mv = maxVertical(p)
   function cellStyle(key: SortKey) {
     const active = sortKey === key
-    return { padding:'0.75rem', textAlign:'right' as const, fontSize:'0.85rem', fontWeight: active ? 700 : 400, color: active ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }
+    return { padding:'0.55rem', textAlign:'right' as const, fontSize:'0.82rem', fontWeight: active ? 700 : 400, color: active ? 'var(--carolina-dark)' : 'var(--text-secondary)', fontFamily:'var(--font-display)' }
   }
   return (
     <tr style={{ borderBottom:'1px solid var(--gray-border)' }}>
-      <td style={{ padding:'0.75rem 0.5rem 0.75rem 0.875rem', textAlign:'center', width:38 }}>
+      <td style={{ padding:'0.55rem 0.3rem 0.55rem 0.75rem', textAlign:'center', width:32 }}>
         <span style={{
           display:'inline-flex', alignItems:'center', justifyContent:'center',
           width:26, height:26, borderRadius:'50%',
@@ -148,7 +148,7 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
           fontWeight: rank<=3 ? 800 : 500, fontSize:'0.72rem', fontFamily:'var(--font-display)',
         }}>{rank}</span>
       </td>
-      <td style={{ padding:'0.75rem' }}>
+      <td style={{ padding:'0.55rem 0.6rem' }}>
         <div style={{ display:'flex', alignItems:'center', gap:'0.6rem' }}>
           <div style={{ width:32, height:32, borderRadius:'50%', background: p.teamColor ? `${p.teamColor}22` : 'var(--carolina-light)', border:`1.5px solid ${p.teamColor ?? 'var(--carolina-border)'}`, display:'flex', alignItems:'center', justifyContent:'center', fontFamily:'var(--font-display)', fontWeight:700, color: p.teamColor ?? 'var(--carolina-deep)', fontSize:'0.8rem', flexShrink:0 }}>
             {p.jersey_number || p.name.charAt(0)}
@@ -178,9 +178,9 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
           </span>
         )}
       </td>
-      <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.age_group || '—'}</td>
+      <td style={{ padding:'0.55rem', fontSize:'0.8rem', color:'var(--text-secondary)' }}>{p.age_group || '—'}</td>
       <td style={cellStyle('age')}>{p.age != null ? p.age : '—'}</td>
-      <td style={{ padding:'0.75rem', fontSize:'0.82rem', color:'var(--text-secondary)' }}>{p.position || '—'}</td>
+      <td style={{ padding:'0.55rem', fontSize:'0.8rem', color:'var(--text-secondary)' }}>{p.position || '—'}</td>
       <td style={cellStyle('height_in')}>{fi(p.height_in)}</td>
       <td style={cellStyle('wingspan_in')}>{fi(p.wingspan_in)}</td>
       <td style={cellStyle('standing_reach_in')}>{fi(p.standing_reach_in)}</td>
@@ -191,7 +191,7 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
       <td style={cellStyle('acceleration_sec')}>{fmtSec(p.acceleration_sec)}</td>
       <td style={cellStyle('pro_agility_sec')}>{fmtSec(p.pro_agility_sec)}</td>
       <td style={cellStyle('swing_velocity_mph')}>{fmtMph(p.swing_velocity_mph)}</td>
-      <td style={{ padding:'0.75rem 0.875rem', whiteSpace:'nowrap' }}>
+      <td style={{ padding:'0.55rem 0.6rem', whiteSpace:'nowrap' }}>
         <button onClick={() => onEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Edit</button>
         <span style={{ color:'var(--gray-border)', margin:'0 0.4rem' }}>|</span>
         <button onClick={() => onDelete(p)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Remove</button>
@@ -215,14 +215,14 @@ function PlayerTable({ rows, sortKey, sortDir, onSort, onEdit, onDelete }: {
       maxHeight: 'calc(100vh - 280px)',
       marginBottom: '1.5rem',
     }}>
-      <table style={{ width:'100%', borderCollapse:'collapse', minWidth:1050 }}>
+      <table className="vx-players-table" style={{ width:'100%', borderCollapse:'collapse' }}>
         <thead>
           <tr style={{ background:'var(--carolina-light)', position:'sticky', top:0, zIndex:1 }}>
-            <th style={{ padding:'0.7rem 0.5rem 0.7rem 0.875rem', width:38, borderBottom:'1.5px solid var(--gray-border)' }} />
+            <th style={{ padding:'0.6rem 0.4rem 0.6rem 0.75rem', width:32, borderBottom:'1.5px solid var(--gray-border)' }} />
             {COLUMNS.map(col => (
               <SortTh key={col.key} col={col} sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             ))}
-            <th style={{ padding:'0.7rem 0.875rem', textAlign:'left', fontSize:'0.7rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, borderBottom:'1.5px solid var(--gray-border)', whiteSpace:'nowrap' }}>Actions</th>
+            <th style={{ padding:'0.6rem 0.75rem', textAlign:'left', fontSize:'0.68rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:600, borderBottom:'1.5px solid var(--gray-border)', whiteSpace:'nowrap' }}>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -424,7 +424,18 @@ export default function CoachPlayersPage() {
   if (loading) return <div style={{ padding:'2rem', color:'var(--text-muted)' }}>Loading…</div>
 
   return (
-    <div style={{ padding:'2rem', maxWidth:1100 }}>
+    <div style={{ padding:'2rem', maxWidth:1800, margin:'0 auto' }}>
+      <style>{`
+        /* On wide desktop screens, let the table stretch to fill the
+           available width so all columns fit with no horizontal scroll.
+           Below that breakpoint (tablets, laptops with less room, phones),
+           it falls back to a minimum width + horizontal scroll instead of
+           squishing every column unreadably. */
+        .vx-players-table { width: 100%; }
+        @media (max-width: 1500px) {
+          .vx-players-table { min-width: 1400px; }
+        }
+      `}</style>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' }}>
         <div>
