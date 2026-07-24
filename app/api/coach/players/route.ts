@@ -3,6 +3,44 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getBestOneRepMax, getTrend } from '@/lib/fitness'
 import { calculateAge } from '@/lib/age'
+import { calculateAthleticismScore, buildPopulationStats, type AthleticismInputs } from '@/lib/athleticism'
+
+// Fetches the latest measurement snapshot (the combine-relevant fields
+// only) for every active player, keyed by player_id. Used both to build
+// the club-wide population stats and to score individual players, so the
+// same pool feeds both the single-player and list endpoints consistently.
+async function getLatestMeasurementPool(db: ReturnType<typeof createServerClient>) {
+  const { data: allMeasurements } = await db
+    .from('measurements')
+    .select('player_id, height_in, wingspan_in, standing_reach_in, standing_vertical_in, approach_vertical_in, acceleration_sec, pro_agility_sec, swing_velocity_mph, measured_at')
+    .order('measured_at', { ascending: false })
+
+  const measMap: Record<string, {
+    height_in: number | null
+    wingspan_in: number | null
+    standing_reach_in: number | null
+    standing_vertical_in: number | null
+    approach_vertical_in: number | null
+    acceleration_sec: number | null
+    pro_agility_sec: number | null
+    swing_velocity_mph: number | null
+  }> = {}
+  for (const m of (allMeasurements ?? [])) {
+    if (!measMap[m.player_id]) {
+      measMap[m.player_id] = {
+        height_in: m.height_in,
+        wingspan_in: m.wingspan_in,
+        standing_reach_in: m.standing_reach_in,
+        standing_vertical_in: m.standing_vertical_in,
+        approach_vertical_in: m.approach_vertical_in,
+        acceleration_sec: m.acceleration_sec,
+        pro_agility_sec: m.pro_agility_sec,
+        swing_velocity_mph: m.swing_velocity_mph,
+      }
+    }
+  }
+  return measMap
+}
 
 export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
@@ -44,7 +82,30 @@ export async function GET(req: NextRequest) {
       return { exerciseId: ex.id, exerciseName: ex.name, history, trend: getTrend(vals), current: vals[vals.length - 1] ?? 0 }
     })
 
-    const enrichedPlayer = player ? { ...player, age: calculateAge(player.date_of_birth) } : null
+    // Club-wide pool (all active players' latest measurements) — needed to
+    // compute the mean/std dev this player's score gets rescaled against.
+    const measMap = await getLatestMeasurementPool(db)
+    const populationStats = buildPopulationStats(Object.values(measMap) as AthleticismInputs[])
+    const playerMeas = measMap[playerId] ?? null
+    const athleticism = calculateAthleticismScore(
+      {
+        height_in: playerMeas?.height_in ?? null,
+        standing_reach_in: playerMeas?.standing_reach_in ?? null,
+        standing_vertical_in: playerMeas?.standing_vertical_in ?? null,
+        approach_vertical_in: playerMeas?.approach_vertical_in ?? null,
+        acceleration_sec: playerMeas?.acceleration_sec ?? null,
+        pro_agility_sec: playerMeas?.pro_agility_sec ?? null,
+        swing_velocity_mph: playerMeas?.swing_velocity_mph ?? null,
+      },
+      populationStats
+    )
+
+    const enrichedPlayer = player ? {
+      ...player,
+      age: calculateAge(player.date_of_birth),
+      athleticism_score: athleticism.score,
+      athleticism_metrics_used: athleticism.metricsUsed,
+    } : null
 
     return NextResponse.json({ player: enrichedPlayer, sessions: sessions?.slice(0, 10), measurements, healthReports, bodyChecks: bodyChecks ?? [], exerciseProgress, team: playerTeam?.teams ?? null })
   }
@@ -55,37 +116,8 @@ export async function GET(req: NextRequest) {
   const { data: activeHealth } = await db.from('health_reports').select('player_id').eq('status', 'active')
   const flaggedIds = new Set((activeHealth ?? []).map(h => h.player_id))
 
-  // Latest measurements for every player — now includes combine metrics
-  const { data: allMeasurements } = await db
-    .from('measurements')
-    .select('player_id, height_in, wingspan_in, standing_reach_in, standing_vertical_in, approach_vertical_in, acceleration_sec, pro_agility_sec, swing_velocity_mph, measured_at')
-    .order('measured_at', { ascending: false })
-
-  // Build latest measurement per player (first row = most recent)
-  const measMap: Record<string, {
-    height_in: number | null
-    wingspan_in: number | null
-    standing_reach_in: number | null
-    standing_vertical_in: number | null
-    approach_vertical_in: number | null
-    acceleration_sec: number | null
-    pro_agility_sec: number | null
-    swing_velocity_mph: number | null
-  }> = {}
-  for (const m of (allMeasurements ?? [])) {
-    if (!measMap[m.player_id]) {
-      measMap[m.player_id] = {
-        height_in: m.height_in,
-        wingspan_in: m.wingspan_in,
-        standing_reach_in: m.standing_reach_in,
-        standing_vertical_in: m.standing_vertical_in,
-        approach_vertical_in: m.approach_vertical_in,
-        acceleration_sec: m.acceleration_sec,
-        pro_agility_sec: m.pro_agility_sec,
-        swing_velocity_mph: m.swing_velocity_mph,
-      }
-    }
-  }
+  const measMap = await getLatestMeasurementPool(db)
+  const populationStats = buildPopulationStats(Object.values(measMap) as AthleticismInputs[])
 
   const teamMap = Object.fromEntries(
     (playerTeams ?? []).map(pt => [
@@ -155,6 +187,18 @@ export async function GET(req: NextRequest) {
     const lifts = playerBestLifts[p.id] ?? { squat: 0, bench: 0, deadlift: 0 }
     const teamName = team?.name ?? ''
     const gender = teamName.toLowerCase().includes('boy') ? 'M' : 'F'
+    const athleticism = calculateAthleticismScore(
+      {
+        height_in: meas.height_in,
+        standing_reach_in: meas.standing_reach_in,
+        standing_vertical_in: meas.standing_vertical_in,
+        approach_vertical_in: meas.approach_vertical_in,
+        acceleration_sec: meas.acceleration_sec,
+        pro_agility_sec: meas.pro_agility_sec,
+        swing_velocity_mph: meas.swing_velocity_mph,
+      },
+      populationStats
+    )
     return {
       ...p,
       teamName,
@@ -163,6 +207,8 @@ export async function GET(req: NextRequest) {
       age_group: team?.age_group ?? '',
       age: calculateAge(p.date_of_birth),
       gender,
+      athleticism_score: athleticism.score,
+      athleticism_metrics_used: athleticism.metricsUsed,
       sessionCount: sessionCountMap[p.id] ?? 0,
       lastSeen: lastSeenMap[p.id] ?? null,
       hasHealthFlag: flaggedIds.has(p.id),
