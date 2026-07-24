@@ -1,3 +1,4 @@
+// FILE: app/api/player/measurements/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 
@@ -21,7 +22,7 @@ export async function POST(req: NextRequest) {
   const db = createServerClient()
   const today = new Date().toISOString().split('T')[0]
 
-  const KEYS = ['height_in','wingspan_in','standing_reach_in','standing_vertical_in','approach_vertical_in']
+  const KEYS = ['height_in','wingspan_in','standing_reach_in','standing_vertical_in','approach_vertical_in','acceleration_sec','pro_agility_sec','swing_velocity_mph']
 
   // Parse only the fields that were provided
   const incoming: Record<string, number | null> = {}
