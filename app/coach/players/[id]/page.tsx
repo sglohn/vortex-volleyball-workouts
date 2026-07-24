@@ -220,6 +220,23 @@ export default function CoachPlayerDetailPage() {
               <button className="btn-ghost" onClick={() => setShowMeasForm(!showMeasForm)} style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}>{showMeasForm ? 'Cancel' : '+ Record'}</button>
             </div>
 
+            {(() => {
+              const score = (player as unknown as { athleticism_score?: number | null }).athleticism_score
+              const used = (player as unknown as { athleticism_metrics_used?: number }).athleticism_metrics_used ?? 0
+              return (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.6rem 0.875rem', marginBottom: '1rem' }}>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--carolina-deep)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Athleticism Score</span>
+                  {score != null ? (
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.15rem', color: 'var(--carolina-deep)' }}>
+                      {score.toFixed(1)} <span style={{ fontSize: '0.68rem', fontWeight: 500, color: 'var(--text-muted)' }}>({used}/8 tests)</span>
+                    </span>
+                  ) : (
+                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{used}/8 tests — need {5 - used > 0 ? 5 - used : 0} more</span>
+                  )}
+                </div>
+              )
+            })()}
+
             {showMeasForm && (
               <div style={{ marginBottom: '1rem' }}>
                 {MEASUREMENT_FIELDS.map(f => (
