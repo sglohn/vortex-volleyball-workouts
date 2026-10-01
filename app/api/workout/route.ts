@@ -1,6 +1,7 @@
+// FILE: app/api/workout/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { getBestOneRepMax, recommendWeightForPhase } from '@/lib/fitness'
+import { getQualifiedOneRepMax, recommendWeightForPhase } from '@/lib/fitness'
 import { PhaseType } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
@@ -108,24 +109,36 @@ export async function GET(req: NextRequest) {
             .eq('session_id', sessionId)
             .eq('exercise_id', activeEx.id)
 
-          // Get historical best for 1RM
+          // Suggested weight — only when the player has enough proven history.
+          // See getQualifiedOneRepMax in lib/fitness.ts for the rules.
           let recommendation = null
           if (activeEx.logs_weight) {
             const { data: playerSessions } = await db
               .from('sessions')
-              .select('id')
+              .select('id, checked_in_at')
               .eq('player_id', session.player_id)
+
+            const sessionDate: Record<string, string> = Object.fromEntries(
+              (playerSessions ?? []).map(s => [s.id, s.checked_in_at])
+            )
 
             const { data: allLogs } = await db
               .from('set_logs')
-              .select('weight_lbs, reps_completed')
+              .select('session_id, weight_lbs, reps_completed, completed')
               .eq('exercise_id', activeEx.id)
               .in('session_id', playerSessions?.map(s => s.id) ?? ['none'])
               .eq('completed', true)
 
-            const best1RM = getBestOneRepMax(allLogs ?? [])
-            recommendation = recommendWeightForPhase(best1RM, be.custom_reps ?? activeEx.default_reps ?? '8', phaseType)
-            recommendation = { ...recommendation, best1RM }
+            const qualified = getQualifiedOneRepMax(
+              (allLogs ?? []).map(l => ({ ...l, session_date: sessionDate[l.session_id] ?? null }))
+            )
+
+            if (qualified.qualified) {
+              const rec = recommendWeightForPhase(qualified.oneRepMax, be.custom_reps ?? activeEx.default_reps ?? '8', phaseType)
+              recommendation = { ...rec, best1RM: qualified.oneRepMax }
+            } else {
+              recommendation = { weight: 0, percent: 0, label: '', phaseNote: qualified.reason, best1RM: 0 }
+            }
           }
 
           const setLogs = Array.from({ length: block.sets }, (_, i) => {
