@@ -10,8 +10,9 @@ interface Exercise {
   demo_url?: string; demo_image_url?: string; start_image_url?: string; end_image_url?: string
   logs_weight: boolean; logs_velocity: boolean
   customReps?: string; customNotes?: string; skipped: boolean
+  targetVelocityMin?: number | null; targetVelocityMax?: number | null
   setLogs: SetLog[]
-  recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number }
+  recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number; sourceLabel?: string; detail?: string; adjustmentMessage?: string }
 }
 interface Block { id: string; block_label: string; sets: number; exercises: Exercise[] }
 interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[] }
@@ -153,6 +154,8 @@ export default function PlayerWorkoutPage() {
         velocityMs: velocityInput ? parseFloat(velocityInput) : null,
         completed,
         targetReps: ex.customReps ?? ex.default_reps ?? null,
+        targetVelocityMin: ex.targetVelocityMin ?? null,
+        targetVelocityMax: ex.targetVelocityMax ?? null,
       }),
     })
     const data = await res.json()
@@ -392,13 +395,16 @@ export default function PlayerWorkoutPage() {
                 {ex.customReps ?? ex.default_reps ?? '—'} reps
               </div>
             </div>
-            {ex.recommendation && ex.recommendation.best1RM > 0 && (
+            {ex.recommendation && ex.recommendation.weight > 0 && (
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '1.25rem' }}>{ex.recommendation.weight} lbs</div>
-                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{ex.recommendation.percent}% · suggested</div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{ex.recommendation.detail || `${ex.recommendation.percent}% · suggested`}</div>
+                {ex.recommendation.sourceLabel && (
+                  <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>{ex.recommendation.sourceLabel}</div>
+                )}
               </div>
             )}
-            {ex.recommendation && ex.recommendation.best1RM === 0 && ex.logs_weight && (
+            {ex.recommendation && !(ex.recommendation.weight > 0) && ex.logs_weight && !ex.recommendation.adjustmentMessage && (
               <div style={{ textAlign: 'right', flexShrink: 0, fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 160 }}>
                 {ex.recommendation.phaseNote || 'Choose your own weight for now.'}
               </div>
@@ -439,7 +445,13 @@ export default function PlayerWorkoutPage() {
             </div>
           )}
 
-          {ex.recommendation?.label && ex.recommendation.best1RM > 0 && phaseConfig && (
+          {ex.recommendation?.adjustmentMessage && (
+            <div style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.5rem 0.875rem', marginBottom: '0.875rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--carolina-dark)' }}>
+              {ex.recommendation.adjustmentMessage}
+            </div>
+          )}
+
+          {ex.recommendation?.label && ex.recommendation.weight > 0 && phaseConfig && (
             <div style={{ background: `${phaseConfig.color}10`, border: `1px solid ${phaseConfig.color}25`, borderRadius: 8, padding: '0.5rem 0.875rem', marginBottom: '0.875rem', display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
               <div style={{ width: 8, height: 8, borderRadius: '50%', background: phaseConfig.color, flexShrink: 0 }} />
               <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>{ex.recommendation.label}</div>
@@ -450,7 +462,7 @@ export default function PlayerWorkoutPage() {
           <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight && ex.logs_velocity ? '1fr 1fr 1fr' : ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.625rem', marginBottom: ex.logs_weight ? '0.5rem' : '1rem' }}>
             {ex.logs_weight && (() => {
               const isBarbell = isLikelyBarbell(ex.name)
-              const rawSuggestion = ex.recommendation?.best1RM ? ex.recommendation.weight : null
+              const rawSuggestion = ex.recommendation && ex.recommendation.weight > 0 ? ex.recommendation.weight : null
               const gymWeight = rawSuggestion ? roundToGymWeight(rawSuggestion, isBarbell) : null
               return (
                 <div>
