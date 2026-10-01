@@ -1,3 +1,4 @@
+// FILE: app/player/workout/page.tsx
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
@@ -151,6 +152,7 @@ export default function PlayerWorkoutPage() {
         repsCompleted: repsInput ? parseInt(repsInput) : null,
         velocityMs: velocityInput ? parseFloat(velocityInput) : null,
         completed,
+        targetReps: ex.customReps ?? ex.default_reps ?? null,
       }),
     })
     const data = await res.json()
@@ -397,8 +399,8 @@ export default function PlayerWorkoutPage() {
               </div>
             )}
             {ex.recommendation && ex.recommendation.best1RM === 0 && ex.logs_weight && (
-              <div style={{ textAlign: 'right', flexShrink: 0, fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 90 }}>
-                Log first set to get suggestions
+              <div style={{ textAlign: 'right', flexShrink: 0, fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 160 }}>
+                {ex.recommendation.phaseNote || 'Choose your own weight for now.'}
               </div>
             )}
           </div>
