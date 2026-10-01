@@ -1,3 +1,4 @@
+// FILE: app/coach/exercises/page.tsx
 'use client'
 import { useState, useEffect, useRef } from 'react'
 
@@ -35,17 +36,6 @@ interface Exercise {
   end_image_position?: string
   logs_weight: boolean
   logs_velocity: boolean
-  // VBT ratio (joined from exercise_anchor_ratios)
-  anchor_exercise_id?: string | null
-  vbt_ratio?: number | null
-  vbt_confidence?: string | null
-}
-
-interface AnchorExercise {
-  id: string
-  name: string
-  slug: string
-  category: string
 }
 
 const BLANK = {
@@ -53,15 +43,8 @@ const BLANK = {
   coaching_notes: '', demo_url: '', logs_weight: true, logs_velocity: false,
 }
 
-const CONFIDENCE_OPTIONS = [
-  { value: 'high',   label: 'High — closely related movement' },
-  { value: 'medium', label: 'Medium — similar pattern' },
-  { value: 'low',    label: 'Low — rough estimate only' },
-]
-
 export default function ExercisesPage() {
   const [exercises, setExercises] = useState<Exercise[]>([])
-  const [anchors, setAnchors]     = useState<AnchorExercise[]>([])
   const [loading, setLoading]     = useState(true)
   const [modal, setModal]         = useState<'add' | 'edit' | null>(null)
   const [editTarget, setEditTarget] = useState<Exercise | null>(null)
@@ -71,11 +54,6 @@ export default function ExercisesPage() {
   const [saving, setSaving]       = useState(false)
   const [msg, setMsg]             = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<Exercise | null>(null)
-
-  // VBT ratio fields in modal
-  const [ratioAnchorId,   setRatioAnchorId]   = useState<string>('')
-  const [ratioValue,      setRatioValue]       = useState<string>('')
-  const [ratioConfidence, setRatioConfidence] = useState<string>('medium')
 
   // Photo upload state
   const [startImg, setStartImg]           = useState<File | null>(null)
@@ -94,17 +72,12 @@ export default function ExercisesPage() {
       setExercises(d.exercises ?? [])
       setLoading(false)
     })
-    // Fetch anchor exercises for the ratio dropdown
-    fetch('/api/coach/vbt/anchors').then(r => r.json()).then(d => {
-      setAnchors(d.anchors ?? [])
-    })
   }, [])
 
   function openAdd() {
     setForm(BLANK); setEditTarget(null)
     setStartImg(null); setEndImg(null); setStartPreview(''); setEndPreview('')
     setStartPos('50% 50%'); setEndPos('50% 50%')
-    setRatioAnchorId(''); setRatioValue(''); setRatioConfidence('medium')
     setModal('add'); setMsg('')
   }
 
@@ -120,10 +93,6 @@ export default function ExercisesPage() {
     setEndPreview(ex.end_image_url ?? '')
     setStartPos(ex.start_image_position ?? '50% 50%')
     setEndPos(ex.end_image_position ?? '50% 50%')
-    // Pre-fill VBT ratio if set
-    setRatioAnchorId(ex.anchor_exercise_id ?? '')
-    setRatioValue(ex.vbt_ratio != null ? String(ex.vbt_ratio) : '')
-    setRatioConfidence(ex.vbt_confidence ?? 'medium')
     setEditTarget(ex); setModal('edit'); setMsg('')
   }
 
@@ -207,35 +176,11 @@ export default function ExercisesPage() {
         })
       }
 
-      // Save VBT anchor ratio if filled in
-      if (exerciseId && ratioAnchorId && ratioValue) {
-        await fetch('/api/coach/vbt/ratios', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            exercise_id:        exerciseId,
-            anchor_exercise_id: ratioAnchorId,
-            ratio:              parseFloat(ratioValue),
-            confidence:         ratioConfidence,
-          }),
-        })
-      } else if (exerciseId && !ratioAnchorId && editTarget?.anchor_exercise_id) {
-        // Anchor was cleared — remove the ratio
-        await fetch('/api/coach/vbt/ratios', {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ exercise_id: exerciseId }),
-        })
-      }
-
       const updated: Exercise = {
         ...data.exercise,
         start_image_url: startUrl,
         end_image_url:   endUrl,
         demo_image_url:  startUrl || data.exercise?.demo_image_url || '',
-        anchor_exercise_id: ratioAnchorId || null,
-        vbt_ratio:          ratioValue ? parseFloat(ratioValue) : null,
-        vbt_confidence:     ratioConfidence,
       }
 
       if (modal === 'add') setExercises(prev => [...prev, updated])
@@ -326,9 +271,6 @@ export default function ExercisesPage() {
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{exercises.length} exercises</p>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
-          <a href="/coach/vbt/mapping" style={{ padding: '0.625rem 1rem', borderRadius: 8, border: '1.5px solid var(--carolina)', color: 'var(--carolina-dark)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', textDecoration: 'none' }}>
-            ⚡ VBT Mapping
-          </a>
           <button className="btn-volt" onClick={openAdd} style={{ padding: '0.625rem 1.25rem' }}>+ Add Exercise</button>
         </div>
       </div>
@@ -373,10 +315,7 @@ export default function ExercisesPage() {
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.375rem' }}>
                     {ex.default_sets}×{ex.default_reps}
                     {ex.logs_weight && ' · weight'}
-                    {ex.logs_velocity && ' · velocity'}
-                    {ex.anchor_exercise_id && ex.vbt_ratio && (
-                      <span style={{ color: 'var(--carolina)', fontWeight: 600 }}> · ⚡ VBT</span>
-                    )}
+                    {ex.logs_velocity && <span style={{ color: 'var(--carolina)', fontWeight: 600 }}> · ⚡ bar speed</span>}
                   </div>
                   {ex.coaching_notes && <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontStyle: 'italic', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{ex.coaching_notes}</div>}
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
@@ -445,59 +384,9 @@ export default function ExercisesPage() {
                   Log velocity
                 </label>
               </div>
-            </div>
-
-            {/* ── VBT ANCHOR RATIO ── */}
-            <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1rem', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.5rem' }}>
-                ⚡ Weight Suggestion — VBT Anchor
-              </div>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.875rem' }}>
-                Link this exercise to one of your 4 anchor lifts so VBT-based 1RM estimates carry over to weight suggestions.
-                The ratio is what fraction of the anchor&apos;s 1RM a typical athlete can lift on this exercise.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                <div>
-                  <Label>Anchor Lift</Label>
-                  <select
-                    className="input"
-                    value={ratioAnchorId}
-                    onChange={e => setRatioAnchorId(e.target.value)}
-                  >
-                    <option value="">— No anchor (Epley only) —</option>
-                    {anchors.map(a => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <Label>Ratio</Label>
-                  <input
-                    className="input"
-                    type="number"
-                    step="0.05"
-                    min="0.1"
-                    max="2.0"
-                    placeholder="e.g. 0.85"
-                    value={ratioValue}
-                    onChange={e => setRatioValue(e.target.value)}
-                    disabled={!ratioAnchorId}
-                  />
-                </div>
-              </div>
-              {ratioAnchorId && (
-                <div>
-                  <Label>Confidence</Label>
-                  <select className="input" value={ratioConfidence} onChange={e => setRatioConfidence(e.target.value)}>
-                    {CONFIDENCE_OPTIONS.map(o => (
-                      <option key={o.value} value={o.value}>{o.label}</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              {ratioAnchorId && ratioValue && (
-                <p style={{ fontSize: '0.75rem', color: 'var(--carolina-dark)', marginTop: '0.5rem', fontStyle: 'italic' }}>
-                  Example: If a player&apos;s {anchors.find(a => a.id === ratioAnchorId)?.name} 1RM is 200 lbs, this exercise suggestion starts at {Math.round(200 * parseFloat(ratioValue))} lbs.
+              {form.logs_velocity && (
+                <p style={{ gridColumn: '1/-1', fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Players can enter bar speed for this exercise, you can run VBT tests on it from a player&apos;s page, and you can set a target speed when adding it to a workout.
                 </p>
               )}
             </div>
