@@ -1,3 +1,4 @@
+// FILE: app/api/coach/teams/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 
@@ -9,12 +10,15 @@ export async function GET() {
     .eq('is_active', true)
     .order('age_group')
 
-  // Enrich with player counts
+  // Enrich with player counts — ACTIVE players only.
+  // The !inner join lets us filter on players.is_active so removed players
+  // (soft-deleted) don't get counted, matching what the roster page shows.
   const enriched = await Promise.all((teams ?? []).map(async (team) => {
     const { count } = await db
       .from('player_teams')
-      .select('*', { count: 'exact', head: true })
+      .select('player_id, players!inner(is_active)', { count: 'exact', head: true })
       .eq('team_id', team.id)
+      .eq('players.is_active', true)
     return { ...team, playerCount: count ?? 0 }
   }))
 
