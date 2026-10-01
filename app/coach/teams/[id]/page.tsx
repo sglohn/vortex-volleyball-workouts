@@ -1,3 +1,4 @@
+// FILE: app/coach/teams/[id]/page.tsx
 'use client'
 import { useState, useEffect, use } from 'react'
 import Link from 'next/link'
@@ -58,6 +59,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const [addingPlayer, setAddingPlayer] = useState(false)
   const [allPlayers, setAllPlayers] = useState<Array<{ id: string; name: string; teamName?: string }>>([])
   const [newPlayerSearch, setNewPlayerSearch] = useState('')
+  const [addMsg, setAddMsg] = useState('')
+  const [rosterMsg, setRosterMsg] = useState('')
 
   useEffect(() => { loadData() }, [teamId])
 
@@ -103,7 +106,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   }
 
   async function removeFromTeam(playerId: string) {
-    await fetch('/api/coach/players/delete', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: playerId, team_id: '' }) })
+    setRosterMsg('')
+    const res = await fetch('/api/coach/players/delete', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: playerId, team_id: '' }) })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      setRosterMsg(d.error || 'Could not remove player from team')
+    }
     loadData()
   }
 
@@ -113,11 +121,18 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     const onTeam = new Set(roster.map(r => r.id))
     setAllPlayers((d.players ?? []).filter((p: { id: string }) => !onTeam.has(p.id)))
     setNewPlayerSearch('')
+    setAddMsg('')
     setAddingPlayer(true)
   }
 
   async function addToTeam(playerId: string) {
-    await fetch('/api/coach/players/delete', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: playerId, team_id: teamId }) })
+    setAddMsg('')
+    const res = await fetch('/api/coach/players/delete', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: playerId, team_id: teamId }) })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      setAddMsg(d.error || 'Could not add player to team')
+      return
+    }
     setAddingPlayer(false); loadData()
   }
 
@@ -160,6 +175,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
           </button>
         ))}
       </div>
+
+      {rosterMsg && <div style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>{rosterMsg}</div>}
 
       {/* ── ROSTER TAB ── */}
       {tab === 'roster' && (
@@ -418,6 +435,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
               <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem' }}>Add Player to {team.name}</h2>
               <button onClick={() => setAddingPlayer(false)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1 }}>✕</button>
             </div>
+            {addMsg && <div style={{ color: 'var(--danger)', fontSize: '0.82rem', marginBottom: '0.75rem' }}>{addMsg}</div>}
             <input className="input" placeholder="Search players…" value={newPlayerSearch} onChange={e => setNewPlayerSearch(e.target.value)} style={{ marginBottom: '0.75rem' }} autoFocus />
             <div style={{ maxHeight: 300, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
               {filteredPlayers.length === 0 && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', fontSize: '0.85rem' }}>No available players found</div>}
