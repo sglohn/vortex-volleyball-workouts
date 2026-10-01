@@ -1,6 +1,7 @@
+// FILE: app/api/sets/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { getBestOneRepMax, recommendWeightForPhase } from '@/lib/fitness'
+import { getQualifiedOneRepMax, recommendWeightForPhase } from '@/lib/fitness'
 import { PhaseType } from '@/lib/types'
 
 export async function POST(req: NextRequest) {
@@ -12,6 +13,7 @@ export async function POST(req: NextRequest) {
     repsCompleted,
     velocityMs,
     completed,
+    targetReps,        // optional: the rep target shown for this exercise in today's workout
   } = await req.json()
 
   if (!sessionId || !exerciseId || !setNumber) {
@@ -64,17 +66,24 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Recalculate 1RM
+  // Recalculate suggestion — only when the player has enough proven history.
+  // See getQualifiedOneRepMax in lib/fitness.ts for the rules.
   const { data: session } = await db.from('sessions').select('player_id, team_id').eq('id', sessionId).single()
-  const { data: playerSessions } = await db.from('sessions').select('id').eq('player_id', session?.player_id)
+  const { data: playerSessions } = await db.from('sessions').select('id, checked_in_at').eq('player_id', session?.player_id)
+  const sessionDate: Record<string, string> = Object.fromEntries(
+    (playerSessions ?? []).map(s => [s.id, s.checked_in_at])
+  )
   const { data: allLogs } = await db
     .from('set_logs')
-    .select('weight_lbs, reps_completed')
+    .select('session_id, weight_lbs, reps_completed, completed')
     .eq('exercise_id', exerciseId)
     .in('session_id', playerSessions?.map(s => s.id) ?? ['none'])
     .eq('completed', true)
 
-  const newOneRepMax = getBestOneRepMax(allLogs ?? [])
+  const qualified = getQualifiedOneRepMax(
+    (allLogs ?? []).map(l => ({ ...l, session_date: sessionDate[l.session_id] ?? null }))
+  )
+  const newOneRepMax = qualified.oneRepMax   // 0 when there isn't enough data
 
   // Get current phase for recommendation
   let phaseType: PhaseType = 'general'
@@ -90,10 +99,14 @@ export async function POST(req: NextRequest) {
     phaseType = (phases?.[0]?.phase_type as PhaseType) ?? 'general'
   }
 
+  // Use the workout's rep target when the page sends it, so the suggestion
+  // doesn't switch to the exercise's default reps after the first set.
   const { data: ex } = await db.from('exercise_library').select('default_reps').eq('id', exerciseId).single()
-  const recommendation = newOneRepMax > 0
-    ? recommendWeightForPhase(newOneRepMax, ex?.default_reps ?? '8', phaseType)
-    : null
+  const repsForSuggestion = targetReps ?? ex?.default_reps ?? '8'
+
+  const recommendation = qualified.qualified
+    ? recommendWeightForPhase(newOneRepMax, repsForSuggestion, phaseType)
+    : { weight: 0, percent: 0, label: '', phaseNote: qualified.reason }
 
   return NextResponse.json({ id: logId, newOneRepMax, recommendation })
 }
