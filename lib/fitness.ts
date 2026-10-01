@@ -1,3 +1,4 @@
+// FILE: lib/fitness.ts
 import { PhaseType, PHASE_CONFIG } from './types'
 
 // ============================================================
@@ -26,6 +27,110 @@ export function getBestOneRepMax(
     const est = estimateOneRepMax(s.weight_lbs, s.reps_completed)
     return est > best ? est : best
   }, 0)
+}
+
+// ============================================================
+// DATA SUFFICIENCY — "don't guess" rules for weight suggestions
+//
+// A suggested weight is only given when the player has proven a
+// strength level on this exact lift. The rules:
+//   1. Only completed sets with a real weight and 1–10 reps count.
+//      (The Epley formula is unreliable above 10 reps.)
+//   2. Only sets from the last 90 days count. Older numbers may no
+//      longer reflect the athlete.
+//   3. The player needs qualifying sets in at least 2 separate
+//      sessions. One day of data is never enough.
+//   4. Each session contributes its best estimated 1RM. The number
+//      used is the highest level that was matched (within 10%) in at
+//      least one OTHER session. A single big day or a typo can't set
+//      the number on its own.
+// If any rule fails, no weight is suggested and the reason is returned.
+// ============================================================
+
+export const SUGGESTION_RULES = {
+  windowDays: 90,
+  maxRepsForEstimate: 10,
+  minSessions: 2,
+  agreementPct: 0.10,
+} as const
+
+export interface SuggestionSetLog {
+  session_id: string
+  session_date: string | null          // sessions.checked_in_at
+  weight_lbs?: number | null
+  reps_completed?: number | null
+  completed?: boolean | null
+}
+
+export interface QualifiedOneRepMax {
+  qualified: boolean
+  oneRepMax: number                    // 0 when not qualified
+  sessionsCounted: number
+  reason: string                       // player-facing explanation
+}
+
+export function getQualifiedOneRepMax(
+  sets: SuggestionSetLog[],
+  now: Date = new Date()
+): QualifiedOneRepMax {
+  const cutoff = now.getTime() - SUGGESTION_RULES.windowDays * 24 * 60 * 60 * 1000
+
+  const usable = sets.filter(s =>
+    s.completed &&
+    s.weight_lbs && s.weight_lbs > 0 &&
+    s.reps_completed && s.reps_completed > 0 &&
+    s.reps_completed <= SUGGESTION_RULES.maxRepsForEstimate &&
+    s.session_date && new Date(s.session_date).getTime() >= cutoff
+  )
+
+  if (usable.length === 0) {
+    const hasHighRepOnly = sets.some(s =>
+      s.completed && s.weight_lbs && s.weight_lbs > 0 &&
+      s.reps_completed && s.reps_completed > SUGGESTION_RULES.maxRepsForEstimate
+    )
+    return {
+      qualified: false, oneRepMax: 0, sessionsCounted: 0,
+      reason: hasHighRepOnly
+        ? `Suggestions need sets of ${SUGGESTION_RULES.maxRepsForEstimate} reps or fewer. Choose your own weight for now.`
+        : 'Choose your own weight. A suggestion unlocks after 2 sessions of this lift.',
+    }
+  }
+
+  // Best estimated 1RM per session
+  const bestBySession: Record<string, number> = {}
+  for (const s of usable) {
+    const est = estimateOneRepMax(s.weight_lbs as number, s.reps_completed as number)
+    if (!bestBySession[s.session_id] || est > bestBySession[s.session_id]) {
+      bestBySession[s.session_id] = est
+    }
+  }
+  const sessionBests = Object.values(bestBySession).sort((a, b) => b - a)
+
+  if (sessionBests.length < SUGGESTION_RULES.minSessions) {
+    return {
+      qualified: false, oneRepMax: 0, sessionsCounted: sessionBests.length,
+      reason: 'Choose your own weight. One more session of this lift unlocks a suggestion.',
+    }
+  }
+
+  // Highest level that another session agrees with
+  for (let i = 0; i < sessionBests.length - 1; i++) {
+    const high = sessionBests[i]
+    const next = sessionBests[i + 1]          // closest lower value
+    if ((high - next) / high <= SUGGESTION_RULES.agreementPct) {
+      return {
+        qualified: true,
+        oneRepMax: next,                        // the level hit in both sessions
+        sessionsCounted: sessionBests.length,
+        reason: '',
+      }
+    }
+  }
+
+  return {
+    qualified: false, oneRepMax: 0, sessionsCounted: sessionBests.length,
+    reason: "Choose your own weight. Your recent sessions don't match closely enough yet to suggest one.",
+  }
 }
 
 // ============================================================
