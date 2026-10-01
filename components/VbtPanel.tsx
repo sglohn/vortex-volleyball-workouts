@@ -1,3 +1,4 @@
+// FILE: components/VbtPanel.tsx
 'use client'
 // components/VbtPanel.tsx
 // ============================================================
@@ -108,8 +109,8 @@ function LogTestModal({
       return
     }
     if (validPoints.length < 2) {
-      setError('Two data points are recommended for an accurate 1RM estimate. Add a second point or proceed with one (less accurate).')
-      // Allow saving with 1 point — just warn
+      setError('A 1RM needs at least two different loads. Add a second load, or the test will save without updating the profile.')
+      // Saving with 1 point stores the test only — no profile is created
     }
 
     setSaving(true)
