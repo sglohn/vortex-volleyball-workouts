@@ -1,4 +1,4 @@
-// app/api/coach/vbt/route.ts
+// FILE: app/api/coach/vbt/route.ts
 // ============================================================
 // VBT API — Coach endpoints
 //
@@ -14,8 +14,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import {
   fitLoadVelocityProfile,
-  singlePointEstimate,
-  DEFAULT_MVT,
+  VBT_RULES,
   type VbtDataPoint,
 } from '@/lib/vbt'
 
@@ -180,16 +179,18 @@ export async function POST(req: NextRequest) {
   let estimated_1rm: number | null = null
   let r_squared: number | null = null
   let profileData = null
+  let rejectReason = ''
 
-  if (vbtPoints.length >= 2) {
+  if (vbtPoints.length < VBT_RULES.minPoints) {
+    rejectReason = `Test saved. A 1RM needs at least ${VBT_RULES.minPoints} different loads, so the profile was not updated.`
+  } else {
     profileData = fitLoadVelocityProfile(vbtPoints, mvt)
     if (profileData) {
       estimated_1rm = profileData.estimated_1rm_lbs
       r_squared = profileData.r_squared
+    } else {
+      rejectReason = `Test saved, but the profile was not updated. The loads need at least ${VBT_RULES.minVelocitySpread} m/s difference in bar speed, a heavier load must be slower, and 3+ points must fit a straight line (R² ${VBT_RULES.minRSquared}+). Retest with a lighter and a heavier load.`
     }
-  } else if (vbtPoints.length === 1) {
-    // Single point fallback
-    estimated_1rm = singlePointEstimate(vbtPoints[0], mvt, anchor.category)
   }
 
   // 4. Upsert the profile with the new 1RM
@@ -223,8 +224,9 @@ export async function POST(req: NextRequest) {
     test,
     estimated_1rm,
     r_squared,
+    profile_updated: estimated_1rm !== null,
     message: estimated_1rm
       ? `1RM estimated at ${Math.round(estimated_1rm)} lbs`
-      : 'Test logged — add a second data point for a 1RM estimate',
+      : rejectReason,
   })
 }
