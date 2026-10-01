@@ -1,9 +1,10 @@
+// FILE: app/coach/templates/page.tsx
 'use client'
 import { useState, useEffect } from 'react'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 
-interface ExerciseLib { id: string; name: string; category?: string; default_sets: number; default_reps?: string; logs_weight: boolean }
-interface BlockExercise { exercise_id: string; custom_reps: string; custom_notes: string; exercise?: ExerciseLib }
+interface ExerciseLib { id: string; name: string; category?: string; default_sets: number; default_reps?: string; logs_weight: boolean; logs_velocity?: boolean }
+interface BlockExercise { exercise_id: string; custom_reps: string; custom_notes: string; target_velocity_min: string; target_velocity_max: string; exercise?: ExerciseLib }
 interface Block { block_label: string; sets: number; exercises: BlockExercise[] }
 interface Template { id?: string; name: string; description: string; phase_type: string; warmup_notes: string; blocks: Block[] }
 
@@ -55,7 +56,7 @@ export default function TemplatesPage() {
       if (!p) return p
       const blocks = [...p.blocks]
       const block = { ...blocks[blockIdx] }
-      block.exercises = [...block.exercises, { exercise_id: ex.id, custom_reps: ex.default_reps ?? '', custom_notes: '', exercise: ex }]
+      block.exercises = [...block.exercises, { exercise_id: ex.id, custom_reps: ex.default_reps ?? '', custom_notes: '', target_velocity_min: '', target_velocity_max: '', exercise: ex }]
       blocks[blockIdx] = block
       return { ...p, blocks }
     })
@@ -73,7 +74,7 @@ export default function TemplatesPage() {
     })
   }
 
-  function updateExercise(blockIdx: number, exIdx: number, field: 'custom_reps' | 'custom_notes', val: string) {
+  function updateExercise(blockIdx: number, exIdx: number, field: 'custom_reps' | 'custom_notes' | 'target_velocity_min' | 'target_velocity_max', val: string) {
     setEditing(p => {
       if (!p) return p
       const blocks = [...p.blocks]
@@ -88,6 +89,11 @@ export default function TemplatesPage() {
 
   async function save() {
     if (!editing?.name) return
+    const badSpeed = editing.blocks.some(b => b.exercises.some(e => {
+      const lo = parseFloat(e.target_velocity_min), hi = parseFloat(e.target_velocity_max)
+      return lo > 0 && hi > 0 && hi <= lo
+    }))
+    if (badSpeed) { setMsg('Fix the target bar speed: max must be higher than min.'); return }
     setSaving(true)
     const method = editing.id ? 'PUT' : 'POST'
     const res = await fetch('/api/coach/templates', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editing) })
@@ -189,14 +195,32 @@ export default function TemplatesPage() {
 
               {/* Block exercises */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.5rem' }}>
-                {block.exercises.map((be, ei) => (
-                  <div key={ei} style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr auto', gap: '0.5rem', alignItems: 'center' }}>
-                    <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)' }}>{be.exercise?.name ?? 'Exercise'}</div>
-                    <input className="input" placeholder="Reps" value={be.custom_reps} onChange={e => updateExercise(bi, ei, 'custom_reps', e.target.value)} style={{ fontSize: '0.8rem', padding: '0.4rem 0.5rem', textAlign: 'center' }} />
-                    <input className="input" placeholder="Custom note (optional)" value={be.custom_notes} onChange={e => updateExercise(bi, ei, 'custom_notes', e.target.value)} style={{ fontSize: '0.8rem', padding: '0.4rem 0.5rem' }} />
-                    <button onClick={() => removeExercise(bi, ei)} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+                {block.exercises.map((be, ei) => {
+                  const speedMin = parseFloat(be.target_velocity_min)
+                  const speedMax = parseFloat(be.target_velocity_max)
+                  const speedError = speedMin > 0 && speedMax > 0 && speedMax <= speedMin
+                  return (
+                  <div key={ei}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr auto', gap: '0.5rem', alignItems: 'center' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)' }}>{be.exercise?.name ?? 'Exercise'}</div>
+                      <input className="input" placeholder="Reps" value={be.custom_reps} onChange={e => updateExercise(bi, ei, 'custom_reps', e.target.value)} style={{ fontSize: '0.8rem', padding: '0.4rem 0.5rem', textAlign: 'center' }} />
+                      <input className="input" placeholder="Custom note (optional)" value={be.custom_notes} onChange={e => updateExercise(bi, ei, 'custom_notes', e.target.value)} style={{ fontSize: '0.8rem', padding: '0.4rem 0.5rem' }} />
+                      <button onClick={() => removeExercise(bi, ei)} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+                    </div>
+                    {be.exercise?.logs_velocity && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem', paddingLeft: '0.75rem', flexWrap: 'wrap' }}>
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target bar speed (m/s):</span>
+                        <input className="input" type="number" step="0.01" min="0" placeholder="Min" value={be.target_velocity_min} onChange={e => updateExercise(bi, ei, 'target_velocity_min', e.target.value)} style={{ width: 80, fontSize: '0.8rem', padding: '0.35rem 0.5rem', textAlign: 'center' }} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>to</span>
+                        <input className="input" type="number" step="0.01" min="0" placeholder="Max" value={be.target_velocity_max} onChange={e => updateExercise(bi, ei, 'target_velocity_max', e.target.value)} style={{ width: 80, fontSize: '0.8rem', padding: '0.35rem 0.5rem', textAlign: 'center' }} />
+                        <span style={{ fontSize: '0.72rem', color: speedError ? 'var(--danger)' : 'var(--text-muted)' }}>
+                          {speedError ? 'Max must be higher than min' : 'Optional. Leave blank for a normal weight suggestion.'}
+                        </span>
+                      </div>
+                    )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
 
               {/* Add exercise picker */}
@@ -253,12 +277,14 @@ export default function TemplatesPage() {
                   if (!tmpl) { alert('Could not load template — try again'); return }
                   const mapped = {
                     ...tmpl,
-                    blocks: (tmpl.blocks ?? []).map((b: { block_label: string; sets: number; exercises: Array<{ exercise_id: string; custom_reps?: string; custom_notes?: string; exercise?: ExerciseLib; exercise_library?: ExerciseLib }> }) => ({
+                    blocks: (tmpl.blocks ?? []).map((b: { block_label: string; sets: number; exercises: Array<{ exercise_id: string; custom_reps?: string; custom_notes?: string; target_velocity_min?: number | null; target_velocity_max?: number | null; exercise?: ExerciseLib; exercise_library?: ExerciseLib }> }) => ({
                       ...b,
                       exercises: (b.exercises ?? []).map(e => ({
                         exercise_id: e.exercise_id,
                         custom_reps: e.custom_reps ?? '',
                         custom_notes: e.custom_notes ?? '',
+                        target_velocity_min: e.target_velocity_min != null ? String(e.target_velocity_min) : '',
+                        target_velocity_max: e.target_velocity_max != null ? String(e.target_velocity_max) : '',
                         exercise: e.exercise_library ?? e.exercise,
                       }))
                     }))
