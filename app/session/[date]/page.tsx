@@ -1,3 +1,4 @@
+// FILE: app/session/[date]/page.tsx
 'use client'
 import { useState, useEffect, useCallback, use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -342,7 +343,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                     )}
                     {ex.recommendation && ex.recommendation.best1RM === 0 && ex.logs_weight && (
                       <div style={{ background: 'var(--yellow-mid)', border: '1px solid var(--yellow-border)', borderRadius: 8, padding: '0.4rem 0.875rem', fontSize: '0.75rem', color: 'var(--black)' }}>
-                        No history yet — log this set to start tracking your progress.
+                        {ex.recommendation.phaseNote || 'Choose your own weight for now.'}
                       </div>
                     )}
                   </div>
