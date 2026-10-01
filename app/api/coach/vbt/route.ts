@@ -1,232 +1,160 @@
 // FILE: app/api/coach/vbt/route.ts
 // ============================================================
-// VBT API — Coach endpoints
+// VBT API — Coach endpoints (exercise-specific)
 //
 // GET  /api/coach/vbt?player_id=xxx
-//      Returns all VBT profiles + test history for a player
+//      The player's VBT profiles and test history, plus every
+//      exercise that has "Log velocity" turned on (testable exercises).
 //
 // POST /api/coach/vbt
-//      Log a new VBT test session with data points,
-//      then recalculate and upsert the player's profile
+//      Log a test for one exercise and rebuild that player's
+//      profile for that exercise from the test's data points.
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import {
-  fitLoadVelocityProfile,
+  fitLoadVelocityLine,
+  oneRepMaxFromLine,
   VBT_RULES,
   type VbtDataPoint,
 } from '@/lib/vbt'
 
 // ------------------------------------------------------------
-// GET — fetch all VBT data for a player
+// GET
 // ------------------------------------------------------------
 export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url)
-  const player_id = searchParams.get('player_id')
-
-  if (!player_id) {
-    return NextResponse.json({ error: 'player_id required' }, { status: 400 })
-  }
+  const player_id = new URL(req.url).searchParams.get('player_id')
+  if (!player_id) return NextResponse.json({ error: 'player_id required' }, { status: 400 })
 
   const db = createServerClient()
 
-  // Fetch profiles (current calculated 1RMs)
   const { data: profiles, error: profileError } = await db
     .from('vbt_profiles')
-    .select(`
-      *,
-      anchor_exercise:vbt_anchor_exercises(*)
-    `)
+    .select('*, exercise:exercise_library(id, name)')
     .eq('player_id', player_id)
+    .not('exercise_id', 'is', null)
     .order('calculated_at', { ascending: false })
+  if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 })
 
-  if (profileError) {
-    return NextResponse.json({ error: profileError.message }, { status: 500 })
-  }
-
-  // Fetch full test history with data points
   const { data: tests, error: testError } = await db
     .from('vbt_tests')
-    .select(`
-      *,
-      anchor_exercise:vbt_anchor_exercises(id, name, slug, category),
-      vbt_data_points(*)
-    `)
+    .select('*, exercise:exercise_library(id, name), vbt_data_points(*)')
     .eq('player_id', player_id)
+    .not('exercise_id', 'is', null)
     .order('tested_at', { ascending: false })
+  if (testError) return NextResponse.json({ error: testError.message }, { status: 500 })
 
-  if (testError) {
-    return NextResponse.json({ error: testError.message }, { status: 500 })
-  }
+  const { data: exercises } = await db
+    .from('exercise_library')
+    .select('id, name')
+    .eq('is_active', true)
+    .eq('logs_velocity', true)
+    .order('name')
 
-  // Fetch all anchor exercises (for the UI to know what's available)
-  const { data: anchors } = await db
-    .from('vbt_anchor_exercises')
-    .select('*')
-    .order('sort_order')
-
-  return NextResponse.json({ profiles, tests, anchors })
+  return NextResponse.json({ profiles, tests, exercises: exercises ?? [] })
 }
 
 // ------------------------------------------------------------
-// POST — log a new VBT test and recalculate profile
-//
+// POST
 // Body:
 // {
 //   player_id: string
-//   anchor_exercise_id: string
-//   tested_at: string          // ISO date e.g. "2025-09-15"
-//   mvt_override?: number      // optional custom MVT
+//   exercise_id: string
+//   tested_at?: string             // "2026-10-01"
+//   mvt?: number                   // optional: speed at a true max, for a 1RM estimate
 //   notes?: string
-//   data_points: [
-//     { load_lbs: number, reps_performed: number, best_velocity_ms: number },
-//     ...
-//   ]
+//   data_points: [{ load_lbs, reps_performed?, best_velocity_ms }, ...]
 // }
 // ------------------------------------------------------------
 export async function POST(req: NextRequest) {
-  const body = await req.json()
-  const {
-    player_id,
-    anchor_exercise_id,
-    tested_at,
-    mvt_override,
-    notes,
-    data_points,
-  } = body
+  const { player_id, exercise_id, tested_at, mvt, notes, data_points } = await req.json()
 
-  // Validation
-  if (!player_id || !anchor_exercise_id) {
-    return NextResponse.json(
-      { error: 'player_id and anchor_exercise_id are required' },
-      { status: 400 }
-    )
+  if (!player_id || !exercise_id) {
+    return NextResponse.json({ error: 'player_id and exercise_id are required' }, { status: 400 })
   }
   if (!Array.isArray(data_points) || data_points.length < 1) {
-    return NextResponse.json(
-      { error: 'At least one data point is required' },
-      { status: 400 }
-    )
+    return NextResponse.json({ error: 'At least one data point is required' }, { status: 400 })
   }
 
   const db = createServerClient()
 
-  // Fetch the anchor exercise for category + default MVT
-  const { data: anchor, error: anchorError } = await db
-    .from('vbt_anchor_exercises')
-    .select('*')
-    .eq('id', anchor_exercise_id)
-    .single()
-
-  if (anchorError || !anchor) {
-    return NextResponse.json({ error: 'Anchor exercise not found' }, { status: 404 })
-  }
-
-  const mvt = mvt_override ?? anchor.mvt_default
-
-  // 1. Insert the test session
+  // 1. Save the test
   const { data: test, error: testError } = await db
     .from('vbt_tests')
     .insert({
       player_id,
-      anchor_exercise_id,
+      exercise_id,
       tested_at: tested_at ?? new Date().toISOString().slice(0, 10),
-      mvt_override: mvt_override ?? null,
+      mvt_override: mvt ?? null,
       notes: notes ?? null,
       created_by_coach: true,
     })
     .select()
     .single()
-
   if (testError || !test) {
     return NextResponse.json({ error: testError?.message ?? 'Failed to create test' }, { status: 500 })
   }
 
-  // 2. Insert the data points
-  const pointsToInsert = data_points.map((p: {
-    load_lbs: number
-    reps_performed?: number
-    best_velocity_ms: number
-    notes?: string
-  }) => ({
-    test_id: test.id,
-    load_lbs: p.load_lbs,
-    reps_performed: p.reps_performed ?? 3,
-    best_velocity_ms: p.best_velocity_ms,
-    notes: p.notes ?? null,
-  }))
-
-  const { error: pointsError } = await db
-    .from('vbt_data_points')
-    .insert(pointsToInsert)
-
+  // 2. Save the data points
+  const { error: pointsError } = await db.from('vbt_data_points').insert(
+    data_points.map((p: { load_lbs: number; reps_performed?: number; best_velocity_ms: number; notes?: string }) => ({
+      test_id: test.id,
+      load_lbs: p.load_lbs,
+      reps_performed: p.reps_performed ?? 3,
+      best_velocity_ms: p.best_velocity_ms,
+      notes: p.notes ?? null,
+    }))
+  )
   if (pointsError) {
-    // Roll back test row on failure
     await db.from('vbt_tests').delete().eq('id', test.id)
     return NextResponse.json({ error: pointsError.message }, { status: 500 })
   }
 
-  // 3. Calculate the 1RM from the new data points
-  const vbtPoints: VbtDataPoint[] = data_points.map((p: {
-    load_lbs: number
-    best_velocity_ms: number
-  }) => ({
+  // 3. Fit the line
+  const points: VbtDataPoint[] = data_points.map((p: { load_lbs: number; best_velocity_ms: number }) => ({
     load_lbs: p.load_lbs,
     best_velocity_ms: p.best_velocity_ms,
   }))
+  const line = fitLoadVelocityLine(points)
 
-  let estimated_1rm: number | null = null
-  let r_squared: number | null = null
-  let profileData = null
-  let rejectReason = ''
-
-  if (vbtPoints.length < VBT_RULES.minPoints) {
-    rejectReason = `Test saved. A 1RM needs at least ${VBT_RULES.minPoints} different loads, so the profile was not updated.`
-  } else {
-    profileData = fitLoadVelocityProfile(vbtPoints, mvt)
-    if (profileData) {
-      estimated_1rm = profileData.estimated_1rm_lbs
-      r_squared = profileData.r_squared
-    } else {
-      rejectReason = `Test saved, but the profile was not updated. The loads need at least ${VBT_RULES.minVelocitySpread} m/s difference in bar speed, a heavier load must be slower, and 3+ points must fit a straight line (R² ${VBT_RULES.minRSquared}+). Retest with a lighter and a heavier load.`
-    }
+  if (!line) {
+    const reason = points.length < VBT_RULES.minPoints
+      ? `Test saved. The profile needs at least ${VBT_RULES.minPoints} different loads, so it was not updated.`
+      : `Test saved, but the profile was not updated. The lightest and heaviest loads need at least ${VBT_RULES.minVelocitySpread} m/s difference in bar speed, heavier loads must be slower, and 3+ loads must fit a straight line (R² ${VBT_RULES.minRSquared}+). Retest with a lighter and a heavier load.`
+    return NextResponse.json({ test, profile_updated: false, message: reason })
   }
 
-  // 4. Upsert the profile with the new 1RM
-  if (estimated_1rm !== null) {
-    const sorted = [...vbtPoints].sort((a, b) => a.load_lbs - b.load_lbs)
+  const estimated_1rm = oneRepMaxFromLine(line, mvt)
 
-    const { error: profileError } = await db
-      .from('vbt_profiles')
-      .upsert({
-        player_id,
-        anchor_exercise_id,
-        estimated_1rm_lbs: estimated_1rm,
-        mvt_used: mvt,
-        velocity_at_light: sorted[0]?.best_velocity_ms ?? null,
-        velocity_at_heavy: sorted[sorted.length - 1]?.best_velocity_ms ?? null,
-        load_light_lbs: sorted[0]?.load_lbs ?? null,
-        load_heavy_lbs: sorted[sorted.length - 1]?.load_lbs ?? null,
-        r_squared: r_squared ?? null,
-        source_test_id: test.id,
-        calculated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'player_id,anchor_exercise_id',
-      })
-
-    if (profileError) {
-      return NextResponse.json({ error: profileError.message }, { status: 500 })
-    }
-  }
+  // 4. Save the profile for this player + exercise
+  const { error: profileError } = await db
+    .from('vbt_profiles')
+    .upsert({
+      player_id,
+      exercise_id,
+      anchor_exercise_id: null,
+      slope: line.slope,
+      v_intercept: line.v_intercept,
+      estimated_1rm_lbs: estimated_1rm,
+      mvt_used: mvt ?? null,
+      velocity_at_light: line.velocity_at_light,
+      velocity_at_heavy: line.velocity_at_heavy,
+      load_light_lbs: line.load_light_lbs,
+      load_heavy_lbs: line.load_heavy_lbs,
+      r_squared: line.r_squared,
+      source_test_id: test.id,
+      calculated_at: new Date().toISOString(),
+    }, { onConflict: 'player_id,exercise_id' })
+  if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 })
 
   return NextResponse.json({
     test,
+    profile_updated: true,
     estimated_1rm,
-    r_squared,
-    profile_updated: estimated_1rm !== null,
+    r_squared: line.r_squared,
     message: estimated_1rm
-      ? `1RM estimated at ${Math.round(estimated_1rm)} lbs`
-      : rejectReason,
+      ? `Profile saved. Estimated 1RM ${Math.round(estimated_1rm)} lbs.`
+      : 'Profile saved. Speed targets will work for this exercise. (No 1RM — enter a minimum velocity to get one.)',
   })
 }
