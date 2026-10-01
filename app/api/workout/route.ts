@@ -1,7 +1,7 @@
 // FILE: app/api/workout/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { getQualifiedOneRepMax, recommendWeightForPhase } from '@/lib/fitness'
+import { getPlayerRecommendation } from '@/lib/suggestions'
 import { PhaseType } from '@/lib/types'
 
 export async function GET(req: NextRequest) {
@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
       const enrichedBlocks = await Promise.all((blocks ?? []).map(async (block) => {
         const { data: blockExercises } = await db
           .from('template_block_exercises')
-          .select('id, exercise_id, custom_reps, custom_notes, sort_order')
+          .select('id, exercise_id, custom_reps, custom_notes, sort_order, target_velocity_min, target_velocity_max')
           .eq('block_id', block.id)
           .order('sort_order')
 
@@ -109,36 +109,20 @@ export async function GET(req: NextRequest) {
             .eq('session_id', sessionId)
             .eq('exercise_id', activeEx.id)
 
-          // Suggested weight — only when the player has enough proven history.
-          // See getQualifiedOneRepMax in lib/fitness.ts for the rules.
+          // Suggested weight — see lib/suggestions.ts for the rules.
+          // Uses today's session so speed-target exercises can adjust
+          // from the player's last set.
           let recommendation = null
           if (activeEx.logs_weight) {
-            const { data: playerSessions } = await db
-              .from('sessions')
-              .select('id, checked_in_at')
-              .eq('player_id', session.player_id)
-
-            const sessionDate: Record<string, string> = Object.fromEntries(
-              (playerSessions ?? []).map(s => [s.id, s.checked_in_at])
-            )
-
-            const { data: allLogs } = await db
-              .from('set_logs')
-              .select('session_id, weight_lbs, reps_completed, completed')
-              .eq('exercise_id', activeEx.id)
-              .in('session_id', playerSessions?.map(s => s.id) ?? ['none'])
-              .eq('completed', true)
-
-            const qualified = getQualifiedOneRepMax(
-              (allLogs ?? []).map(l => ({ ...l, session_date: sessionDate[l.session_id] ?? null }))
-            )
-
-            if (qualified.qualified) {
-              const rec = recommendWeightForPhase(qualified.oneRepMax, be.custom_reps ?? activeEx.default_reps ?? '8', phaseType)
-              recommendation = { ...rec, best1RM: qualified.oneRepMax }
-            } else {
-              recommendation = { weight: 0, percent: 0, label: '', phaseNote: qualified.reason, best1RM: 0 }
-            }
+            recommendation = await getPlayerRecommendation(db, {
+              playerId: session.player_id,
+              exerciseId: activeEx.id,
+              targetReps: be.custom_reps ?? activeEx.default_reps ?? '8',
+              phaseType,
+              sessionId,
+              targetVelocityMin: be.target_velocity_min,
+              targetVelocityMax: be.target_velocity_max,
+            })
           }
 
           const setLogs = Array.from({ length: block.sets }, (_, i) => {
@@ -151,6 +135,8 @@ export async function GET(req: NextRequest) {
             blockExerciseId: be.id,
             customReps: be.custom_reps,
             customNotes: be.custom_notes,
+            targetVelocityMin: be.target_velocity_min ?? null,
+            targetVelocityMax: be.target_velocity_max ?? null,
             skipped,
             isReplaced,
             originalExerciseName: isReplaced ? ex.name : undefined,
