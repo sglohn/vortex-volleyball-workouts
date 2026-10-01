@@ -1,5 +1,13 @@
+// FILE: app/api/coach/templates/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+
+// Target bar speed from the builder: blank → null, otherwise a number in m/s
+function toSpeed(v: unknown): number | null {
+  if (v === null || v === undefined || v === '') return null
+  const n = parseFloat(String(v))
+  return isFinite(n) && n > 0 ? n : null
+}
 
 export async function GET(req: NextRequest) {
   const db = createServerClient()
@@ -73,6 +81,8 @@ export async function POST(req: NextRequest) {
           exercise_id: ex.exercise_id,
           custom_reps: ex.custom_reps ?? null,
           custom_notes: ex.custom_notes ?? null,
+          target_velocity_min: toSpeed(ex.target_velocity_min),
+          target_velocity_max: toSpeed(ex.target_velocity_max),
           sort_order: ei,
         }))
         await db.from('template_block_exercises').insert(exerciseRows)
@@ -120,6 +130,8 @@ export async function PUT(req: NextRequest) {
           exercise_id: ex.exercise_id,
           custom_reps: ex.custom_reps ?? null,
           custom_notes: ex.custom_notes ?? null,
+          target_velocity_min: toSpeed(ex.target_velocity_min),
+          target_velocity_max: toSpeed(ex.target_velocity_max),
           sort_order: ei,
         }))
         await db.from('template_block_exercises').insert(exerciseRows)
