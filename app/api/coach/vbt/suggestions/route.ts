@@ -1,20 +1,21 @@
-// app/api/coach/vbt/suggestion/route.ts
+// FILE: app/api/coach/vbt/suggestions/route.ts
 // ============================================================
 // VBT SUGGESTION API
 //
-// GET /api/coach/vbt/suggestion?player_id=xxx&exercise_id=xxx&reps=5
+// GET /api/coach/vbt/suggestions?player_id=xxx&exercise_id=xxx&reps=5
 //
 // Returns the best weight suggestion for a player+exercise combo,
 // using the priority cascade:
-//   1. Direct VBT profile for this exercise's anchor
-//   2. VBT profile for a related anchor via ratio
-//   3. Epley estimate from rep history
-//   4. Nothing (prompt for first weight)
+//   1. Direct VBT profile for this exercise's anchor (fresh + good fit)
+//   2. VBT profile for a related anchor via a high-confidence ratio
+//   3. Epley estimate from history that passes getQualifiedOneRepMax
+//   4. Nothing — player chooses their own weight
 // ============================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { buildWeightSuggestion, epley1RM } from '@/lib/vbt'
+import { buildWeightSuggestion, profileNeedsRefresh } from '@/lib/vbt'
+import { getQualifiedOneRepMax } from '@/lib/fitness'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
@@ -45,11 +46,16 @@ export async function GET(req: NextRequest) {
   // --- 2. Look up player's VBT profiles ---
   const { data: profiles } = await db
     .from('vbt_profiles')
-    .select('anchor_exercise_id, estimated_1rm_lbs')
+    .select('anchor_exercise_id, estimated_1rm_lbs, r_squared, calculated_at, load_light_lbs, load_heavy_lbs')
     .eq('player_id', player_id)
 
+  // Only profiles that are recent, fit well, and came from 2+ different
+  // loads are trusted. Anything else is ignored rather than guessed from.
   const profileMap: Record<string, number> = {}
   for (const p of profiles ?? []) {
+    if (!p.estimated_1rm_lbs || p.estimated_1rm_lbs <= 0) continue
+    if (profileNeedsRefresh(p.calculated_at, p.r_squared)) continue
+    if (p.load_light_lbs === null || p.load_heavy_lbs === null || p.load_light_lbs === p.load_heavy_lbs) continue
     profileMap[p.anchor_exercise_id] = p.estimated_1rm_lbs
   }
 
@@ -83,42 +89,38 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // --- 4. Epley fallback: fetch best recent set for this exercise ---
-  let epley_weight: number | null = null
-  let epley_reps:   number | null = null
+  // --- 4. Epley fallback: only from proven history (see lib/fitness.ts) ---
+  let epley_qualified_1rm: number | null = null
+  let epley_not_qualified_reason = ''
 
   if (!vbt_1rm && !vbt_ratio_1rm) {
-    // Get the heaviest set logged in the last 90 days for this exercise
-    const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
-
     const { data: sets } = await db
       .from('set_logs')
       .select(`
+        session_id,
         weight_lbs,
         reps_completed,
-        session:sessions!inner(player_id, checked_in_at),
-        exercise_id
+        completed,
+        session:sessions!inner(player_id, checked_in_at)
       `)
       .eq('exercise_id', exercise_id)
       .eq('session.player_id', player_id)
-      .gte('session.checked_in_at', cutoff)
-      .gt('weight_lbs', 0)
-      .gt('reps_completed', 0)
-      .order('weight_lbs', { ascending: false })
-      .limit(20)
+      .eq('completed', true)
 
-    if (sets && sets.length > 0) {
-      // Find the set with the best estimated 1RM
-      let best1rm = 0
-      for (const s of sets) {
-        const est = epley1RM(s.weight_lbs, s.reps_completed)
-        if (est > best1rm) {
-          best1rm = est
-          epley_weight = s.weight_lbs
-          epley_reps   = s.reps_completed
+    const qualified = getQualifiedOneRepMax(
+      (sets ?? []).map(s => {
+        const sess = Array.isArray(s.session) ? s.session[0] : s.session
+        return {
+          session_id: s.session_id,
+          session_date: (sess as { checked_in_at?: string } | undefined)?.checked_in_at ?? null,
+          weight_lbs: s.weight_lbs,
+          reps_completed: s.reps_completed,
+          completed: s.completed,
         }
-      }
-    }
+      })
+    )
+    if (qualified.qualified) epley_qualified_1rm = qualified.oneRepMax
+    else epley_not_qualified_reason = qualified.reason
   }
 
   // --- 5. Build suggestion ---
@@ -129,8 +131,8 @@ export async function GET(req: NextRequest) {
     vbt_ratio_1rm,
     vbt_ratio,
     vbt_ratio_confidence,
-    epley_weight_lbs:     epley_weight,
-    epley_reps:           epley_reps,
+    epley_qualified_1rm,
+    epley_not_qualified_reason,
   })
 
   return NextResponse.json(suggestion)
