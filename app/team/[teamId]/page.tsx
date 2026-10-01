@@ -1,3 +1,4 @@
+// FILE: app/team/[teamId]/page.tsx
 'use client'
 import { useState, useEffect, useCallback, use } from 'react'
 import { useRouter } from 'next/navigation'
@@ -34,10 +35,13 @@ interface WorkoutExercise {
   id: string
   name: string
   logs_weight: boolean
+  logs_velocity?: boolean
   default_reps?: string
   customReps?: string
-  recommendation?: { weight: number; percent: number; label: string; best1RM: number } | null
-  setLogs: Array<{ set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean }>
+  targetVelocityMin?: number | null
+  targetVelocityMax?: number | null
+  recommendation?: { weight: number; percent: number; label: string; phaseNote?: string; best1RM: number; sourceLabel?: string; detail?: string; adjustmentMessage?: string } | null
+  setLogs: Array<{ set_number: number; weight_lbs?: number; reps_completed?: number; velocity_ms?: number; completed: boolean }>
 }
 
 interface WorkoutData {
@@ -65,6 +69,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
   const [activeSetNum, setActiveSetNum] = useState(1)
   const [weightInput, setWeightInput] = useState('')
   const [repsInput, setRepsInput] = useState('')
+  const [velocityInput, setVelocityInput] = useState('')
   const [savingSet, setSavingSet] = useState(false)
 
   // Flash message after returning from a set
@@ -193,7 +198,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
     setActiveBlockId(startBlockId)
     setActiveExIdx(startEx)
     setActiveSetNum(startSet)
-    setWeightInput('')
+    setWeightInput(''); setVelocityInput('')
     setRepsInput(startBlock?.exercises[startEx]?.customReps ?? startBlock?.exercises[startEx]?.default_reps ?? '')
     setScreen('workout')
   }
@@ -206,7 +211,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
     const ex = block.exercises[activeExIdx]
     if (!ex) { setSavingSet(false); return }
 
-    await fetch('/api/sets', {
+    const res = await fetch('/api/sets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -215,11 +220,21 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
         setNumber: activeSetNum,
         weightLbs: weightInput ? parseFloat(weightInput) : null,
         repsCompleted: repsInput ? parseInt(repsInput) : null,
+        velocityMs: velocityInput ? parseFloat(velocityInput) : null,
+        targetReps: ex.customReps ?? ex.default_reps ?? null,
+        targetVelocityMin: ex.targetVelocityMin ?? null,
+        targetVelocityMax: ex.targetVelocityMax ?? null,
         completed,
       }),
     })
 
     setSavingSet(false)
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}))
+      alert(`Set not saved: ${err.error ?? res.status}`)
+      return
+    }
 
     if (completed) {
       // Immediately return to main screen so next player can go
@@ -352,7 +367,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                   const total = b.exercises.length * b.sets
                   const isActive = b.id === activeBlockId
                   return (
-                    <button key={b.id} onClick={() => { setActiveBlockId(b.id); setActiveExIdx(0); setActiveSetNum(1); setWeightInput(''); setRepsInput(b.exercises[0]?.default_reps ?? '') }}
+                    <button key={b.id} onClick={() => { setActiveBlockId(b.id); setActiveExIdx(0); setActiveSetNum(1); setWeightInput(''); setVelocityInput(''); setRepsInput(b.exercises[0]?.default_reps ?? '') }}
                       style={{ padding: '0.4rem 0.875rem', borderRadius: 8, border: `1.5px solid ${isActive ? 'var(--volt)' : done === total ? 'rgba(74,222,128,0.5)' : 'rgba(255,255,255,0.15)'}`, background: isActive ? 'var(--volt)' : 'transparent', color: isActive ? '#0a0f0d' : done === total ? 'var(--volt)' : 'rgba(255,255,255,0.6)', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer' }}>
                       {b.block_label} {done === total && '✓'}
                     </button>
@@ -368,14 +383,27 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                     </div>
                     <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800, marginBottom: '0.35rem' }}>{ex.name}</h2>
 
-                    {ex.recommendation && ex.recommendation.best1RM > 0 && (
+                    {ex.recommendation?.adjustmentMessage && (
+                      <div style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.45rem 0.875rem', marginBottom: '0.5rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--carolina-dark)' }}>
+                        {ex.recommendation.adjustmentMessage}
+                      </div>
+                    )}
+                    {ex.recommendation && ex.recommendation.weight > 0 && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.5rem 0.875rem', marginBottom: '0.75rem' }}>
                         <div>
                           <div style={{ fontSize: '0.65rem', color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Suggested</div>
                           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: 'var(--carolina)', lineHeight: 1 }}>{ex.recommendation.weight} lbs</div>
-                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ex.recommendation.percent}% of your best</div>
+                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ex.recommendation.detail || `${ex.recommendation.percent}% of your best`}</div>
+                          {ex.recommendation.sourceLabel && (
+                            <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>{ex.recommendation.sourceLabel}</div>
+                          )}
                         </div>
                         <div style={{ flex: 1, fontSize: '0.75rem', color: 'var(--text-secondary)', lineHeight: 1.4, fontStyle: 'italic' }}>{ex.recommendation.label}</div>
+                      </div>
+                    )}
+                    {ex.recommendation && !(ex.recommendation.weight > 0) && ex.logs_weight && !ex.recommendation.adjustmentMessage && (
+                      <div style={{ background: 'var(--yellow-mid)', border: '1px solid var(--yellow-border)', borderRadius: 8, padding: '0.4rem 0.875rem', marginBottom: '0.75rem', fontSize: '0.75rem', color: 'var(--black)' }}>
+                        {ex.recommendation.phaseNote || 'Choose your own weight for now.'}
                       </div>
                     )}
                   </div>
@@ -384,13 +412,13 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                   {block.exercises.length > 1 && (
                     <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '1rem', flexWrap: 'wrap' }}>
                       {block.exercises.map((e, i) => (
-                        <button key={e.id} onClick={() => { setActiveExIdx(i); setWeightInput(''); setRepsInput(e.default_reps ?? '') }}
+                        <button key={e.id} onClick={() => { setActiveExIdx(i); setWeightInput(''); setVelocityInput(''); setRepsInput(e.default_reps ?? '') }}
                           style={{ padding: '0.3rem 0.75rem', borderRadius: 6, border: `1.5px solid ${i === activeExIdx ? 'var(--carolina)' : 'var(--gray-border)'}`, background: i === activeExIdx ? 'var(--carolina-light)' : 'var(--white)', color: i === activeExIdx ? 'var(--carolina-deep)' : 'var(--text-secondary)', fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer' }}>{e.name}</button>
                       ))}
                     </div>
                   )}
 
-                  <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.75rem', marginBottom: '1rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight && ex.logs_velocity ? '1fr 1fr 1fr' : ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.75rem', marginBottom: '1rem' }}>
                     {ex.logs_weight && (
                       <div>
                         <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Weight (lbs)</label>
@@ -403,6 +431,13 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                       <input className="input" type="number" inputMode="numeric" placeholder={ex.customReps ?? ex.default_reps ?? '—'} value={repsInput} onChange={e => setRepsInput(e.target.value)}
                         style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700 }} />
                     </div>
+                    {ex.logs_velocity && (
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Bar speed (m/s)</label>
+                        <input className="input" type="number" inputMode="decimal" step="0.01" placeholder="0.00" value={velocityInput} onChange={e => setVelocityInput(e.target.value)}
+                          style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700 }} />
+                      </div>
+                    )}
                   </div>
 
                   <button className="btn-volt" onClick={() => saveSet(true)} disabled={savingSet}
@@ -414,7 +449,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                     <div style={{ marginTop: '0.875rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                       {ex.setLogs.filter(l => l.completed).map((log, i) => (
                         <div key={i} style={{ background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 6, padding: '0.25rem 0.625rem', fontSize: '0.78rem', color: 'var(--carolina-deep)', fontWeight: 600 }}>
-                          Set {log.set_number}: {log.weight_lbs ? `${log.weight_lbs}lbs × ` : ''}{log.reps_completed}
+                          Set {log.set_number}: {log.weight_lbs ? `${log.weight_lbs}lbs × ` : ''}{log.reps_completed}{log.velocity_ms ? ` @ ${Number(log.velocity_ms).toFixed(2)} m/s` : ''}
                         </div>
                       ))}
                     </div>
