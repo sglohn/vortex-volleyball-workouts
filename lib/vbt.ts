@@ -1,12 +1,14 @@
-// lib/vbt.ts
+// FILE: lib/vbt.ts
 // ============================================================
 // VELOCITY-BASED TRAINING — CALCULATION ENGINE
 //
 // Provides:
 //   - Load-velocity profile fitting (linear regression)
-//   - 1RM estimation from velocity data
-//   - Cross-exercise weight suggestion via anchor ratios
-//   - Fallback to Epley method when no VBT data exists
+//   - 1RM estimation from velocity data (2+ loads only)
+//   - Cross-exercise weight suggestion via high-confidence anchor ratios
+//   - Fallback to Epley, only from history that passed
+//     getQualifiedOneRepMax (lib/fitness.ts)
+//   - Otherwise: no suggestion
 // ============================================================
 
 // ------------------------------------------------------------
@@ -62,6 +64,19 @@ export const DEFAULT_MVT: Record<string, number> = {
 }
 
 // ------------------------------------------------------------
+// DATA SUFFICIENCY RULES (VBT)
+// A profile is only created, and only used for suggestions, when
+// it meets all of these. Otherwise no weight is suggested.
+// ------------------------------------------------------------
+export const VBT_RULES = {
+  minPoints: 2,               // never estimate from a single load
+  minVelocitySpread: 0.25,    // m/s between lightest and heaviest load
+  minRSquared: 0.90,          // 3+ point profiles must fit this well
+  maxProfileAgeWeeks: 6,      // older profiles are not used
+  allowedRatioConfidence: ['high'] as Array<'high' | 'medium' | 'low'>,
+} as const
+
+// ------------------------------------------------------------
 // LOAD-VELOCITY LINEAR REGRESSION
 //
 // The load-velocity relationship is highly linear within the
@@ -81,7 +96,7 @@ export function fitLoadVelocityProfile(
   points: VbtDataPoint[],
   mvt: number
 ): LoadVelocityProfile | null {
-  if (points.length < 2) return null
+  if (points.length < VBT_RULES.minPoints) return null
 
   // Sort by load ascending
   const sorted = [...points].sort((a, b) => a.load_lbs - b.load_lbs)
@@ -119,6 +134,15 @@ export function fitLoadVelocityProfile(
   // Slope must be negative (velocity decreases as load increases)
   if (slope >= 0) return null
 
+  // Loads must be far enough apart to define a real line. Two loads that
+  // move at nearly the same speed give a slope that is mostly noise.
+  const velocities = sorted.map(p => p.best_velocity_ms)
+  const velocitySpread = Math.max(...velocities) - Math.min(...velocities)
+  if (velocitySpread < VBT_RULES.minVelocitySpread) return null
+
+  // With 3+ points, the points must actually fall on a line.
+  if (r_squared !== null && r_squared < VBT_RULES.minRSquared) return null
+
   // Extrapolate to 1RM: load at which velocity = MVT
   const estimated_1rm_lbs = (mvt - v_intercept) / slope
 
@@ -138,32 +162,9 @@ export function fitLoadVelocityProfile(
   }
 }
 
-/**
- * Quick single-point 1RM estimate using a two-point profile
- * where the second "point" is a theoretical zero-load intercept.
- *
- * This is less accurate than a real two-point test but gives a
- * reasonable estimate when only one data point is available.
- *
- * Uses the population-average velocity at ~0 load (~1.3 m/s for
- * lower body, ~1.1 m/s for upper body) as the anchor.
- */
-export function singlePointEstimate(
-  point: VbtDataPoint,
-  mvt: number,
-  category: string
-): number | null {
-  // Theoretical max velocity at ~0 load (unloaded bar speed)
-  const v0 = category === 'strength_upper' ? 1.1 : 1.3
-
-  const syntheticPoints: VbtDataPoint[] = [
-    { load_lbs: 0, best_velocity_ms: v0 },
-    point,
-  ]
-
-  const profile = fitLoadVelocityProfile(syntheticPoints, mvt)
-  return profile ? profile.estimated_1rm_lbs : null
-}
+// Single-point estimates were removed on purpose: they fill in the
+// missing second point with a population-average bar speed, which is
+// a guess about the athlete rather than a measurement.
 
 // ------------------------------------------------------------
 // EPLEY 1RM ESTIMATION (fallback)
@@ -249,9 +250,10 @@ export interface SuggestionInput {
   vbt_ratio?: number | null
   vbt_ratio_confidence?: 'high' | 'medium' | 'low'
 
-  // Epley fallback: best logged set for this exercise
-  epley_weight_lbs?: number | null
-  epley_reps?: number | null
+  // Epley fallback: a 1RM that already passed getQualifiedOneRepMax
+  // (lib/fitness.ts). Pass null when the player hasn't qualified.
+  epley_qualified_1rm?: number | null
+  epley_not_qualified_reason?: string
 }
 
 export function buildWeightSuggestion(input: SuggestionInput): WeightSuggestion {
@@ -274,7 +276,12 @@ export function buildWeightSuggestion(input: SuggestionInput): WeightSuggestion 
   }
 
   // ---- Priority 2: VBT via cross-exercise ratio ----
-  if (input.vbt_ratio_1rm && input.vbt_ratio_1rm > 0 && input.vbt_ratio) {
+  // Only ratios the coach has marked with an allowed confidence are used.
+  const ratioConfidence = input.vbt_ratio_confidence ?? 'medium'
+  if (
+    input.vbt_ratio_1rm && input.vbt_ratio_1rm > 0 && input.vbt_ratio &&
+    VBT_RULES.allowedRatioConfidence.includes(ratioConfidence)
+  ) {
     const derived_1rm = input.vbt_ratio_1rm * input.vbt_ratio
     const { weight_lbs, zone_pct } = suggestWeightFromOneRM(
       derived_1rm, target_reps, is_explosive
@@ -286,16 +293,13 @@ export function buildWeightSuggestion(input: SuggestionInput): WeightSuggestion 
       one_rm_lbs: Math.round(derived_1rm),
       source: 'vbt_ratio',
       source_label: 'Estimated from your velocity profile (related lift)',
-      confidence: input.vbt_ratio_confidence ?? 'medium',
+      confidence: ratioConfidence,
     }
   }
 
-  // ---- Priority 3: Epley from rep history ----
-  if (
-    input.epley_weight_lbs && input.epley_weight_lbs > 0 &&
-    input.epley_reps     && input.epley_reps     > 0
-  ) {
-    const one_rm = epley1RM(input.epley_weight_lbs, input.epley_reps)
+  // ---- Priority 3: Epley from proven rep history ----
+  if (input.epley_qualified_1rm && input.epley_qualified_1rm > 0) {
+    const one_rm = input.epley_qualified_1rm
     const { weight_lbs, zone_pct } = suggestWeightFromOneRM(
       one_rm, target_reps, is_explosive
     )
@@ -317,7 +321,7 @@ export function buildWeightSuggestion(input: SuggestionInput): WeightSuggestion 
     training_zone_pct: 0,
     one_rm_lbs: null,
     source: 'none',
-    source_label: 'No data yet — enter a starting weight',
+    source_label: input.epley_not_qualified_reason || 'Not enough data yet. Choose your own weight.',
     confidence: 'low',
   }
 }
@@ -333,13 +337,13 @@ export function profileQualityLabel(
   n_points: number,
   r_squared: number | null
 ): string {
-  if (n_points < 2) return 'Needs more data'
+  if (n_points < VBT_RULES.minPoints) return 'Needs more data'
   if (n_points === 2) return 'Good (2-point profile)'
   if (r_squared === null) return 'Good'
   if (r_squared >= 0.98) return 'Excellent'
   if (r_squared >= 0.92) return 'Good'
-  if (r_squared >= 0.80) return 'Fair — consider retesting'
-  return 'Poor fit — retest recommended'
+  if (r_squared >= VBT_RULES.minRSquared) return 'Fair'
+  return 'Poor fit — not used, retest needed'
 }
 
 /**
@@ -349,11 +353,11 @@ export function profileQualityLabel(
 export function profileNeedsRefresh(
   calculated_at: string,
   r_squared: number | null,
-  weeks_threshold = 6
+  weeks_threshold: number = VBT_RULES.maxProfileAgeWeeks
 ): boolean {
   const age_ms   = Date.now() - new Date(calculated_at).getTime()
   const age_weeks = age_ms / (1000 * 60 * 60 * 24 * 7)
   if (age_weeks > weeks_threshold) return true
-  if (r_squared !== null && r_squared < 0.80) return true
+  if (r_squared !== null && r_squared < VBT_RULES.minRSquared) return true
   return false
 }
