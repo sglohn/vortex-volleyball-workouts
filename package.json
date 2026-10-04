@@ -14,7 +14,9 @@
     "react-dom": "19.1.0",
     "@supabase/supabase-js": "^2.47.0",
     "recharts": "^2.13.3",
-    "clsx": "^2.1.1"
+    "clsx": "^2.1.1",
+    "@sparticuz/chromium": "153.0.0",
+    "puppeteer-core": "25.11.0"
   },
   "devDependencies": {
     "@types/node": "^22",
@@ -26,5 +28,8 @@
     "tailwindcss": "^3.4.17",
     "autoprefixer": "^10.0.1",
     "postcss": "^8"
+  },
+  "engines": {
+    "node": "22.x"
   }
 }
