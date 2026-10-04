@@ -1,5 +1,12 @@
+// FILE: app/api/checkin/route.ts
+//
+// Player check-in (phone, kiosk and session tablet).
+// This version uses the club's local date (lib/clubTime.ts) when resuming
+// today's session and finding today's workout, instead of Vercel's UTC date.
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { clubDateString, clubDayBounds } from '@/lib/clubTime'
 
 export async function POST(req: NextRequest) {
   const { playerId, pin } = await req.json()
@@ -27,15 +34,17 @@ export async function POST(req: NextRequest) {
     .single()
 
   const teamId = playerTeam?.team_id ?? null
-  const today = new Date().toISOString().split('T')[0]
+  // Club-local date — Vercel's clock is UTC, which rolls to tomorrow at 8 PM Eastern
+  const today = clubDateString()
+  const { start: dayStart, end: dayEnd } = clubDayBounds(today)
 
   // Check for today's existing incomplete session — resume it
   const { data: existingSession } = await db
     .from('sessions')
     .select('id, team_id')
     .eq('player_id', playerId)
-    .gte('checked_in_at', `${today}T00:00:00.000Z`)
-    .lte('checked_in_at', `${today}T23:59:59.999Z`)
+    .gte('checked_in_at', dayStart)
+    .lt('checked_in_at', dayEnd)
     .is('completed_at', null)
     .order('checked_in_at', { ascending: false })
     .limit(1)
