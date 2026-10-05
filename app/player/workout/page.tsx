@@ -207,7 +207,7 @@ export default function PlayerWorkoutPage() {
     const totalSets = workout?.blocks.reduce((sum, b) => sum + b.exercises.filter(e => !e.skipped).length * b.sets, 0) ?? 0
     const totalWeight = workout?.blocks.reduce((sum, b) =>
       sum + b.exercises.reduce((s, e) =>
-        s + e.setLogs.filter(l => l.completed && l.weight_lbs).reduce((ws, l) => ws + setPoundsMoved(l.weight_lbs, l.reps_completed, e.equipment), 0), 0), 0) ?? 0
+        s + e.setLogs.filter(l => l.completed).reduce((ws, l) => ws + setPoundsMoved(l.weight_lbs, l.reps_completed, e.equipment), 0), 0), 0) ?? 0
     const durationMin = Math.round((Date.now() - new Date(session.checkedInAt ?? Date.now()).getTime()) / 60000)
     const completionData = { name: session.playerName, totalWeight: Math.round(totalWeight), durationMin, completedSets, totalSets }
 
