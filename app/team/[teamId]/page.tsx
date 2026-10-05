@@ -2,6 +2,7 @@
 'use client'
 import { useState, useEffect, useCallback, use } from 'react'
 import { useRouter } from 'next/navigation'
+import { loadLabel, plateText, weightInputLabel, type Equipment } from '@/lib/loads'
 
 interface RosterPlayer {
   id: string
@@ -36,6 +37,7 @@ interface WorkoutExercise {
   name: string
   logs_weight: boolean
   logs_velocity?: boolean
+  equipment?: Equipment | null
   default_reps?: string
   customReps?: string
   targetVelocityMin?: number | null
@@ -392,7 +394,10 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.5rem 0.875rem', marginBottom: '0.75rem' }}>
                         <div>
                           <div style={{ fontSize: '0.65rem', color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>Suggested</div>
-                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: 'var(--carolina)', lineHeight: 1 }}>{ex.recommendation.weight} lbs</div>
+                          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: 'var(--carolina)', lineHeight: 1 }}>{loadLabel(ex.recommendation.weight, ex.equipment)}</div>
+                          {plateText(ex.recommendation.weight, ex.equipment) && (
+                            <div style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{plateText(ex.recommendation.weight, ex.equipment)}</div>
+                          )}
                           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{ex.recommendation.detail || `${ex.recommendation.percent}% of your best`}</div>
                           {ex.recommendation.sourceLabel && (
                             <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>{ex.recommendation.sourceLabel}</div>
@@ -421,7 +426,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                   <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight && ex.logs_velocity ? '1fr 1fr 1fr' : ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.75rem', marginBottom: '1rem' }}>
                     {ex.logs_weight && (
                       <div>
-                        <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Weight (lbs)</label>
+                        <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>{weightInputLabel(ex.equipment)}</label>
                         <input className="input" type="number" inputMode="decimal" placeholder="0" value={weightInput} onChange={e => setWeightInput(e.target.value)}
                           style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700 }} autoFocus />
                       </div>
@@ -449,7 +454,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                     <div style={{ marginTop: '0.875rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                       {ex.setLogs.filter(l => l.completed).map((log, i) => (
                         <div key={i} style={{ background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 6, padding: '0.25rem 0.625rem', fontSize: '0.78rem', color: 'var(--carolina-deep)', fontWeight: 600 }}>
-                          Set {log.set_number}: {log.weight_lbs ? `${log.weight_lbs}lbs × ` : ''}{log.reps_completed}{log.velocity_ms ? ` @ ${Number(log.velocity_ms).toFixed(2)} m/s` : ''}
+                          Set {log.set_number}: {log.weight_lbs ? `${loadLabel(log.weight_lbs, ex.equipment)} × ` : ''}{log.reps_completed}{log.velocity_ms ? ` @ ${Number(log.velocity_ms).toFixed(2)} m/s` : ''}
                         </div>
                       ))}
                     </div>
