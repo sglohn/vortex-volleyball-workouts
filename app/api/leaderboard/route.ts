@@ -11,13 +11,17 @@
 //   ?gender=F | M      girls or boys only (derived from team name, like elsewhere)
 //   ?limit=10          rows per board (1–15, default 10)
 //   ?key=...           required only if LEADERBOARD_DISPLAY_KEY is set in Vercel
+//
+// Pounds moved counts both dumbbells on 2-dumbbell exercises (lib/loads.ts).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { setLoad, setPoundsMoved } from '@/lib/loads'
+import { equipmentByExercise } from '@/lib/equipmentLookup'
 import { CLUB_TIMEZONE, clubDateString, clubDayBounds } from '@/lib/clubTime'
 
 type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
-type LogRow = { session_id: string; weight_lbs: number | null; reps_completed: number | null; completed: boolean }
+type LogRow = { session_id: string; exercise_id: string; weight_lbs: number | null; reps_completed: number | null; completed: boolean }
 type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
 type TeamRow = { id: string; name: string; age_group?: string | null; color?: string | null }
 
@@ -122,9 +126,12 @@ export async function GET(req: NextRequest) {
   const { data: logsRaw } = sessionIds.length
     ? await db
         .from('set_logs')
-        .select('session_id, weight_lbs, reps_completed, completed')
+        .select('session_id, exercise_id, weight_lbs, reps_completed, completed')
         .in('session_id', sessionIds)
     : { data: [] }
+
+  // 2-dumbbell exercises count both dumbbells toward pounds moved
+  const equipment = await equipmentByExercise(db, ((logsRaw ?? []) as LogRow[]).map(l => l.exercise_id))
 
   const logsBySession: Record<string, LogRow[]> = {}
   for (const log of (logsRaw ?? []) as LogRow[]) {
@@ -172,9 +179,9 @@ export async function GET(req: NextRequest) {
     const playerSessions = sessionsByPlayer[p.id] ?? []
     const completedLogs = playerSessions.flatMap(s => logsBySession[s.id] ?? []).filter(l => l.completed)
 
-    const totalWeight = completedLogs.reduce((sum, l) => sum + (l.weight_lbs ?? 0) * (l.reps_completed ?? 1), 0)
+    const totalWeight = completedLogs.reduce((sum, l) => sum + setPoundsMoved(l.weight_lbs, l.reps_completed, equipment[l.exercise_id]), 0)
     const weighted = completedLogs.filter(l => (l.weight_lbs ?? 0) > 0)
-    const avg = weighted.length ? weighted.reduce((sum, l) => sum + (l.weight_lbs ?? 0), 0) / weighted.length : 0
+    const avg = weighted.length ? weighted.reduce((sum, l) => sum + setLoad(l.weight_lbs, equipment[l.exercise_id]), 0) / weighted.length : 0
 
     const templateId = templateByTeam[p.team.id]
     const totalSets = templateId ? (totalSetsByTemplate[templateId] ?? 0) : 0
