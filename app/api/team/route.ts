@@ -151,7 +151,6 @@ export async function GET(req: NextRequest) {
 
     const completedSets = completedLogs.length
     const totalWeight = completedLogs
-      .filter(l => l.weight_lbs)
       .reduce((sum, l) => sum + setPoundsMoved(l.weight_lbs, l.reps_completed, equipment[l.exercise_id]), 0)
 
     const firstCheckIn = playerSessions[0].checked_in_at
