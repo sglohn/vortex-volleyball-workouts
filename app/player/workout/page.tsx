@@ -3,12 +3,14 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
+import { loadLabel, plateText, setPoundsMoved, weightInputLabel, type Equipment } from '@/lib/loads'
 
 interface SetLog { id?: string; set_number: number; reps_completed?: number; weight_lbs?: number; velocity_ms?: number; completed: boolean }
 interface Exercise {
   id: string; name: string; default_reps?: string; coaching_notes?: string
   demo_url?: string; demo_image_url?: string; start_image_url?: string; end_image_url?: string
   logs_weight: boolean; logs_velocity: boolean
+  equipment?: Equipment | null
   customReps?: string; customNotes?: string; skipped: boolean
   targetVelocityMin?: number | null; targetVelocityMax?: number | null
   setLogs: SetLog[]
@@ -18,27 +20,6 @@ interface Block { id: string; block_label: string; sets: number; exercises: Exer
 interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[] }
 
 type WorkoutView = 'blocks' | 'active_block'
-
-// Round to nearest available gym weight
-// DBs: 5-50 by 5s. Barbells: 45lb bar + 2.5/5/10/25/35/45 plates
-function roundToGymWeight(lbs: number, isBarbell: boolean): number {
-  if (lbs <= 0) return 0
-  if (!isBarbell) {
-    // Dumbbell: 5-50 by 5s
-    const clamped = Math.max(5, Math.min(50, lbs))
-    return Math.round(clamped / 5) * 5
-  }
-  // Barbell: 45lb bar, plates in 5lb increments (round to nearest 5 above bar)
-  if (lbs <= 45) return 45
-  const aboveBar = lbs - 45
-  const roundedPlates = Math.round(aboveBar / 5) * 5
-  return 45 + roundedPlates
-}
-
-function isLikelyBarbell(exerciseName: string): boolean {
-  const barbellKeywords = ['squat','deadlift','rdl','bench','row','clean','press','snatch','jerk','hip thrust','barbell']
-  return barbellKeywords.some(k => exerciseName.toLowerCase().includes(k))
-}
 
 export default function PlayerWorkoutPage() {
   const router = useRouter()
@@ -226,7 +207,7 @@ export default function PlayerWorkoutPage() {
     const totalSets = workout?.blocks.reduce((sum, b) => sum + b.exercises.filter(e => !e.skipped).length * b.sets, 0) ?? 0
     const totalWeight = workout?.blocks.reduce((sum, b) =>
       sum + b.exercises.reduce((s, e) =>
-        s + e.setLogs.filter(l => l.completed && l.weight_lbs).reduce((ws, l) => ws + (l.weight_lbs! * (l.reps_completed ?? 1)), 0), 0), 0) ?? 0
+        s + e.setLogs.filter(l => l.completed && l.weight_lbs).reduce((ws, l) => ws + setPoundsMoved(l.weight_lbs, l.reps_completed, e.equipment), 0), 0), 0) ?? 0
     const durationMin = Math.round((Date.now() - new Date(session.checkedInAt ?? Date.now()).getTime()) / 60000)
     const completionData = { name: session.playerName, totalWeight: Math.round(totalWeight), durationMin, completedSets, totalSets }
 
@@ -397,7 +378,10 @@ export default function PlayerWorkoutPage() {
             </div>
             {ex.recommendation && ex.recommendation.weight > 0 && (
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '1.25rem' }}>{ex.recommendation.weight} lbs</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '1.25rem' }}>{loadLabel(ex.recommendation.weight, ex.equipment)}</div>
+                {plateText(ex.recommendation.weight, ex.equipment) && (
+                  <div style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', fontWeight: 600 }}>{plateText(ex.recommendation.weight, ex.equipment)}</div>
+                )}
                 <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{ex.recommendation.detail || `${ex.recommendation.percent}% · suggested`}</div>
                 {ex.recommendation.sourceLabel && (
                   <div style={{ fontSize: '0.62rem', color: 'var(--text-muted)', fontStyle: 'italic' }}>{ex.recommendation.sourceLabel}</div>
@@ -461,17 +445,16 @@ export default function PlayerWorkoutPage() {
           {/* Input fields */}
           <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight && ex.logs_velocity ? '1fr 1fr 1fr' : ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.625rem', marginBottom: ex.logs_weight ? '0.5rem' : '1rem' }}>
             {ex.logs_weight && (() => {
-              const isBarbell = isLikelyBarbell(ex.name)
-              const rawSuggestion = ex.recommendation && ex.recommendation.weight > 0 ? ex.recommendation.weight : null
-              const gymWeight = rawSuggestion ? roundToGymWeight(rawSuggestion, isBarbell) : null
+              // Suggestions arrive already rounded to a loadable weight (lib/loads.ts)
+              const gymWeight = ex.recommendation && ex.recommendation.weight > 0 ? ex.recommendation.weight : null
               return (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                    <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Weight (lbs)</label>
+                    <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{weightInputLabel(ex.equipment)}</label>
                     {gymWeight && !weightInput && (
                       <button onClick={() => setWeightInput(String(gymWeight))}
                         style={{ fontSize: '0.7rem', color: 'var(--carolina)', fontWeight: 700, background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 5, padding: '0.15rem 0.5rem', cursor: 'pointer' }}>
-                        Use {gymWeight} lbs →
+                        Use {loadLabel(gymWeight, ex.equipment)} →
                       </button>
                     )}
                   </div>
@@ -500,7 +483,7 @@ export default function PlayerWorkoutPage() {
           {ex.logs_weight && lastWeight && currentSet > 1 && !weightInput && (
             <button onClick={() => { setWeightInput(String(lastWeight)); if (lastReps) setRepsInput(lastReps) }}
               style={{ width: '100%', padding: '0.5rem', marginBottom: '0.5rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
-              Same as last set ({lastWeight} lbs{lastReps ? ` × ${lastReps}` : ''}) →
+              Same as last set ({loadLabel(lastWeight, ex.equipment)}{lastReps ? ` × ${lastReps}` : ''}) →
             </button>
           )}
 
@@ -526,7 +509,7 @@ export default function PlayerWorkoutPage() {
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {ex.setLogs.filter(l => l.completed).map((log, i) => (
                 <div key={i} style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 6, padding: '0.3rem 0.625rem', fontSize: '0.8rem', color: 'var(--volt)' }}>
-                  Set {log.set_number}: {log.weight_lbs ? `${log.weight_lbs} lbs × ` : ''}{log.reps_completed} reps
+                  Set {log.set_number}: {log.weight_lbs ? `${loadLabel(log.weight_lbs, ex.equipment)} × ` : ''}{log.reps_completed} reps
                 </div>
               ))}
             </div>
