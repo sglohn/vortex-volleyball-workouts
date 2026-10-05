@@ -11,9 +11,12 @@
 //    used for logging. Previously one session was picked at random.
 //  - Supabase joins are guarded with Array.isArray.
 //  - Template set totals are counted in one query instead of one per block.
+//  - Pounds moved counts both dumbbells on 2-dumbbell exercises (lib/loads.ts).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { setLoad, setPoundsMoved } from '@/lib/loads'
+import { equipmentByExercise } from '@/lib/equipmentLookup'
 import { clubDateString, clubDayBounds, clubDateOf, isDateString } from '@/lib/clubTime'
 
 type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
@@ -92,6 +95,8 @@ export async function GET(req: NextRequest) {
     : { data: [] }
 
   const logs = (logsRaw ?? []) as LogRow[]
+  // 2-dumbbell exercises count both dumbbells toward pounds moved
+  const equipment = await equipmentByExercise(db, logs.map(l => l.exercise_id))
   const logsBySession: Record<string, LogRow[]> = Object.fromEntries(sessionIds.map(id => [id, [] as LogRow[]]))
   for (const log of logs) {
     const arr = logsBySession[log.session_id]
@@ -154,7 +159,7 @@ export async function GET(req: NextRequest) {
       .filter(l => l.completed)
 
     const totalWeight = completedLogs.reduce((sum, l) =>
-      sum + (l.weight_lbs ?? 0) * (l.reps_completed ?? 1), 0)
+      sum + setPoundsMoved(l.weight_lbs, l.reps_completed, equipment[l.exercise_id]), 0)
     const setsCompleted = completedLogs.length
 
     const templateId = templateByTeam[p.teamId]?.templateId
@@ -163,7 +168,7 @@ export async function GET(req: NextRequest) {
 
     const weightedSets = completedLogs.filter(l => l.weight_lbs && l.weight_lbs > 0)
     const avgWeightPerSet = weightedSets.length > 0
-      ? Math.round(weightedSets.reduce((sum, l) => sum + (l.weight_lbs ?? 0), 0) / weightedSets.length)
+      ? Math.round(weightedSets.reduce((sum, l) => sum + setLoad(l.weight_lbs, equipment[l.exercise_id]), 0) / weightedSets.length)
       : 0
 
     return {
