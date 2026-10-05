@@ -1,6 +1,7 @@
 // FILE: app/coach/exercises/page.tsx
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import { EQUIPMENT_OPTIONS, asEquipment } from '@/lib/loads'
 
 const CATEGORIES = [
   'Upper - Push',
@@ -36,11 +37,17 @@ interface Exercise {
   end_image_position?: string
   logs_weight: boolean
   logs_velocity: boolean
+  equipment?: string | null
 }
 
 const BLANK = {
   name: '', category: 'Upper - Push', default_sets: 3, default_reps: '8',
   coaching_notes: '', demo_url: '', logs_weight: true, logs_velocity: false,
+  equipment: '' as string,   // '' = not set yet
+}
+
+function equipmentLabel(value: string | null | undefined): string {
+  return EQUIPMENT_OPTIONS.find(o => o.value === value)?.label ?? ''
 }
 
 export default function ExercisesPage() {
@@ -54,6 +61,7 @@ export default function ExercisesPage() {
   const [saving, setSaving]       = useState(false)
   const [msg, setMsg]             = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<Exercise | null>(null)
+  const [onlyMissingEquipment, setOnlyMissingEquipment] = useState(false)
 
   // Photo upload state
   const [startImg, setStartImg]           = useState<File | null>(null)
@@ -87,6 +95,7 @@ export default function ExercisesPage() {
       default_sets: ex.default_sets ?? 3, default_reps: ex.default_reps ?? '8',
       coaching_notes: ex.coaching_notes ?? '', demo_url: ex.demo_url ?? '',
       logs_weight: ex.logs_weight, logs_velocity: ex.logs_velocity,
+      equipment: ex.equipment ?? '',
     })
     setStartImg(null); setEndImg(null)
     setStartPreview(ex.start_image_url ?? ex.demo_image_url ?? '')
@@ -203,6 +212,7 @@ export default function ExercisesPage() {
 
   const filtered = exercises.filter(e => {
     const matchCat    = filterCat === 'all' || e.category === filterCat
+    if (onlyMissingEquipment && !(e.logs_weight && !e.equipment)) return false
     const matchSearch = e.name.toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
   })
@@ -261,6 +271,22 @@ export default function ExercisesPage() {
     )
   }
 
+  // Quick equipment setting straight from the list
+  async function setEquipmentInline(ex: Exercise, value: string) {
+    const equipment = asEquipment(value)
+    setExercises(prev => prev.map(e => e.id === ex.id ? { ...e, equipment } : e))
+    const res = await fetch('/api/coach/exercises', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: ex.id, equipment }),
+    })
+    if (!res.ok) {
+      setExercises(prev => prev.map(e => e.id === ex.id ? { ...e, equipment: ex.equipment ?? null } : e))
+      alert('Could not save equipment for ' + ex.name)
+    }
+  }
+
+  const missingEquipmentCount = exercises.filter(e => e.logs_weight && !e.equipment).length
+
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading…</div>
 
   return (
@@ -269,6 +295,12 @@ export default function ExercisesPage() {
         <div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800 }}>Exercise Library</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{exercises.length} exercises</p>
+          {missingEquipmentCount > 0 && (
+            <button onClick={() => setOnlyMissingEquipment(v => !v)}
+              style={{ marginTop: '0.375rem', padding: '0.25rem 0.75rem', borderRadius: 20, border: '1.5px solid #f59e0b', background: onlyMissingEquipment ? '#f59e0b' : 'rgba(245,158,11,0.1)', color: onlyMissingEquipment ? '#111827' : '#b45309', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
+              {onlyMissingEquipment ? 'Showing' : 'Show'} {missingEquipmentCount} weighted exercise{missingEquipmentCount === 1 ? '' : 's'} with no equipment set
+            </button>
+          )}
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
           <button className="btn-volt" onClick={openAdd} style={{ padding: '0.625rem 1.25rem' }}>+ Add Exercise</button>
@@ -314,9 +346,16 @@ export default function ExercisesPage() {
                   <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.2rem' }}>{ex.name}</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.375rem' }}>
                     {ex.default_sets}×{ex.default_reps}
-                    {ex.logs_weight && ' · weight'}
+                    {ex.logs_weight && (ex.equipment ? ` · ${equipmentLabel(ex.equipment)}` : ' · weight')}
                     {ex.logs_velocity && <span style={{ color: 'var(--carolina)', fontWeight: 600 }}> · ⚡ bar speed</span>}
                   </div>
+                  {ex.logs_weight && !ex.equipment && (
+                    <select value="" onChange={e => setEquipmentInline(ex, e.target.value)}
+                      style={{ marginBottom: '0.375rem', fontSize: '0.75rem', padding: '0.2rem 0.4rem', borderRadius: 6, border: '1.5px solid #f59e0b', background: 'rgba(245,158,11,0.08)', color: '#b45309', fontWeight: 600, cursor: 'pointer' }}>
+                      <option value="" disabled>Set equipment…</option>
+                      {EQUIPMENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  )}
                   {ex.coaching_notes && <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontStyle: 'italic', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{ex.coaching_notes}</div>}
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <button onClick={() => openEdit(ex)} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, padding: 0 }}>Edit</button>
@@ -384,6 +423,18 @@ export default function ExercisesPage() {
                   Log velocity
                 </label>
               </div>
+              {form.logs_weight && (
+                <div style={{ gridColumn: '1/-1' }}>
+                  <Label>Equipment</Label>
+                  <select className="input" value={form.equipment} onChange={e => setForm(p => ({ ...p, equipment: e.target.value }))}>
+                    <option value="">Not set</option>
+                    {EQUIPMENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}: {o.hint}</option>)}
+                  </select>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.35rem 0 0' }}>
+                    Dumbbell exercises: players enter the number on the dumbbell and suggestions are given the same way (5–50 by 5s). With 2 dumbbells, pounds moved count both. Barbell suggestions are always loadable on a 45 lb bar.
+                  </p>
+                </div>
+              )}
               {form.logs_velocity && (
                 <p style={{ gridColumn: '1/-1', fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
                   Players can enter bar speed for this exercise, you can run VBT tests on it from a player&apos;s page, and you can set a target speed when adding it to a workout.
