@@ -12,14 +12,17 @@
 //    and the open session is the one used for logging.
 //  - Set logs are fetched in one query instead of one per player.
 //  - Supabase joins are guarded with Array.isArray.
+//  - Pounds moved counts both dumbbells on 2-dumbbell exercises (lib/loads.ts).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { setLoad, setPoundsMoved } from '@/lib/loads'
+import { equipmentByExercise } from '@/lib/equipmentLookup'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
 
 type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
 type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
-type LogRow = { session_id: string; completed: boolean; weight_lbs: number | null; reps_completed: number | null }
+type LogRow = { session_id: string; exercise_id: string; completed: boolean; weight_lbs: number | null; reps_completed: number | null }
 
 function one<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null
@@ -115,9 +118,12 @@ export async function GET(req: NextRequest) {
   const { data: logsRaw } = sessionIds.length
     ? await db
         .from('set_logs')
-        .select('session_id, completed, weight_lbs, reps_completed')
+        .select('session_id, exercise_id, completed, weight_lbs, reps_completed')
         .in('session_id', sessionIds)
     : { data: [] }
+
+  // 2-dumbbell exercises count both dumbbells toward pounds moved
+  const equipment = await equipmentByExercise(db, ((logsRaw ?? []) as LogRow[]).map(l => l.exercise_id))
 
   const logsBySession: Record<string, LogRow[]> = {}
   for (const log of (logsRaw ?? []) as LogRow[]) {
@@ -146,7 +152,7 @@ export async function GET(req: NextRequest) {
     const completedSets = completedLogs.length
     const totalWeight = completedLogs
       .filter(l => l.weight_lbs)
-      .reduce((sum, l) => sum + (l.weight_lbs ?? 0) * (l.reps_completed ?? 1), 0)
+      .reduce((sum, l) => sum + setPoundsMoved(l.weight_lbs, l.reps_completed, equipment[l.exercise_id]), 0)
 
     const firstCheckIn = playerSessions[0].checked_in_at
     const durationMin = !openSession && latestSession.completed_at
