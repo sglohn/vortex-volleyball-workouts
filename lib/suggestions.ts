@@ -30,7 +30,13 @@
 //    Every suggestion is rounded to a weight that can actually be loaded
 //    for the exercise's equipment: barbell = 45 bar + plate pairs (5 lb
 //    steps, never under 45); dumbbells = 5–50 by 5s, given per dumbbell
-//    (the number on the dumbbell, which is also what players enter).
+//    (the number on the dumbbell, which is also what players enter);
+//    landmine = plates on the end in 2.5 lb steps.
+//
+// LANDMINE / VIKING PRESS
+//    Players enter only the plates. The math adds the bar's felt weight
+//    (LANDMINE_BAR_LBS) so the 1RM and % work on the real load, then the
+//    suggestion is handed back as plates to load.
 // ============================================================
 
 import { createServerClient } from '@/lib/supabase'
@@ -40,7 +46,7 @@ import {
   nextSetAdjustment, type StoredProfile,
 } from '@/lib/vbt'
 import { PhaseType } from '@/lib/types'
-import { asEquipment, roundToLoadable, type Equipment } from '@/lib/loads'
+import { asEquipment, entryOffset, roundToLoadable, type Equipment } from '@/lib/loads'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -94,7 +100,8 @@ async function getProfile(db: Db, playerId: string, exerciseId: string): Promise
 export async function getSetsOneRepMax(
   db: Db,
   playerId: string,
-  exerciseId: string
+  exerciseId: string,
+  offset = 0,   // added to every entered weight (landmine bar)
 ): Promise<{ oneRepMax: number | null; reason: string }> {
   const { data: playerSessions } = await db
     .from('sessions')
@@ -113,7 +120,11 @@ export async function getSetsOneRepMax(
     .eq('completed', true)
 
   const q = getQualifiedOneRepMax(
-    (logs ?? []).map(l => ({ ...l, session_date: sessionDate[l.session_id] ?? null }))
+    (logs ?? []).map(l => ({
+      ...l,
+      weight_lbs: offset && l.weight_lbs != null ? Number(l.weight_lbs) + offset : l.weight_lbs,
+      session_date: sessionDate[l.session_id] ?? null,
+    }))
   )
   return { oneRepMax: q.qualified ? q.oneRepMax : null, reason: q.reason }
 }
@@ -169,12 +180,18 @@ export async function getPlayerRecommendation(
   db: Db,
   opts: Parameters<typeof computeRecommendation>[1]
 ): Promise<PlayerRecommendation> {
-  const [rec, equipment] = await Promise.all([
-    computeRecommendation(db, opts),
-    getEquipment(db, opts.exerciseId),
-  ])
+  const equipment = await getEquipment(db, opts.exerciseId)
+  const rec = await computeRecommendation(db, { ...opts, offset: entryOffset(equipment) })
+
+  // Landmine: a %-of-best suggestion at or under the bar's own weight
+  // still gets the lightest plate rather than disappearing.
+  const isPercentSuggestion = rec.source === 'sets' || rec.source === 'vbt' || rec.source === 'vbt_and_sets'
+  const weight = equipment === 'landmine' && isPercentSuggestion && rec.weight <= 0
+    ? roundToLoadable(0.01, equipment)
+    : roundToLoadable(rec.weight, equipment)
+
   // Always hand players a weight they can actually load
-  return { ...rec, weight: roundToLoadable(rec.weight, equipment) }
+  return { ...rec, weight }
 }
 
 async function computeRecommendation(
@@ -187,8 +204,10 @@ async function computeRecommendation(
     sessionId?: string | null
     targetVelocityMin?: number | null
     targetVelocityMax?: number | null
+    offset?: number   // landmine bar weight; see lib/loads.ts
   }
 ): Promise<PlayerRecommendation> {
+  const offset = opts.offset ?? 0
   const vMin = opts.targetVelocityMin ? Number(opts.targetVelocityMin) : null
   const vMax = opts.targetVelocityMax ? Number(opts.targetVelocityMax) : null
   const hasSpeedTarget = !!(vMin || vMax)
@@ -196,10 +215,10 @@ async function computeRecommendation(
 
   const [profile, setsResult] = await Promise.all([
     getProfile(db, opts.playerId, opts.exerciseId),
-    getSetsOneRepMax(db, opts.playerId, opts.exerciseId),
+    getSetsOneRepMax(db, opts.playerId, opts.exerciseId, offset),
   ])
   const trusted = isProfileTrusted(profile)
-  const vbt1RM = trusted && profile?.estimated_1rm_lbs ? Number(profile.estimated_1rm_lbs) : null
+  const vbt1RM = trusted && profile?.estimated_1rm_lbs ? Number(profile.estimated_1rm_lbs) + offset : null
   const sets1RM = setsResult.oneRepMax
 
   const base = {
@@ -277,6 +296,7 @@ async function computeRecommendation(
   return {
     ...base,
     ...rec,
+    weight: rec.weight - offset,   // landmine: back to plates to load
     best1RM: combined.oneRepMax,
     source: combined.source,
     sourceLabel,
