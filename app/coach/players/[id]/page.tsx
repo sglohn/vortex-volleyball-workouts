@@ -2,6 +2,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
+import Link from 'next/link'
+import { clubDateOf } from '@/lib/clubTime'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { inchesToFeetInches } from '@/lib/fitness'
 import FeetInchesInput from '@/components/FeetInchesInput'
@@ -298,9 +300,11 @@ export default function CoachPlayerDetailPage() {
           ? <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No sessions yet.</p>
           : <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
               {sessions.map((s: Record<string, unknown>) => (
-                <div key={s.id as string} style={{ padding: '0.4rem 0.875rem', borderRadius: 6, background: s.completed_at ? 'rgba(74,222,128,0.1)' : 'var(--court-raised)', border: `1px solid ${s.completed_at ? 'var(--volt)' : 'var(--court-border)'}`, fontSize: '0.8rem', color: s.completed_at ? 'var(--volt)' : 'var(--text-secondary)' }}>
+                <Link key={s.id as string} href={`/coach/logs?date=${clubDateOf(s.checked_in_at as string)}&session=${s.id as string}`}
+                  title="See and fix this workout's sets"
+                  style={{ padding: '0.4rem 0.875rem', borderRadius: 6, background: s.completed_at ? 'rgba(74,222,128,0.1)' : 'var(--court-raised)', border: `1px solid ${s.completed_at ? 'var(--volt)' : 'var(--court-border)'}`, fontSize: '0.8rem', color: s.completed_at ? 'var(--volt)' : 'var(--text-secondary)', textDecoration: 'none' }}>
                   {new Date(s.checked_in_at as string).toLocaleDateString()}
-                </div>
+                </Link>
               ))}
             </div>
         }
