@@ -1,5 +1,7 @@
+// FILE: app/api/coach/session-detail/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { asEquipment, setPoundsMoved, type Equipment } from '@/lib/loads'
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')
@@ -41,26 +43,26 @@ export async function GET(req: NextRequest) {
   // Look up exercise names separately — try exercise_library first, fall back to exercises
   const exerciseIds = [...new Set(logs.map(l => l.exercise_id))]
   const [{ data: libExercises }, { data: legacyExercises }] = await Promise.all([
-    db.from('exercise_library').select('id, name, category, logs_weight').in('id', exerciseIds),
+    db.from('exercise_library').select('id, name, category, logs_weight, equipment').in('id', exerciseIds),
     db.from('exercises').select('id, name, logs_weight').in('id', exerciseIds),
   ])
 
-  const exMap = Object.fromEntries([
-    ...(legacyExercises ?? []).map(e => [e.id, { name: e.name, category: 'Other', logsWeight: e.logs_weight ?? false }]),
-    ...(libExercises ?? []).map(e => [e.id, { name: e.name, category: e.category ?? '', logsWeight: e.logs_weight ?? false }]),
+  const exMap: Record<string, { name: string; category: string; logsWeight: boolean; equipment: Equipment | null }> = Object.fromEntries([
+    ...(legacyExercises ?? []).map(e => [e.id, { name: e.name, category: 'Other', logsWeight: e.logs_weight ?? false, equipment: null }]),
+    ...(libExercises ?? []).map(e => [e.id, { name: e.name, category: e.category ?? '', logsWeight: e.logs_weight ?? false, equipment: asEquipment(e.equipment) }]),
   ])
 
   // Group logs by exercise in order first seen
   const exerciseOrder: string[] = []
   const byExercise: Record<string, {
-    exerciseId: string; name: string; category: string; logsWeight: boolean
+    exerciseId: string; name: string; category: string; logsWeight: boolean; equipment: Equipment | null
     firstLoggedAt: string
     sets: Array<{ setNumber: number; weightLbs: number | null; repsCompleted: number | null; completed: boolean; loggedAt: string }>
   }> = {}
 
   for (const log of logs) {
     const exId = log.exercise_id
-    const exInfo = exMap[exId] ?? { name: 'Unknown Exercise', category: '', logsWeight: false }
+    const exInfo = exMap[exId] ?? { name: 'Unknown Exercise', category: '', logsWeight: false, equipment: null }
     if (!byExercise[exId]) {
       exerciseOrder.push(exId)
       byExercise[exId] = { exerciseId: exId, ...exInfo, firstLoggedAt: log.logged_at, sets: [] }
@@ -76,7 +78,8 @@ export async function GET(req: NextRequest) {
 
   const exercises = exerciseOrder.map(id => byExercise[id])
   const completedLogs = logs.filter(l => l.completed)
-  const totalWeightMoved = completedLogs.reduce((sum, l) => sum + (l.weight_lbs ?? 0) * (l.reps_completed ?? 1), 0)
+  // 2-dumbbell exercises count both dumbbells (lib/loads.ts)
+  const totalWeightMoved = completedLogs.reduce((sum, l) => sum + setPoundsMoved(l.weight_lbs, l.reps_completed, exMap[l.exercise_id]?.equipment), 0)
 
   const checkedInAt = session.checked_in_at ? new Date(session.checked_in_at) : null
   const completedAt = session.completed_at ? new Date(session.completed_at) : null
