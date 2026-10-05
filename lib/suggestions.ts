@@ -25,6 +25,12 @@
 //      Sets — Epley from history passing getQualifiedOneRepMax
 //    Both within 15% → average.  >15% apart → lower one.
 //    One only → that one.  Neither → no suggestion.
+//
+// 3. LOADABLE WEIGHT (lib/loads.ts)
+//    Every suggestion is rounded to a weight that can actually be loaded
+//    for the exercise's equipment: barbell = 45 bar + plate pairs (5 lb
+//    steps, never under 45); dumbbells = 5–50 by 5s, given per dumbbell
+//    (the number on the dumbbell, which is also what players enter).
 // ============================================================
 
 import { createServerClient } from '@/lib/supabase'
@@ -34,6 +40,7 @@ import {
   nextSetAdjustment, type StoredProfile,
 } from '@/lib/vbt'
 import { PhaseType } from '@/lib/types'
+import { asEquipment, roundToLoadable, type Equipment } from '@/lib/loads'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -69,6 +76,11 @@ export interface PlayerRecommendation {
 // ------------------------------------------------------------
 // Data loaders
 // ------------------------------------------------------------
+async function getEquipment(db: Db, exerciseId: string): Promise<Equipment | null> {
+  const { data } = await db.from('exercise_library').select('equipment').eq('id', exerciseId).maybeSingle()
+  return asEquipment((data as { equipment?: unknown } | null)?.equipment)
+}
+
 async function getProfile(db: Db, playerId: string, exerciseId: string): Promise<StoredProfile | null> {
   const { data } = await db
     .from('vbt_profiles')
@@ -154,6 +166,18 @@ function fmtRange(min: number | null, max: number | null): string {
 // Main entry point
 // ------------------------------------------------------------
 export async function getPlayerRecommendation(
+  db: Db,
+  opts: Parameters<typeof computeRecommendation>[1]
+): Promise<PlayerRecommendation> {
+  const [rec, equipment] = await Promise.all([
+    computeRecommendation(db, opts),
+    getEquipment(db, opts.exerciseId),
+  ])
+  // Always hand players a weight they can actually load
+  return { ...rec, weight: roundToLoadable(rec.weight, equipment) }
+}
+
+async function computeRecommendation(
   db: Db,
   opts: {
     playerId: string
