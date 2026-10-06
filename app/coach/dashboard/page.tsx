@@ -1,4 +1,5 @@
 'use client'
+// app/coach/dashboard/page.tsx
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
@@ -252,7 +253,7 @@ export default function CoachDashboardPage() {
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 500, fontSize: '0.85rem', color: 'var(--text-primary)' }}>{r.playerName}</div>
-                        <div style={{ fontSize: '0.72rem', color: '#f87171' }}>{r.bodyPart} · {r.reportType === 'major_injury' ? 'Injury' : 'Pain'}{r.painLevel ? ` · ${r.painLevel}/10` : ''}</div>
+                        <div style={{ fontSize: '0.72rem', color: '#f87171' }}>{r.bodyPart} · {r.reportType === 'major_injury' ? 'Injury' : r.reportType === 'soreness' ? 'Sore' : 'Pain'}{r.painLevel ? ` · ${r.painLevel}/10` : ''}</div>
                       </div>
                       <span className="tag tag-danger" style={{ fontSize: '0.65rem' }}>Review</span>
                     </div>
