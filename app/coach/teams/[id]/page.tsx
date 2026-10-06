@@ -345,7 +345,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem' }}>
                         <span style={{ fontWeight: 700, color: r.report_type === 'major_injury' ? 'var(--danger)' : 'var(--warning)', fontSize: '0.9rem' }}>{r.body_part}</span>
-                        <span className={`tag ${r.report_type === 'major_injury' ? 'tag-danger' : 'tag-warn'}`} style={{ fontSize: '0.65rem' }}>{r.report_type === 'major_injury' ? 'Injury' : 'Pain'}</span>
+                        <span className={`tag ${r.report_type === 'major_injury' ? 'tag-danger' : 'tag-warn'}`} style={{ fontSize: '0.65rem' }}>{r.report_type === 'major_injury' ? 'Injury' : r.report_type === 'soreness' ? 'Sore' : 'Pain'}</span>
                         {!r.confirmed_by_coach && <span className="tag tag-muted" style={{ fontSize: '0.65rem' }}>Needs review</span>}
                       </div>
                       {r.pain_level && <div style={{ fontSize: '0.78rem', color: painLevelColor(r.pain_level) }}>{r.pain_level}/10 — {painLevelLabel(r.pain_level)}</div>}
