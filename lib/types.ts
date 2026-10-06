@@ -1,3 +1,4 @@
+// lib/types.ts
 // ============================================================
 // VORTEX STRENGTH & CONDITIONING — V2 TYPES
 // ============================================================
@@ -145,11 +146,13 @@ export interface PlayerExerciseSkip {
 export interface HealthReport {
   id: string
   player_id: string
-  report_type: 'major_injury' | 'nagging_pain'
+  report_type: 'major_injury' | 'nagging_pain' | 'soreness'
   body_part: string
   description?: string
   pain_level?: number
   reported_at: string
+  last_reported_at?: string
+  report_count?: number
   reported_by: string
   confirmed_by_coach: boolean
   coach_notes?: string
