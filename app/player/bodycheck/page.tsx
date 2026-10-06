@@ -1,4 +1,5 @@
 'use client'
+// app/player/bodycheck/page.tsx
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -98,28 +99,32 @@ export default function BodyCheckPage() {
     })
   }
 
-  async function submit() {
+  // One request with the whole body map. Every sore/injured area — or a "sore"/"hurts"
+  // answer with no area tapped — becomes a report on the coach Health Board.
+  async function submit(opts?: { status?: QuickStatus; skipRegions?: boolean }) {
+    if (submitting) return
     setSubmitting(true)
     const s = localStorage.getItem('vx_session')
     if (!s) { router.push('/'); return }
     const { sessionId, playerId } = JSON.parse(s)
 
-    // If "good" and no regions flagged, just proceed
-    if (quickStatus === 'good' && Object.keys(regions).length === 0) {
+    const status = opts?.status ?? quickStatus
+    const sendRegions = opts?.skipRegions ? {} : regions
+
+    // "I'm Good" with nothing flagged — nothing to report
+    if (status === 'good' && Object.keys(sendRegions).length === 0) {
       router.push('/player/workout')
       return
     }
 
-    // Save any flagged regions
-    const flags = Object.entries(regions)
-    if (flags.length > 0) {
-      for (const [region, status] of flags) {
-        await fetch('/api/player/bodycheck', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId, playerId, region, status, reportType: status === 'injured' ? 'major_injury' : 'minor_pain' }),
-        })
-      }
+    try {
+      await fetch('/api/player/bodycheck', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId, playerId, quickStatus: status, regions: sendRegions }),
+      })
+    } catch {
+      // Don't block the workout if the network hiccups
     }
     router.push('/player/workout')
   }
@@ -137,7 +142,7 @@ export default function BodyCheckPage() {
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginBottom: '2rem' }}>How are you feeling today?</p>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <button onClick={() => { setQuickStatus('good'); setTimeout(() => submit(), 100) }}
+          <button onClick={() => { setQuickStatus('good'); submit({ status: 'good' }) }}
             style={{ padding: '1.25rem', borderRadius: 14, border: '2px solid rgba(22,163,74,0.3)', background: 'rgba(22,163,74,0.08)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', textAlign: 'left', transition: 'all 0.15s' }}
             onMouseEnter={e => e.currentTarget.style.borderColor = 'var(--success)'}
             onMouseLeave={e => e.currentTarget.style.borderColor = 'rgba(22,163,74,0.3)'}>
@@ -234,11 +239,11 @@ export default function BodyCheckPage() {
       </div>
 
       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
-        <button onClick={() => router.push('/player/workout')}
+        <button onClick={() => submit({ skipRegions: true })} disabled={submitting}
           style={{ flex: 1, padding: '0.875rem', borderRadius: 10, border: '1.5px solid var(--gray-border)', background: 'var(--white)', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
           Skip
         </button>
-        <button onClick={submit} disabled={submitting}
+        <button onClick={() => submit()} disabled={submitting}
           className="btn-volt" style={{ flex: 2, padding: '0.875rem', fontSize: '1rem' }}>
           {submitting ? 'Saving…' : flagCount > 0 ? `Report ${flagCount} area${flagCount > 1 ? 's' : ''} & Continue` : 'Continue'}
         </button>
