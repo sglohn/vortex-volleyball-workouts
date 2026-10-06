@@ -1,3 +1,4 @@
+// app/api/coach/health/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 
@@ -17,10 +18,12 @@ export async function GET(req: NextRequest) {
   }
 
   if (mode === 'trends') {
-    // Return all resolved + active for trend analysis
+    // Return all resolved + active for trend analysis.
+    // Everyday soreness is left out so it doesn't drown out real injury trends.
     let query = db
       .from('health_reports')
       .select('id, body_part, report_type, injury_type, severity, status, reported_at, resolved_at, player_id')
+      .neq('report_type', 'soreness')
       .order('reported_at', { ascending: true })
     if (playerIds) query = query.in('player_id', playerIds)
     const { data: all } = await query
@@ -78,11 +81,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ resolved: resolved ?? [] })
   }
 
-  // Default: active + unconfirmed
+  // Default: active + unconfirmed — most recently reported first
+  // (a repeat report bumps last_reported_at, so it rises back to the top)
   let query = db
     .from('health_reports')
     .select('*, players!inner(id, name, jersey_number)')
     .in('status', ['active', 'monitoring'])
+    .order('last_reported_at', { ascending: false, nullsFirst: false })
     .order('reported_at', { ascending: false })
   if (playerIds?.length) query = query.in('player_id', playerIds)
 
@@ -118,6 +123,8 @@ export async function POST(req: NextRequest) {
       coach_notes: coachNotes ?? null,
       expected_return: expectedReturn ?? null,
       status: 'active',
+      last_reported_at: new Date().toISOString(),
+      report_count: 1,
     })
     .select()
     .single()
