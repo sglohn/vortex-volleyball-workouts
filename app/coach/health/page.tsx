@@ -1,17 +1,22 @@
 'use client'
+// app/coach/health/page.tsx
 import { useState, useEffect } from 'react'
 import { painLevelColor, painLevelLabel } from '@/lib/fitness'
+
+type ReportType = 'major_injury' | 'nagging_pain' | 'soreness'
 
 interface HealthReport {
   id: string
   player_id: string
-  report_type: 'major_injury' | 'nagging_pain'
+  report_type: ReportType
   body_part: string
   injury_type?: string
   severity?: 'mild' | 'moderate' | 'severe'
   description?: string
   pain_level?: number
   reported_at: string
+  last_reported_at?: string
+  report_count?: number
   reported_by: string
   confirmed_by_coach: boolean
   coach_notes?: string
@@ -51,12 +56,16 @@ const SEVERITY_LEVELS = [
   { value: 'severe',   label: 'Severe',   color: '#f87171', desc: 'Cannot participate' },
 ]
 
+const TYPE_LABELS: Record<string, string> = { major_injury: 'Injury', nagging_pain: 'Nagging Pain', soreness: 'Soreness' }
+const TYPE_COLORS: Record<string, string> = { major_injury: '#f87171', nagging_pain: '#f97316', soreness: '#facc15' }
+function typeTagClass(t: string) { return t === 'major_injury' ? 'tag-danger' : 'tag-warn' }
+
 const STATUS_LABELS: Record<string, string> = { active: 'Active', monitoring: 'Monitoring', resolved: 'Resolved' }
 const STATUS_COLORS: Record<string, string> = { active: '#f87171', monitoring: '#facc15', resolved: '#4ade80' }
 
 const BLANK_FORM = {
   playerId: '', bodyPart: '', side: '', injuryType: '', severity: '',
-  reportType: 'major_injury' as 'major_injury' | 'nagging_pain',
+  reportType: 'major_injury' as ReportType,
   description: '', painLevel: '', expectedReturn: '', coachNotes: '',
 }
 
@@ -173,9 +182,14 @@ export default function CoachHealthPage() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.25rem', flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600, fontSize: '0.95rem' }}>{r.players?.name ?? 'Unknown'}</span>
             {r.players?.jersey_number && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>#{r.players.jersey_number}</span>}
-            <span className={`tag ${r.report_type === 'major_injury' ? 'tag-danger' : 'tag-warn'}`}>
-              {r.report_type === 'major_injury' ? 'Injury' : 'Pain'}
+            <span className={`tag ${typeTagClass(r.report_type)}`}>
+              {TYPE_LABELS[r.report_type] ?? r.report_type}
             </span>
+            {(r.report_count ?? 1) > 1 && (
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#facc15', border: '1px solid rgba(250,204,21,0.4)', borderRadius: 4, padding: '0.1rem 0.4rem' }}>
+                Reported {r.report_count}×
+              </span>
+            )}
             {pending && <span className="tag tag-danger">Needs review</span>}
             {r.reported_by === 'coach' && <span style={{ fontSize: '0.68rem', background: 'rgba(86,160,211,0.15)', color: 'var(--carolina)', border: '1px solid rgba(86,160,211,0.3)', borderRadius: 4, padding: '0.1rem 0.4rem', fontWeight: 600 }}>Coach logged</span>}
           </div>
@@ -202,7 +216,9 @@ export default function CoachHealthPage() {
             {STATUS_LABELS[r.status] ?? r.status}
           </div>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-            {new Date(r.reported_at).toLocaleDateString()}
+            {(r.report_count ?? 1) > 1 && r.last_reported_at
+              ? `Last: ${new Date(r.last_reported_at).toLocaleDateString()}`
+              : new Date(r.reported_at).toLocaleDateString()}
           </div>
           {r.expected_return && (
             <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
@@ -247,7 +263,7 @@ export default function CoachHealthPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.75rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '0.25rem' }}>Health Board</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Track player injuries, monitor recovery, and identify trends</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Every player report — soreness, pain, or injury — shows up here for review</p>
         </div>
         <button className="btn-volt" onClick={() => setShowNewModal(true)} style={{ padding: '0.625rem 1.25rem', flexShrink: 0 }}>
           + Log Injury
@@ -379,10 +395,13 @@ export default function CoachHealthPage() {
                 <p style={{ color: '#f87171', fontSize: '0.85rem' }}>
                   {selected.body_part}
                   {selected.injury_type ? ` · ${selected.injury_type}` : ''}
-                  {' · '}{selected.report_type === 'major_injury' ? 'Injury' : 'Nagging Pain'}
+                  {' · '}{TYPE_LABELS[selected.report_type] ?? selected.report_type}
                 </p>
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
                   Reported {new Date(selected.reported_at).toLocaleDateString()} by {selected.reported_by}
+                  {(selected.report_count ?? 1) > 1 && selected.last_reported_at && (
+                    <span> · reported {selected.report_count}×, last {new Date(selected.last_reported_at).toLocaleDateString()}</span>
+                  )}
                   {selected.severity && <span> · <strong style={{ color: SEVERITY_LEVELS.find(s => s.value === selected.severity)?.color }}>{selected.severity}</strong></span>}
                 </p>
               </div>
@@ -513,9 +532,9 @@ export default function CoachHealthPage() {
               <div>
                 <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem', fontWeight: 600 }}>Report Type</label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  {[['major_injury', 'Injury'], ['nagging_pain', 'Nagging Pain']].map(([v, l]) => (
-                    <button key={v} onClick={() => setNewForm(f => ({ ...f, reportType: v as 'major_injury' | 'nagging_pain' }))}
-                      style={{ flex: 1, padding: '0.5rem', borderRadius: 8, border: `2px solid ${newForm.reportType === v ? (v === 'major_injury' ? '#f87171' : '#facc15') : 'var(--court-border)'}`, background: newForm.reportType === v ? (v === 'major_injury' ? 'rgba(248,113,113,0.1)' : 'rgba(250,204,21,0.1)') : 'transparent', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: newForm.reportType === v ? (v === 'major_injury' ? '#f87171' : '#facc15') : 'var(--text-muted)' }}>
+                  {(['major_injury', 'nagging_pain', 'soreness'] as ReportType[]).map(v => [v, TYPE_LABELS[v]] as const).map(([v, l]) => (
+                    <button key={v} onClick={() => setNewForm(f => ({ ...f, reportType: v }))}
+                      style={{ flex: 1, padding: '0.5rem', borderRadius: 8, border: `2px solid ${newForm.reportType === v ? TYPE_COLORS[v] : 'var(--court-border)'}`, background: newForm.reportType === v ? `${TYPE_COLORS[v]}1a` : 'transparent', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, color: newForm.reportType === v ? TYPE_COLORS[v] : 'var(--text-muted)' }}>
                       {l}
                     </button>
                   ))}
