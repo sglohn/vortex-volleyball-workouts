@@ -1,4 +1,5 @@
 'use client'
+// app/player/health/page.tsx
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 
@@ -146,7 +147,7 @@ export default function PlayerHealthPage() {
                   <div>
                     <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.2rem' }}>{r.body_part}</div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      {r.report_type === 'major_injury' ? 'Injury' : 'Nagging pain'}
+                      {r.report_type === 'major_injury' ? 'Injury' : r.report_type === 'soreness' ? 'Soreness' : 'Nagging pain'}
                       {r.pain_level ? ` · ${r.pain_level}/10` : ''}
                       {' · '}{new Date(r.reported_at).toLocaleDateString()}
                     </div>
