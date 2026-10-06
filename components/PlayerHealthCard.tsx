@@ -149,7 +149,8 @@ const STATUS_CONFIG: Record<PlayerStatus, { label: string; color: string; bg: st
 }
 
 function deriveStatus(reports: HealthReport[]): PlayerStatus {
-  const current = reports.filter(r => r.status === 'active' || r.status === 'monitoring')
+  // Everyday soreness is shown on the map but doesn't change a player's participation status
+  const current = reports.filter(r => (r.status === 'active' || r.status === 'monitoring') && r.report_type !== 'soreness')
   if (!current.length) return 'active'
   const hasSevere   = current.some(r => r.severity === 'severe')
   const hasModerate = current.some(r => r.severity === 'moderate' || r.report_type === 'major_injury')
