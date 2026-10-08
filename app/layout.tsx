@@ -24,7 +24,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en">
       <head>
-        {css && <style dangerouslySetInnerHTML={{ __html: css }} />}
+        {/* Must be null (not an empty string) when there's no brand CSS:
+            a stray text node in <head> breaks hydration and drops the
+            stylesheet on the Vortex site. */}
+        {css ? <style dangerouslySetInnerHTML={{ __html: css }} /> : null}
       </head>
       <body>{children}</body>
     </html>
