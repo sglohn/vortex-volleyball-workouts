@@ -138,14 +138,18 @@ export default function ExercisesPage() {
     })
   }
 
+  // Photos go through the server (app/api/coach/exercise-media/route.ts),
+  // so the browser never needs a Supabase key.
   async function uploadPhoto(file: File, exerciseId: string, which: 'start' | 'end'): Promise<string | null> {
-    const path = `exercises/${exerciseId}/${which}_${Date.now()}.jpg`
-    const { supabase } = await import('@/lib/supabase')
     const blob = await resizeImage(file, 1800)
-    const { error } = await supabase.storage.from('exercise-media').upload(path, blob, { upsert: true, contentType: 'image/jpeg' })
-    if (error) { console.error('Upload error:', error); return null }
-    const { data } = supabase.storage.from('exercise-media').getPublicUrl(path)
-    return data.publicUrl
+    const body = new FormData()
+    body.append('file', blob, `${which}.jpg`)
+    body.append('exerciseId', exerciseId)
+    body.append('which', which)
+    const res = await fetch('/api/coach/exercise-media', { method: 'POST', body })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.url) { console.error('Upload error:', data.error ?? res.status); return null }
+    return data.url as string
   }
 
   async function save() {
@@ -167,14 +171,14 @@ export default function ExercisesPage() {
         setUploadingStart(true)
         const url = await uploadPhoto(startImg, exerciseId, 'start')
         if (url) startUrl = url
-        else alert('Start photo upload failed — check Supabase storage bucket permissions')
+        else alert('Start photo upload failed. Try again, or use a smaller photo.')
         setUploadingStart(false)
       }
       if (endImg && exerciseId) {
         setUploadingEnd(true)
         const url = await uploadPhoto(endImg, exerciseId, 'end')
         if (url) endUrl = url
-        else alert('End photo upload failed — check Supabase storage bucket permissions')
+        else alert('End photo upload failed. Try again, or use a smaller photo.')
         setUploadingEnd(false)
       }
 
