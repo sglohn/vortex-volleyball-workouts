@@ -26,15 +26,32 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
 
+  // Quick check from the browser flag, then confirm with the server.
+  // The server cookie is what actually lets coach pages load data; if it
+  // has expired (14 days) or the coach PIN was changed, go back to sign-in.
   useEffect(() => {
     if (typeof window === 'undefined') return
-    if (path !== '/coach' && !localStorage.getItem('vx_coach')) router.push('/coach')
+    if (path === '/coach') return
+    if (!localStorage.getItem('vx_coach')) { router.push('/coach'); return }
+    // The TV display only reads public data, and the Roku snapshot's hidden
+    // browser has no coach cookie, so skip the server check there.
+    if (path === '/coach/display') return
+    fetch('/api/coach')
+      .then(r => r.json())
+      .then(d => {
+        if (!d?.signedIn) { localStorage.removeItem('vx_coach'); router.push('/coach') }
+      })
+      .catch(() => { /* offline — leave the page alone */ })
   }, [path, router])
 
   // Close menu on navigation
   useEffect(() => { setMenuOpen(false) }, [path])
 
-  function signOut() { localStorage.removeItem('vx_coach'); router.push('/') }
+  async function signOut() {
+    localStorage.removeItem('vx_coach')
+    await fetch('/api/coach', { method: 'DELETE' }).catch(() => {})
+    router.push('/')
+  }
 
   if (path === '/coach') return <>{children}</>
   if (path === '/coach/display') return <>{children}</>

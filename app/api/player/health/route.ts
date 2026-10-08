@@ -1,5 +1,17 @@
+// FILE: app/api/player/health/route.ts
+//
+// Health / soreness reports.
+//   Players:  GET ?playerId=  (their own reports)   POST (new report)
+//   Coach only (needs the coach cookie, see lib/coachAuth.ts):
+//             GET ?all=1   PATCH   DELETE
+//   A report only counts as coach-entered (reportedBy: 'coach') when the
+//   coach cookie is present.
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { isCoachRequest } from '@/lib/coachAuth'
+
+const coachOnly = () => NextResponse.json({ error: 'Coach sign-in required' }, { status: 401 })
 
 export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
@@ -7,6 +19,7 @@ export async function GET(req: NextRequest) {
   const db = createServerClient()
 
   if (all) {
+    if (!(await isCoachRequest(req))) return coachOnly()
     const { data: reports } = await db
       .from('health_reports')
       .select('*, players(name, jersey_number)')
@@ -34,6 +47,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  const byCoach = reportedBy === 'coach' && (await isCoachRequest(req))
+
   const db = createServerClient()
   const { data: report, error } = await db
     .from('health_reports')
@@ -45,8 +60,8 @@ export async function POST(req: NextRequest) {
       severity: severity ?? null,
       description: description ?? null,
       pain_level: painLevel ?? null,
-      reported_by: reportedBy ?? 'player',
-      confirmed_by_coach: reportedBy === 'coach',
+      reported_by: byCoach ? 'coach' : 'player',
+      confirmed_by_coach: byCoach,
       coach_notes: coachNotes ?? null,
       expected_return: expectedReturn ?? null,
       status: 'active',
@@ -59,6 +74,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
+  if (!(await isCoachRequest(req))) return coachOnly()
   const { id, confirmedByCoach, coachNotes, status, expectedReturn, severity, injuryType } = await req.json()
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
@@ -87,6 +103,7 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!(await isCoachRequest(req))) return coachOnly()
   const { id } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 

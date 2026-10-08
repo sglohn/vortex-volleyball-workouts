@@ -1,3 +1,9 @@
+// FILE: app/page.tsx
+//
+// Player sign-in: team → name → 4-digit PIN.
+// Roster comes from /api/player/roster (names only). It used to come from
+// /api/coach/team-detail, which is now coach-only.
+
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -45,7 +51,7 @@ export default function HomePage() {
     setStep('player')
     setLoadingTeamPlayers(true)
     // Fetch players for this specific team
-    const res = await fetch(`/api/coach/team-detail?teamId=${team.id}`)
+    const res = await fetch(`/api/player/roster?teamId=${encodeURIComponent(team.id)}`)
     const d = await res.json()
     setTeamPlayers((d.roster ?? []).map((p: { id: string; name: string; jerseyNumber?: string }) => ({
       id: p.id, name: p.name, jersey_number: p.jerseyNumber, teamId: team.id,

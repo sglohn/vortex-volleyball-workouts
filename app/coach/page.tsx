@@ -1,3 +1,8 @@
+// FILE: app/coach/page.tsx
+//
+// Coach sign-in. The server sets the coach cookie (app/api/coach/route.ts).
+// Shows the server's message, so lockouts read "Too many wrong PINs…".
+
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -28,7 +33,8 @@ export default function CoachLoginPage() {
       localStorage.setItem('vx_coach', 'true')
       router.push('/coach/dashboard')
     } else {
-      setError('Wrong PIN')
+      const data = await res.json().catch(() => ({}))
+      setError(data?.error || 'Wrong PIN')
       setPin('')
       setLoading(false)
     }
