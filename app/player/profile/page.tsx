@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { inchesToFeetInches, calcVertical } from '@/lib/fitness'
 import MeasurementHistoryModal from '@/components/MeasurementHistoryModal'
+import { playerFetch } from '@/lib/playerPass'
 
 interface Measurement {
   id: string; measured_at: string
@@ -46,7 +47,7 @@ export default function PlayerProfilePage() {
     const s = JSON.parse(stored)
     setPlayerName(s.playerName)
     setPlayerId(s.playerId)
-    fetch(`/api/player/measurements?playerId=${s.playerId}`)
+    playerFetch(`/api/player/measurements?playerId=${s.playerId}`)
       .then(r => r.json())
       .then(d => { setMeasurements(d.measurements ?? []); setLoading(false) })
       .catch(() => setLoading(false))

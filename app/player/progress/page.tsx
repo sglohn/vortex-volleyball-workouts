@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { playerFetch } from '@/lib/playerPass'
 
 interface ExerciseProgress {
   exerciseId: string; exerciseName: string
@@ -27,7 +28,7 @@ export default function PlayerProgressPage() {
     const stored = localStorage.getItem('vx_session')
     if (!stored) { router.push('/'); return }
     const s = JSON.parse(stored)
-    fetch(`/api/player/progress?playerId=${s.playerId}`)
+    playerFetch(`/api/player/progress?playerId=${s.playerId}`)
       .then(r => r.json())
       .then(d => {
         setExerciseProgress(d.exerciseProgress ?? [])

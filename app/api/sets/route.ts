@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getPlayerRecommendation } from '@/lib/suggestions'
 import { PhaseType } from '@/lib/types'
+import { canAccessSession, signInAgain } from '@/lib/playerAuth'
 
 export async function POST(req: NextRequest) {
   const {
@@ -21,6 +22,7 @@ export async function POST(req: NextRequest) {
   if (!sessionId || !exerciseId || !setNumber) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+  if (!(await canAccessSession(req, sessionId))) return signInAgain()
 
   const db = createServerClient()
 
@@ -113,6 +115,7 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')
   if (!sessionId) return NextResponse.json({ logs: [] })
+  if (!(await canAccessSession(req, sessionId))) return signInAgain()
   const db = createServerClient()
   const { data: logs } = await db
     .from('set_logs')

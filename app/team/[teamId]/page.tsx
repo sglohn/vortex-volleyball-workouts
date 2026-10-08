@@ -1,10 +1,11 @@
 // FILE: app/team/[teamId]/page.tsx
 'use client'
-import { useState, useEffect, useCallback, use } from 'react'
+import { useState, useEffect, useCallback, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadLabel, plateText, weightInputLabel, type Equipment } from '@/lib/loads'
 import BrandMark from '@/components/BrandMark'
 import { BRAND } from '@/lib/brand'
+import { withPass } from '@/lib/playerPass'
 
 interface RosterPlayer {
   id: string
@@ -79,6 +80,11 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
   // Flash message after returning from a set
   const [flashName, setFlashName] = useState<string | null>(null)
 
+  // Each player's sign-in pass (lib/playerAuth.ts), kept only in this
+  // tablet's memory. A player can tap back in between sets without her PIN;
+  // after a page reload she enters her PIN again.
+  const passes = useRef<Map<string, string>>(new Map())
+
   const loadRoster = useCallback(async () => {
     const res = await fetch(`/api/team?teamId=${teamId}`)
     const d = await res.json()
@@ -110,8 +116,8 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
     setSelected(player)
     setPin('')
     setPinError('')
-    if (player.checkedIn && player.sessionId) {
-      // Already checked in — go straight to workout
+    if (player.checkedIn && player.sessionId && passes.current.has(player.id)) {
+      // Already checked in on this tablet — go straight to workout
       loadWorkout(player, player.sessionId, data?.templateId ?? null)
     } else {
       setScreen('pin')
@@ -145,6 +151,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
     }
 
     setCheckingIn(false)
+    if (d.playerPass) passes.current.set(selected.id, d.playerPass)
     const templateId = d.templateId ?? data?.templateId ?? null
     const updatedPlayer = { ...selected, checkedIn: true, sessionId: d.sessionId }
     setSelected(updatedPlayer)
@@ -158,7 +165,13 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
       setScreen('main')
       return
     }
-    const res = await fetch(`/api/workout?sessionId=${sessionId}&templateId=${templateId}`)
+    const res = await fetch(`/api/workout?sessionId=${sessionId}&templateId=${templateId}`, withPass(passes.current.get(player.id)))
+    if (res.status === 401) {
+      // Pass missing or expired: ask for her PIN again
+      passes.current.delete(player.id)
+      setPin(''); setPinError('Please enter your PIN again'); setScreen('pin')
+      return
+    }
     const d = await res.json()
     if (d.source !== 'template' || !d.template) {
       alert('No workout scheduled today for this team.')
@@ -215,7 +228,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
     const ex = block.exercises[activeExIdx]
     if (!ex) { setSavingSet(false); return }
 
-    const res = await fetch('/api/sets', {
+    const res = await fetch('/api/sets', withPass(selected ? passes.current.get(selected.id) : null, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -230,7 +243,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
         targetVelocityMax: ex.targetVelocityMax ?? null,
         completed,
       }),
-    })
+    }))
 
     setSavingSet(false)
 
@@ -255,11 +268,11 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
 
   async function finishWorkout() {
     if (!sessionInfo) return
-    await fetch('/api/checkin', {
+    await fetch('/api/checkin', withPass(selected ? passes.current.get(selected.id) : null, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: sessionInfo.sessionId }),
-    })
+    }))
     const name = selected?.name.split(' ')[0] ?? null
     setScreen('main')
     setSelected(null)

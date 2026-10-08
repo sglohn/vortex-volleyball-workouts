@@ -2,6 +2,7 @@
 // app/player/health/page.tsx
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { playerFetch } from '@/lib/playerPass'
 
 const BODY_PARTS = [
   'Head/Neck','Left Shoulder','Right Shoulder','Left Elbow','Right Elbow',
@@ -31,7 +32,7 @@ export default function PlayerHealthPage() {
     const s = JSON.parse(stored)
     setPlayerId(s.playerId)
     setHasHealthFlags(s.hasHealthFlags ?? false)
-    fetch(`/api/player/health?playerId=${s.playerId}`)
+    playerFetch(`/api/player/health?playerId=${s.playerId}`)
       .then(r => r.json())
       .then(d => { setActiveReports((d.reports ?? []).filter((r: HealthReport) => r.status !== 'resolved')); setLoading(false) })
       .catch(() => setLoading(false))
@@ -40,7 +41,7 @@ export default function PlayerHealthPage() {
   async function submitReport() {
     if (!playerId || !form.bodyPart) { setMsg('Please select a body part'); return }
     setSaving(true)
-    const res = await fetch('/api/player/health', {
+    const res = await playerFetch('/api/player/health', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ playerId, reportType: form.reportType, bodyPart: form.bodyPart, painLevel: form.painLevel, description: form.description, reportedBy: 'player' }),

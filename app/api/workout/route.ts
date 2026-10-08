@@ -3,12 +3,14 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getPlayerRecommendation } from '@/lib/suggestions'
 import { PhaseType } from '@/lib/types'
+import { canAccessSession, signInAgain } from '@/lib/playerAuth'
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')
   const templateId = req.nextUrl.searchParams.get('templateId')
 
   if (!sessionId) return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 })
+  if (!(await canAccessSession(req, sessionId))) return signInAgain()
 
   const db = createServerClient()
   const today = new Date().toISOString().split('T')[0]

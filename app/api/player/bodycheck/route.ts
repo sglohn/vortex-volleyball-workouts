@@ -1,6 +1,7 @@
 // app/api/player/bodycheck/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { canAccessPlayer, canAccessSession, signInAgain } from '@/lib/playerAuth'
 
 // ─── Zone classification ──────────────────────────────────────────────────────
 // Every flagged area now reaches the coach Health Board.
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest) {
     sessionId?: string; playerId?: string; quickStatus?: 'good' | 'sore' | 'injured'
   }
   if (!sessionId || !playerId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
+  // Her own pass, for her own session
+  if (!(await canAccessPlayer(req, playerId)) || !(await canAccessSession(req, sessionId))) return signInAgain()
 
   // Accept the full map ({ regions: { r_knee: 'sore', ... } }).
   // Also accept the older one-region-per-request shape ({ region, status }) in case
@@ -189,6 +192,7 @@ export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
   const limit = parseInt(req.nextUrl.searchParams.get('limit') ?? '30')
   if (!playerId) return NextResponse.json({ error: 'Missing playerId' }, { status: 400 })
+  if (!(await canAccessPlayer(req, playerId))) return signInAgain()
 
   const db = createServerClient()
   const { data: checks } = await db
