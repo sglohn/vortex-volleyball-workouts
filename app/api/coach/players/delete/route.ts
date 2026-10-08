@@ -5,8 +5,9 @@ import { calculateAge } from '@/lib/age'
 
 // PATCH — edit a player's details and/or change their team.
 // team_id: undefined = leave team alone, '' or null = unassign, uuid = move to that team.
+// self_guided: true/false — auto-built full-body workouts (lib/fullBodyWorkout.ts).
 export async function PATCH(req: NextRequest) {
-  const { id, name, pin, jersey_number, position, team_id, date_of_birth } = await req.json()
+  const { id, name, pin, jersey_number, position, team_id, date_of_birth, self_guided } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   if (pin && (pin.length !== 4 || !/^\d{4}$/.test(pin)))
     return NextResponse.json({ error: 'PIN must be exactly 4 digits' }, { status: 400 })
@@ -19,6 +20,7 @@ export async function PATCH(req: NextRequest) {
   if (jersey_number !== undefined) updates.jersey_number = jersey_number || null
   if (position !== undefined) updates.position = position || null
   if (date_of_birth !== undefined) updates.date_of_birth = date_of_birth || null
+  if (self_guided !== undefined) updates.self_guided = self_guided === true
 
   // Only run the players UPDATE when there is something to update.
   // The team page's Add/Remove buttons send ONLY { id, team_id }, and an empty

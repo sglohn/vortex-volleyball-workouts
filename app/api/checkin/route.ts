@@ -1,13 +1,23 @@
 // FILE: app/api/checkin/route.ts
 //
 // Player check-in (phone, kiosk and session tablet).
-// This version uses the club's local date (lib/clubTime.ts) when resuming
-// today's session and finding today's workout, instead of Vercel's UTC date.
+// Uses the club's local date (lib/clubTime.ts) when resuming today's
+// session and finding today's workout, instead of Vercel's UTC date.
+//
+// Which workout a player gets today, in order:
+//   1. Coach date override (player_overrides)
+//   2. Active individual program (player_programs)
+//   3. Self-guided player (players.self_guided) → auto-built full-body
+//      workout (lib/fullBodyWorkout.ts), saved on the session so resuming
+//      shows the same exercises. Each new session gets a new one.
+//   4. Team schedule
+//   5. Legacy active workout
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
 import { canAccessSession, createPlayerPass, signInAgain } from '@/lib/playerAuth'
+import { buildFullBodyWorkout, asGeneratedWorkout } from '@/lib/fullBodyWorkout'
 
 export async function POST(req: NextRequest) {
   const { playerId, pin } = await req.json()
@@ -16,9 +26,10 @@ export async function POST(req: NextRequest) {
   const db = createServerClient()
 
   // Verify player + PIN
+  // select('*') so check-in keeps working even before the self_guided column exists
   const { data: player, error } = await db
     .from('players')
-    .select('id, name, pin')
+    .select('*')
     .eq('id', playerId)
     .eq('is_active', true)
     .single()
@@ -42,7 +53,7 @@ export async function POST(req: NextRequest) {
   // Check for today's existing incomplete session — resume it
   const { data: existingSession } = await db
     .from('sessions')
-    .select('id, team_id')
+    .select('*')
     .eq('player_id', playerId)
     .gte('checked_in_at', dayStart)
     .lt('checked_in_at', dayEnd)
@@ -51,8 +62,10 @@ export async function POST(req: NextRequest) {
     .limit(1)
     .single()
 
-  // Find today's template — priority: date override → player program → team schedule
+  // Find today's template — priority: date override → player program → self-guided → team schedule
   let templateId: string | null = null
+  let selfGuided = false
+
   const { data: override } = await db
     .from('player_overrides')
     .select('template_id')
@@ -87,6 +100,9 @@ export async function POST(req: NextRequest) {
         const idx = (count ?? 0) % sequence.length
         templateId = sequence[idx] ?? null
       }
+    } else if (player.self_guided === true) {
+      // Auto-built full-body workout (built below, when the session is known)
+      selfGuided = true
     } else if (teamId) {
       const { data: schedule } = await db
         .from('team_schedule')
@@ -98,9 +114,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Fallback legacy
+  // Fallback legacy (not for self-guided players — they get their own workout)
   let legacyWorkoutId: string | null = null
-  if (!templateId) {
+  if (!templateId && !selfGuided) {
     const { data: workout } = await db
       .from('workouts')
       .select('id')
@@ -119,13 +135,26 @@ export async function POST(req: NextRequest) {
   let sessionId: string
 
   if (existingSession) {
-    // Resume existing session
+    // Resume existing session — keep the same generated workout if it has one
     sessionId = existingSession.id
+    if (selfGuided && !asGeneratedWorkout(existingSession.generated_workout)) {
+      // e.g. coach switched the player to self-guided after they checked in
+      const generated = await buildFullBodyWorkout(db, playerId, today)
+      if (generated) {
+        await db.from('sessions').update({ generated_workout: generated }).eq('id', sessionId)
+      }
+    }
   } else {
-    // Create new session
+    // Create new session (self-guided players get a brand-new workout)
+    const generated = selfGuided ? await buildFullBodyWorkout(db, playerId, today) : null
     const { data: session, error: sessionError } = await db
       .from('sessions')
-      .insert({ player_id: playerId, workout_id: legacyWorkoutId, team_id: teamId })
+      .insert({
+        player_id: playerId,
+        workout_id: legacyWorkoutId,
+        team_id: teamId,
+        ...(generated ? { generated_workout: generated } : {}),
+      })
       .select('id')
       .single()
     if (sessionError) return NextResponse.json({ error: 'Could not create session' }, { status: 500 })
@@ -137,6 +166,7 @@ export async function POST(req: NextRequest) {
     playerName: player.name,
     teamId,
     templateId,
+    selfGuided,
     isResumed: !!existingSession,
     hasHealthFlags: (healthReports?.length ?? 0) > 0,
     healthReports: healthReports ?? [],

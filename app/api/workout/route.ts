@@ -1,9 +1,112 @@
 // FILE: app/api/workout/route.ts
+//
+// The workout a player sees for a session.
+//
+// Sources, in order:
+//   1. templateId passed in      → coach template (team schedule, override, program)
+//   2. session.generated_workout → self-guided full-body workout (lib/fullBodyWorkout.ts)
+//   3. legacy active workout
+//
+// Templates and generated workouts come back in the same shape
+// (source: 'template'), so the player page, kiosk and session pages show
+// and log them the same way.
+
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getPlayerRecommendation } from '@/lib/suggestions'
 import { PhaseType } from '@/lib/types'
 import { canAccessSession, signInAgain } from '@/lib/playerAuth'
+import { asGeneratedWorkout } from '@/lib/fullBodyWorkout'
+
+type Db = ReturnType<typeof createServerClient>
+
+interface ExerciseContext {
+  db: Db
+  sessionId: string
+  playerId: string
+  phaseType: PhaseType
+  skippedIds: Set<string>
+  replacements: Record<string, string>
+}
+
+interface BlockExerciseInput {
+  blockExerciseId: string
+  exerciseId: string
+  customReps: string | null
+  customNotes: string | null
+  targetVelocityMin: number | null
+  targetVelocityMax: number | null
+}
+
+// One exercise in a block: skips/replacements, today's logs and the weight suggestion
+async function buildExercise(ctx: ExerciseContext, be: BlockExerciseInput, blockSets: number) {
+  const { db, sessionId } = ctx
+  const { data: ex } = await db
+    .from('exercise_library')
+    .select('*')
+    .eq('id', be.exerciseId)
+    .single()
+
+  if (!ex) return null
+
+  // Check if this exercise is skipped and has a replacement
+  const replacementId = ctx.replacements[ex.id]
+  const skipped = ctx.skippedIds.has(ex.id) && !replacementId
+
+  // Use replacement exercise if one is set
+  let activeEx = ex
+  let isReplaced = false
+  if (replacementId) {
+    const { data: repEx } = await db
+      .from('exercise_library')
+      .select('*')
+      .eq('id', replacementId)
+      .single()
+    if (repEx) { activeEx = repEx; isReplaced = true }
+  }
+
+  // Get today's set logs
+  const { data: todayLogs } = await db
+    .from('set_logs')
+    .select('*')
+    .eq('session_id', sessionId)
+    .eq('exercise_id', activeEx.id)
+
+  // Suggested weight — see lib/suggestions.ts for the rules.
+  // Uses today's session so speed-target exercises can adjust
+  // from the player's last set.
+  let recommendation = null
+  if (activeEx.logs_weight) {
+    recommendation = await getPlayerRecommendation(db, {
+      playerId: ctx.playerId,
+      exerciseId: activeEx.id,
+      targetReps: be.customReps ?? activeEx.default_reps ?? '8',
+      phaseType: ctx.phaseType,
+      sessionId,
+      targetVelocityMin: be.targetVelocityMin,
+      targetVelocityMax: be.targetVelocityMax,
+    })
+  }
+
+  const setLogs = Array.from({ length: blockSets }, (_, i) => {
+    const found = todayLogs?.find(l => l.set_number === i + 1)
+    return found ?? { set_number: i + 1, completed: false }
+  })
+
+  return {
+    ...activeEx,
+    blockExerciseId: be.blockExerciseId,
+    customReps: be.customReps,
+    customNotes: be.customNotes,
+    targetVelocityMin: be.targetVelocityMin ?? null,
+    targetVelocityMax: be.targetVelocityMax ?? null,
+    skipped,
+    isReplaced,
+    originalExerciseName: isReplaced ? ex.name : undefined,
+    setLogs,
+    recommendation,
+  }
+}
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')
@@ -15,10 +118,10 @@ export async function GET(req: NextRequest) {
   const db = createServerClient()
   const today = new Date().toISOString().split('T')[0]
 
-  // Get session
+  // Get session (select '*' so this works before the generated_workout column exists)
   const { data: session } = await db
     .from('sessions')
-    .select('id, player_id, team_id')
+    .select('*')
     .eq('id', sessionId)
     .single()
 
@@ -48,21 +151,21 @@ export async function GET(req: NextRequest) {
     .eq('is_active', true)
     .or(`ends_on.is.null,ends_on.gte.${today}`)
 
-  const skippedIds = new Set(skips?.map(s => s.exercise_id) ?? [])
-  const replacements = Object.fromEntries(
+  const skippedIds = new Set<string>(skips?.map(s => s.exercise_id) ?? [])
+  const replacements: Record<string, string> = Object.fromEntries(
     (skips ?? [])
       .filter(s => s.replacement_exercise_id)
       .map(s => [s.exercise_id, s.replacement_exercise_id])
   )
 
-  // ----- Try new template system first -----
-  const resolvedTemplateId = templateId
+  const ctx: ExerciseContext = { db, sessionId, playerId: session.player_id, phaseType, skippedIds, replacements }
 
-  if (resolvedTemplateId) {
+  // ----- 1. Coach template -----
+  if (templateId) {
     const { data: template } = await db
       .from('workout_templates')
       .select('id, name, description, warmup_notes, phase_type')
-      .eq('id', resolvedTemplateId)
+      .eq('id', templateId)
       .single()
 
     if (template) {
@@ -79,78 +182,16 @@ export async function GET(req: NextRequest) {
           .eq('block_id', block.id)
           .order('sort_order')
 
-        const exercises = await Promise.all((blockExercises ?? []).map(async (be) => {
-          const { data: ex } = await db
-            .from('exercise_library')
-            .select('*')
-            .eq('id', be.exercise_id)
-            .single()
+        const exercises = await Promise.all((blockExercises ?? []).map(be => buildExercise(ctx, {
+          blockExerciseId: be.id,
+          exerciseId: be.exercise_id,
+          customReps: be.custom_reps,
+          customNotes: be.custom_notes,
+          targetVelocityMin: be.target_velocity_min,
+          targetVelocityMax: be.target_velocity_max,
+        }, block.sets)))
 
-          if (!ex) return null
-
-          // Check if this exercise is skipped and has a replacement
-          const replacementId = replacements[ex.id]
-          const skipped = skippedIds.has(ex.id) && !replacementId
-
-          // Use replacement exercise if one is set
-          let activeEx = ex
-          let isReplaced = false
-          if (replacementId) {
-            const { data: repEx } = await db
-              .from('exercise_library')
-              .select('*')
-              .eq('id', replacementId)
-              .single()
-            if (repEx) { activeEx = repEx; isReplaced = true }
-          }
-
-          // Get today's set logs
-          const { data: todayLogs } = await db
-            .from('set_logs')
-            .select('*')
-            .eq('session_id', sessionId)
-            .eq('exercise_id', activeEx.id)
-
-          // Suggested weight — see lib/suggestions.ts for the rules.
-          // Uses today's session so speed-target exercises can adjust
-          // from the player's last set.
-          let recommendation = null
-          if (activeEx.logs_weight) {
-            recommendation = await getPlayerRecommendation(db, {
-              playerId: session.player_id,
-              exerciseId: activeEx.id,
-              targetReps: be.custom_reps ?? activeEx.default_reps ?? '8',
-              phaseType,
-              sessionId,
-              targetVelocityMin: be.target_velocity_min,
-              targetVelocityMax: be.target_velocity_max,
-            })
-          }
-
-          const setLogs = Array.from({ length: block.sets }, (_, i) => {
-            const found = todayLogs?.find(l => l.set_number === i + 1)
-            return found ?? { set_number: i + 1, completed: false }
-          })
-
-          return {
-            ...activeEx,
-            blockExerciseId: be.id,
-            customReps: be.custom_reps,
-            customNotes: be.custom_notes,
-            targetVelocityMin: be.target_velocity_min ?? null,
-            targetVelocityMax: be.target_velocity_max ?? null,
-            skipped,
-            isReplaced,
-            originalExerciseName: isReplaced ? ex.name : undefined,
-            setLogs,
-            recommendation,
-          }
-        }))
-
-        return {
-          ...block,
-          exercises: exercises.filter(Boolean),
-        }
+        return { ...block, exercises: exercises.filter(Boolean) }
       }))
 
       return NextResponse.json({
@@ -163,7 +204,46 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ----- Fallback: legacy workout system -----
+  // ----- 2. Self-guided full-body workout saved on the session -----
+  const generated = asGeneratedWorkout(session.generated_workout)
+  if (generated) {
+    const blocks = await Promise.all(generated.blocks.map(async (block, bi) => {
+      const exercises = await Promise.all(block.exercises.map((ge, ei) => buildExercise(ctx, {
+        blockExerciseId: `gen-${bi}-${ei}`,
+        exerciseId: ge.exerciseId,
+        customReps: ge.reps ?? null,
+        customNotes: null,
+        targetVelocityMin: null,
+        targetVelocityMax: null,
+      }, block.sets)))
+
+      return {
+        id: `gen-${block.label}`,
+        block_label: block.label,
+        sets: block.sets,
+        sort_order: bi,
+        exercises: exercises.filter(Boolean),
+      }
+    }))
+
+    return NextResponse.json({
+      source: 'template',
+      generated: true,
+      template: {
+        id: `generated-${sessionId}`,
+        name: generated.name,
+        description: generated.description,
+        warmup_notes: generated.warmupNotes,
+        phase_type: null,
+        blocks: blocks.filter(b => b.exercises.length > 0),
+      },
+      phase,
+      phaseType,
+      skippedExerciseIds: [...skippedIds],
+    })
+  }
+
+  // ----- 3. Fallback: legacy workout system -----
   const { data: workout } = await db
     .from('workouts')
     .select('id, title, description')
