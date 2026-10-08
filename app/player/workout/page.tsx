@@ -1,4 +1,8 @@
 // FILE: app/player/workout/page.tsx
+//
+// Self-guided full-body workouts (lib/fullBodyWorkout.ts): before logging a
+// set of an exercise, a sore player can tap "Sore? Pick an easier option" and
+// choose another exercise for the same area (app/api/player/self-guided-swap).
 'use client'
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
@@ -13,14 +17,17 @@ interface Exercise {
   logs_weight: boolean; logs_velocity: boolean
   equipment?: Equipment | null
   customReps?: string; customNotes?: string; skipped: boolean
+  blockExerciseId?: string
+  swap?: { available: boolean; role: 'main' | 'secondary' | null; swappedFromName: string | null }
   targetVelocityMin?: number | null; targetVelocityMax?: number | null
   setLogs: SetLog[]
   recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number; sourceLabel?: string; detail?: string; adjustmentMessage?: string }
 }
-interface Block { id: string; block_label: string; sets: number; exercises: Exercise[] }
+interface Block { id: string; block_label: string; title?: string | null; sets: number; exercises: Exercise[] }
 interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[] }
 
 type WorkoutView = 'blocks' | 'active_block'
+interface SwapOption { id: string; name: string; equipment?: string | null; imageUrl?: string | null }
 
 export default function PlayerWorkoutPage() {
   const router = useRouter()
@@ -47,26 +54,72 @@ export default function PlayerWorkoutPage() {
   const [startTimes, setStartTimes] = useState<Record<string, string>>({})
   const [lastWeight, setLastWeight] = useState<number | null>(null)
   const [lastReps, setLastReps] = useState<string | null>(null)
+  // Easier-option swap (self-guided workouts)
+  const [swapFor, setSwapFor] = useState<Exercise | null>(null)
+  const [swapOptions, setSwapOptions] = useState<SwapOption[]>([])
+  const [swapOriginal, setSwapOriginal] = useState<SwapOption | null>(null)
+  const [swapLoading, setSwapLoading] = useState(false)
+  const [swapSaving, setSwapSaving] = useState(false)
+  const [swapError, setSwapError] = useState('')
+
+  const loadWorkout = useCallback(async (s: { sessionId: string; templateId?: string }): Promise<WorkoutData | null> => {
+    const params = new URLSearchParams({ sessionId: s.sessionId })
+    if (s.templateId) params.set('templateId', s.templateId)
+    const data = await playerFetch(`/api/workout?${params}`).then(r => r.json())
+    let next: WorkoutData | null = null
+    if (data.source === 'template') next = data.template
+    else if (data.source === 'legacy' && data.workout) {
+      next = { id: data.workout.id, name: data.workout.title, description: data.workout.description, warmup_notes: undefined, blocks: [{ id: 'legacy', block_label: 'Workout', sets: 3, exercises: data.workout.exercises.map((ex: Record<string, unknown>) => ({ ...ex, logs_weight: true, logs_velocity: false, skipped: false, setLogs: ex.setLogs })) }] }
+    }
+    setWorkout(next)
+    setPhase(data.phase)
+    return next
+  }, [])
 
   useEffect(() => {
     const stored = localStorage.getItem('vx_session')
     if (!stored) { router.push('/'); return }
     const s = JSON.parse(stored)
     setSession(s)
-    const params = new URLSearchParams({ sessionId: s.sessionId })
-    if (s.templateId) params.set('templateId', s.templateId)
-    playerFetch(`/api/workout?${params}`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.source === 'template') setWorkout(data.template)
-        else if (data.source === 'legacy' && data.workout) {
-          setWorkout({ id: data.workout.id, name: data.workout.title, description: data.workout.description, warmup_notes: undefined, blocks: [{ id: 'legacy', block_label: 'Workout', sets: 3, exercises: data.workout.exercises.map((ex: Record<string, unknown>) => ({ ...ex, logs_weight: true, logs_velocity: false, skipped: false, setLogs: ex.setLogs })) }] })
-        }
-        setPhase(data.phase)
-        setLoading(false)
-      })
+    loadWorkout(s)
+      .then(() => setLoading(false))
       .catch(() => setLoading(false))
-  }, [router])
+  }, [router, loadWorkout])
+
+  async function openSwap(ex: Exercise) {
+    if (!session || !ex.blockExerciseId) return
+    setSwapFor(ex); setSwapOptions([]); setSwapOriginal(null); setSwapError(''); setSwapLoading(true)
+    try {
+      const params = new URLSearchParams({ sessionId: session.sessionId, slot: ex.blockExerciseId })
+      const res = await playerFetch(`/api/player/self-guided-swap?${params}`)
+      const d = await res.json()
+      if (!res.ok) setSwapError(d.error ?? 'Could not load options')
+      else { setSwapOptions(d.options ?? []); setSwapOriginal(d.original ?? null) }
+    } catch { setSwapError('Could not load options') }
+    setSwapLoading(false)
+  }
+
+  async function chooseSwap(exerciseId: string) {
+    if (!session || !swapFor?.blockExerciseId) return
+    setSwapSaving(true); setSwapError('')
+    try {
+      const res = await playerFetch('/api/player/self-guided-swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: session.sessionId, slot: swapFor.blockExerciseId, exerciseId }),
+      })
+      const d = await res.json()
+      if (!res.ok) { setSwapError(d.error ?? 'Swap not saved'); setSwapSaving(false); return }
+      const next = await loadWorkout(session)
+      // Same spot in the block now holds the new exercise — reset the inputs for it
+      const swapped = next?.blocks[activeBlockIdx]?.exercises.find(e => e.blockExerciseId === swapFor.blockExerciseId)
+      setWeightInput('')
+      setVelocityInput('')
+      setRepsInput(swapped?.customReps ?? swapped?.default_reps ?? '')
+      setSwapFor(null)
+    } catch { setSwapError('Swap not saved') }
+    setSwapSaving(false)
+  }
 
   const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
 
@@ -278,7 +331,7 @@ export default function PlayerWorkoutPage() {
             {block.block_label.charAt(0)}
           </div>
           <div style={{ flex: 1 }}>
-            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem' }}>Block {block.block_label}</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem' }}>Block {block.block_label}{block.title ? ` · ${block.title}` : ''}</div>
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Set {currentSet} of {block.sets} · Exercise {currentExIdx + 1} of {activeExercises.length}</div>
           </div>
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--volt)', fontSize: '1.1rem' }}>{completedSteps}/{totalSteps}</div>
@@ -431,6 +484,14 @@ export default function PlayerWorkoutPage() {
             </div>
           )}
 
+          {/* Easier option (self-guided workouts, before any set is logged) */}
+          {ex.swap?.available && (
+            <button onClick={() => openSwap(ex)}
+              style={{ width: '100%', padding: '0.5rem 0.75rem', marginBottom: '0.875rem', background: 'transparent', border: '1.5px dashed var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
+              {ex.swap.swappedFromName ? 'Change easier option' : 'Sore? Pick an easier option →'}
+            </button>
+          )}
+
           {ex.recommendation?.adjustmentMessage && (
             <div style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.5rem 0.875rem', marginBottom: '0.875rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--carolina-dark)' }}>
               {ex.recommendation.adjustmentMessage}
@@ -503,6 +564,55 @@ export default function PlayerWorkoutPage() {
             })()}
           </button>
         </div>
+
+        {/* Easier-option picker */}
+        {swapFor && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 60 }}
+            onClick={() => !swapSaving && setSwapFor(null)}>
+            <div className="card" style={{ width: '100%', maxWidth: 500, maxHeight: '80vh', overflowY: 'auto', padding: '1.25rem', borderRadius: '16px 16px 0 0' }} onClick={e => e.stopPropagation()}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem', marginBottom: '0.5rem' }}>
+                <div>
+                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem' }}>Easier option</h3>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.15rem', lineHeight: 1.4 }}>
+                    Instead of <strong>{swapFor.name}</strong>. Same area, lighter weight or a shorter range. Stop anything that hurts.
+                  </p>
+                </div>
+                <button onClick={() => setSwapFor(null)} disabled={swapSaving} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
+              </div>
+
+              {swapError && <div style={{ background: 'var(--danger-light)', borderRadius: 8, padding: '0.5rem 0.75rem', marginBottom: '0.75rem', color: 'var(--danger)', fontSize: '0.82rem' }}>{swapError}</div>}
+              {swapLoading && <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Loading options…</div>}
+
+              {!swapLoading && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {swapOriginal && (
+                    <button onClick={() => chooseSwap(swapOriginal.id)} disabled={swapSaving}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem', borderRadius: 10, border: '1.5px solid var(--gray-border)', background: 'var(--court-raised)', cursor: 'pointer', textAlign: 'left' }}>
+                      <span style={{ fontSize: '1.1rem' }}>↩</span>
+                      <span style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--text-primary)' }}>Back to {swapOriginal.name}</span>
+                    </button>
+                  )}
+                  {swapOptions.map(o => (
+                    <button key={o.id} onClick={() => chooseSwap(o.id)} disabled={swapSaving}
+                      style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.6rem 0.75rem', borderRadius: 10, border: '1.5px solid var(--carolina-border)', background: 'var(--carolina-light)', cursor: 'pointer', textAlign: 'left' }}>
+                      {o.imageUrl
+                        ? <img src={o.imageUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
+                        : <div style={{ width: 44, height: 44, borderRadius: 6, background: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>💪</div>}
+                      <span style={{ flex: 1, fontWeight: 600, fontSize: '0.9rem', color: 'var(--carolina-deep)' }}>{o.name}</span>
+                      <span style={{ color: 'var(--carolina)', fontSize: '1.1rem' }}>→</span>
+                    </button>
+                  ))}
+                  {!swapOptions.length && !swapOriginal && !swapError && (
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textAlign: 'center', padding: '1rem' }}>
+                      No other exercises for this area yet. Go lighter and use a shorter, pain-free range.
+                    </p>
+                  )}
+                  {swapSaving && <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>Swapping…</div>}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Previous sets for this exercise */}
         {ex.setLogs.filter(l => l.completed).length > 0 && (
@@ -587,7 +697,7 @@ export default function PlayerWorkoutPage() {
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
-                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem' }}>Block {block.block_label}</span>
+                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem' }}>Block {block.block_label}{block.title ? ` · ${block.title}` : ''}</span>
                     <span style={{ fontSize: '0.8rem', color: done ? 'var(--volt)' : 'var(--text-muted)' }}>{completed}/{total}</span>
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>

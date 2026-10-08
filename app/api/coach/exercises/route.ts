@@ -4,14 +4,29 @@ import { createServerClient } from '@/lib/supabase'
 import { asEquipment } from '@/lib/loads'
 import { FEATURES } from '@/lib/features'
 
+// self_guided_roles: which self-guided workout spots an exercise can fill
+// (lib/fullBodyWorkout.ts), e.g. ['quad_main', 'push_secondary'].
+const ROLE_RE = /^(quad|hamstring|push|pull)_(main|secondary|easier)$/
+function asRoles(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return [...new Set(value.filter((v): v is string => typeof v === 'string' && ROLE_RE.test(v)))]
+}
+
+const BASE_COLUMNS = 'id, name, category, default_sets, default_reps, coaching_notes, demo_url, demo_image_url, start_image_url, end_image_url, logs_weight, logs_velocity, equipment, is_active'
+
 export async function GET(req: NextRequest) {
   const db = createServerClient()
   const category = req.nextUrl.searchParams.get('category')
 
-  let query = db.from('exercise_library').select('id, name, category, default_sets, default_reps, coaching_notes, demo_url, demo_image_url, start_image_url, end_image_url, logs_weight, logs_velocity, equipment, is_active').eq('is_active', true).order('name')
-  if (category) query = query.eq('category', category)
+  async function run(columns: string) {
+    let query = db.from('exercise_library').select(columns).eq('is_active', true).order('name')
+    if (category) query = query.eq('category', category)
+    return query
+  }
 
-  const { data: exercises, error } = await query
+  // Falls back to the old columns if the self-guided migration hasn't been run yet
+  let { data: exercises, error } = await run(`${BASE_COLUMNS}, self_guided_roles`)
+  if (error) ({ data: exercises, error } = await run(BASE_COLUMNS))
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ exercises: exercises ?? [] })
 }
@@ -21,7 +36,7 @@ export async function POST(req: NextRequest) {
   const {
     name, category, default_sets, default_reps,
     logs_weight, logs_velocity, coaching_notes,
-    demo_url, demo_image_url, equipment,
+    demo_url, demo_image_url, equipment, self_guided_roles,
   } = body
 
   if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
@@ -40,6 +55,7 @@ export async function POST(req: NextRequest) {
       coaching_notes: coaching_notes ?? null,
       demo_url: demo_url ?? null,
       demo_image_url: demo_image_url ?? null,
+      ...(Array.isArray(self_guided_roles) && self_guided_roles.length ? { self_guided_roles: asRoles(self_guided_roles) } : {}),
     })
     .select()
     .single()
@@ -56,6 +72,7 @@ export async function PUT(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   // '' or anything unexpected → not set
   if ('equipment' in updates) updates.equipment = asEquipment(updates.equipment)
+  if ('self_guided_roles' in updates) updates.self_guided_roles = asRoles(updates.self_guided_roles)
 
   const db = createServerClient()
   const { data: exercise, error } = await db

@@ -5,6 +5,8 @@
 // Sources, in order:
 //   1. templateId passed in      → coach template (team schedule, override, program)
 //   2. session.generated_workout → self-guided full-body workout (lib/fullBodyWorkout.ts)
+//      Each exercise also gets `swap`, so the player page can offer an
+//      easier option before any set of it is logged.
 //   3. legacy active workout
 //
 // Templates and generated workouts come back in the same shape
@@ -16,7 +18,7 @@ import { createServerClient } from '@/lib/supabase'
 import { getPlayerRecommendation } from '@/lib/suggestions'
 import { PhaseType } from '@/lib/types'
 import { canAccessSession, signInAgain } from '@/lib/playerAuth'
-import { asGeneratedWorkout } from '@/lib/fullBodyWorkout'
+import { asGeneratedWorkout, slotId } from '@/lib/fullBodyWorkout'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -208,18 +210,33 @@ export async function GET(req: NextRequest) {
   const generated = asGeneratedWorkout(session.generated_workout)
   if (generated) {
     const blocks = await Promise.all(generated.blocks.map(async (block, bi) => {
-      const exercises = await Promise.all(block.exercises.map((ge, ei) => buildExercise(ctx, {
-        blockExerciseId: `gen-${bi}-${ei}`,
-        exerciseId: ge.exerciseId,
-        customReps: ge.reps ?? null,
-        customNotes: null,
-        targetVelocityMin: null,
-        targetVelocityMax: null,
-      }, block.sets)))
+      const exercises = await Promise.all(block.exercises.map(async (ge, ei) => {
+        const built = await buildExercise(ctx, {
+          blockExerciseId: slotId(bi, ei),
+          exerciseId: ge.exerciseId,
+          customReps: ge.reps ?? null,
+          customNotes: ge.swappedFromName
+            ? `Easier option in place of ${ge.swappedFromName}. Go lighter and keep it in a pain-free range.`
+            : null,
+          targetVelocityMin: null,
+          targetVelocityMax: null,
+        }, block.sets)
+        if (!built) return null
+        const anyLogged = built.setLogs.some((l: { completed?: boolean }) => l.completed)
+        return {
+          ...built,
+          swap: {
+            available: !anyLogged,           // can only swap before logging a set
+            role: ge.role ?? null,           // 'main' | 'secondary'
+            swappedFromName: ge.swappedFromName ?? null,
+          },
+        }
+      }))
 
       return {
         id: `gen-${block.label}`,
         block_label: block.label,
+        title: block.title ?? null,
         sets: block.sets,
         sort_order: bi,
         exercises: exercises.filter(Boolean),

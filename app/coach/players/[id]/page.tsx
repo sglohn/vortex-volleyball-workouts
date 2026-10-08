@@ -380,7 +380,7 @@ export default function CoachPlayerDetailPage() {
                   {selfGuided && <span style={{ fontSize: '0.65rem', background: 'rgba(22,163,74,0.1)', color: 'var(--success)', border: '1px solid rgba(22,163,74,0.3)', borderRadius: 4, padding: '0.1rem 0.4rem', fontWeight: 600 }}>ON</span>}
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem', lineHeight: 1.45 }}>
-                  For former players and coaches not on a team. Every sign-in builds a new full-body workout from the exercise library: quads, hamstrings, hips, shoulders and core. Skips above are respected, and exercises from their last two workouts are avoided.
+                  For former players and coaches not on a team. Every sign-in builds a new full-body workout: A Quad, B Hamstring, C Push, D Pull — each a main lift paired with a secondary exercise (set these on the Exercise Library page). Sore players can pick an easier option for the same area. Skips below are respected, and exercises from their last two workouts are avoided.
                 </p>
                 {selfGuided && hasProgram && (
                   <p style={{ color: 'var(--carolina-dark)', fontSize: '0.72rem', marginTop: '0.35rem', fontWeight: 600 }}>
