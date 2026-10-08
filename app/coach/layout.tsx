@@ -3,8 +3,11 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
+import BrandMark from '@/components/BrandMark'
+import { BRAND } from '@/lib/brand'
+import { isHiddenPage } from '@/lib/features'
 
-const NAV = [
+const ALL_NAV = [
   { href: '/coach/dashboard', label: 'Dashboard',       short: 'Home',      icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
   { href: '/coach/health',    label: 'Health Board',    short: 'Health',    icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> },
   { href: '/coach/schedule',  label: 'Schedule',        short: 'Schedule',  icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
@@ -17,6 +20,9 @@ const NAV = [
   { href: '/coach/comparisons', label: 'Comparisons',    short: 'Compare',   icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
   { href: '/coach/display',   label: 'TV Display',      short: 'TV',        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
 ]
+
+// Hide pages for features this sport doesn't use (lib/features.ts)
+const NAV = ALL_NAV.filter(n => !isHiddenPage(n.href))
 
 // Bottom nav shows these 5 on mobile — most used pages
 const MOBILE_NAV = ['/coach/dashboard', '/coach/health', '/coach/teams', '/coach/players', '/coach/schedule']
@@ -78,11 +84,9 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
         {/* ── DESKTOP SIDEBAR ── */}
         <aside className="coach-sidebar" style={{ width: 215, background: 'var(--black)', display: 'flex', flexDirection: 'column', padding: '1.25rem 0.75rem', flexShrink: 0, position: 'sticky', top: 0, height: '100vh', overflowY: 'auto' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '1.75rem', padding: '0 0.25rem' }}>
-            <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'var(--yellow)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--black)" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-            </div>
+            <BrandMark size={30} tone="accent" />
             <div>
-              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.1em', color: 'var(--yellow)', lineHeight: 1 }}>VORTEX</div>
+              <div style={{ whiteSpace: 'nowrap', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.1em', color: 'var(--yellow)', lineHeight: 1 }}>{BRAND.name}</div>
               <div style={{ fontSize: '0.58rem', color: 'var(--carolina-light)', letterSpacing: '0.06em', textTransform: 'uppercase', opacity: 0.7 }}>S&C Coach</div>
             </div>
           </div>
@@ -108,10 +112,8 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
           {/* Mobile top bar */}
           <div className="coach-mobile-topbar" style={{ background: 'var(--black)', padding: '0.625rem 1rem', alignItems: 'center', gap: '0.75rem', position: 'sticky', top: 0, zIndex: 20, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1 }}>
-              <div style={{ width: 26, height: 26, borderRadius: '50%', background: 'var(--yellow)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--black)" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-              </div>
-              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.08em', color: 'var(--yellow)' }}>VORTEX</span>
+              <BrandMark size={26} tone="accent" />
+              <span style={{ whiteSpace: 'nowrap', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.08em', color: 'var(--yellow)' }}>{BRAND.name}</span>
               <span style={{ fontSize: '0.72rem', color: 'rgba(255,255,255,0.4)', marginLeft: '0.25rem' }}>
                 {NAV.find(n => path.startsWith(n.href))?.label ?? 'Coach'}
               </span>

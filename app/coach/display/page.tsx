@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
+import { BRAND } from '@/lib/brand'
 
 interface Exercise {
   id: string
@@ -116,7 +117,7 @@ function DisplayContent() {
           <div style={{ width: '2.6vh', height: '2.6vh', borderRadius: '50%', background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             <svg width="55%" height="55%" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
           </div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.7vh', letterSpacing: '0.1em', color: YELLOW }}>VORTEX S&C</span>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.7vh', letterSpacing: '0.1em', color: YELLOW }}>{BRAND.appTitle.toUpperCase()}</span>
         </div>
 
         {/* Team pills */}

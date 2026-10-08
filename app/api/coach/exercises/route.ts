@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { asEquipment } from '@/lib/loads'
+import { FEATURES } from '@/lib/features'
 
 export async function GET(req: NextRequest) {
   const db = createServerClient()
@@ -34,7 +35,7 @@ export async function POST(req: NextRequest) {
       default_sets: default_sets ?? 3,
       default_reps: default_reps ?? null,
       logs_weight: logs_weight ?? false,
-      logs_velocity: logs_velocity ?? false,
+      logs_velocity: FEATURES.vbt ? (logs_velocity ?? false) : false,
       equipment: asEquipment(equipment),
       coaching_notes: coaching_notes ?? null,
       demo_url: demo_url ?? null,
@@ -50,6 +51,8 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const body = await req.json()
   const { id, ...updates } = body
+  // No bar speed logging when VBT is off (lib/features.ts)
+  if (!FEATURES.vbt && 'logs_velocity' in updates) updates.logs_velocity = false
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   // '' or anything unexpected → not set
   if ('equipment' in updates) updates.equipment = asEquipment(updates.equipment)

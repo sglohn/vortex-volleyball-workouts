@@ -7,6 +7,8 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import BrandMark from '@/components/BrandMark'
+import { BRAND } from '@/lib/brand'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface Player { id: string; name: string; jersey_number?: string; teamId: string }
@@ -102,11 +104,9 @@ export default function HomePage() {
 
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '2rem' }} className="fade-up">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-          <div style={{ width: 44, height: 44, borderRadius: '50%', background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--yellow)" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2.25rem', fontWeight: 800, letterSpacing: '0.06em', color: 'var(--black)' }}>VORTEX</h1>
+        <div style={{ display: 'flex', flexDirection: BRAND.markSrc ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+          <BrandMark size={BRAND.markSrc ? 88 : 44} tone="dark" />
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: BRAND.markSrc ? 'clamp(1.6rem, 8vw, 2.25rem)' : '2.25rem', whiteSpace: 'nowrap', fontWeight: 800, letterSpacing: '0.06em', color: 'var(--black)' }}>{BRAND.name}</h1>
         </div>
         <p style={{ color: 'var(--carolina-dark)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>Strength & Conditioning</p>
         <div style={{ height: 3, width: 60, background: 'linear-gradient(90deg, var(--black), var(--carolina))', borderRadius: 2, margin: '0.625rem auto 0' }} />

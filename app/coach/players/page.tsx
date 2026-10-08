@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
 import { calculateAge } from '@/lib/age'
+import { FEATURES, POSITIONS } from '@/lib/features'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface Player {
@@ -39,25 +40,26 @@ type SortDir = 'asc' | 'desc'
 type ViewMode = 'leaderboard' | 'grouped'
 type ScopeKey = 'all' | 'ageGroup' | 'age' | 'position' | 'team'
 
-const POSITIONS = ['Setter','Outside Hitter','Middle Blocker','Opposite','Libero','Defensive Specialist','Other']
 
-const COLUMNS: { key: SortKey; label: string; short: string; numeric?: boolean; fmt: 'text' | 'fi' | 'in' }[] = [
+// measure: true = volleyball measurement column, hidden when measurements are off (lib/features.ts)
+const ALL_COLUMNS: { key: SortKey; label: string; short: string; numeric?: boolean; fmt: 'text' | 'fi' | 'in'; measure?: true }[] = [
   { key: 'name',                 label: 'Player',          short: 'Player',    fmt: 'text' },
-  { key: 'athleticism_score',    label: 'Athleticism Score', short: 'VPI',     numeric: true, fmt: 'in' },
+  { key: 'athleticism_score',    label: 'Athleticism Score', short: 'VPI',     numeric: true, fmt: 'in', measure: true },
   { key: 'age_group',            label: 'Team Age Group',  short: 'Team Grp',  fmt: 'text' },
   { key: 'age',                  label: 'Age',             short: 'Age',       numeric: true, fmt: 'in' },
   { key: 'position',             label: 'Position',        short: 'Position',  fmt: 'text' },
-  { key: 'height_in',            label: 'Height',          short: 'Height',    numeric: true, fmt: 'fi' },
-  { key: 'wingspan_in',          label: 'Wingspan',        short: 'Wingspan',  numeric: true, fmt: 'fi' },
-  { key: 'standing_reach_in',    label: 'Standing Reach',  short: 'Stn Reach', numeric: true, fmt: 'fi' },
-  { key: 'standing_vertical_in', label: 'Block Touch',     short: 'Blk Touch', numeric: true, fmt: 'fi' },
-  { key: 'standingVert',         label: 'Stand. Vertical', short: 'Stn Vert',  numeric: true, fmt: 'in' },
-  { key: 'approach_vertical_in', label: 'App. Touch',      short: 'App Touch', numeric: true, fmt: 'fi' },
-  { key: 'maxVert',              label: 'Max Vertical',    short: 'Max Vert',  numeric: true, fmt: 'in' },
-  { key: 'acceleration_sec',     label: 'Acceleration',    short: 'Accel',     numeric: true, fmt: 'in' },
-  { key: 'pro_agility_sec',      label: 'Pro-Agility',     short: 'Pro Agl',   numeric: true, fmt: 'in' },
-  { key: 'swing_velocity_mph',   label: 'Swing Velocity',  short: 'Swing MPH', numeric: true, fmt: 'in' },
+  { key: 'height_in',            label: 'Height',          short: 'Height',    numeric: true, fmt: 'fi', measure: true },
+  { key: 'wingspan_in',          label: 'Wingspan',        short: 'Wingspan',  numeric: true, fmt: 'fi', measure: true },
+  { key: 'standing_reach_in',    label: 'Standing Reach',  short: 'Stn Reach', numeric: true, fmt: 'fi', measure: true },
+  { key: 'standing_vertical_in', label: 'Block Touch',     short: 'Blk Touch', numeric: true, fmt: 'fi', measure: true },
+  { key: 'standingVert',         label: 'Stand. Vertical', short: 'Stn Vert',  numeric: true, fmt: 'in', measure: true },
+  { key: 'approach_vertical_in', label: 'App. Touch',      short: 'App Touch', numeric: true, fmt: 'fi', measure: true },
+  { key: 'maxVert',              label: 'Max Vertical',    short: 'Max Vert',  numeric: true, fmt: 'in', measure: true },
+  { key: 'acceleration_sec',     label: 'Acceleration',    short: 'Accel',     numeric: true, fmt: 'in', measure: true },
+  { key: 'pro_agility_sec',      label: 'Pro-Agility',     short: 'Pro Agl',   numeric: true, fmt: 'in', measure: true },
+  { key: 'swing_velocity_mph',   label: 'Swing Velocity',  short: 'Swing MPH', numeric: true, fmt: 'in', measure: true },
 ]
+const COLUMNS = ALL_COLUMNS.filter(c => FEATURES.measurements || !c.measure)
 
 function fi(inches: number | null | undefined): string {
   if (!inches) return '—'
@@ -166,31 +168,35 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
           </div>
         </div>
       </td>
-      <td style={cellStyle('athleticism_score')}>
-        {p.athleticism_score != null ? (
-          <>
-            {fmtScore(p.athleticism_score)}
-            <div style={{ fontSize: '0.62rem', fontWeight: 400, color: 'var(--text-muted)' }}>{p.athleticism_metrics_used ?? 0}/8 tests</div>
-          </>
-        ) : (
-          <span style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--text-muted)' }}>
-            {p.athleticism_metrics_used ? `${p.athleticism_metrics_used}/8 — need more` : 'No tests yet'}
-          </span>
-        )}
-      </td>
+      {FEATURES.measurements && (
+        <td style={cellStyle('athleticism_score')}>
+          {p.athleticism_score != null ? (
+            <>
+              {fmtScore(p.athleticism_score)}
+              <div style={{ fontSize: '0.62rem', fontWeight: 400, color: 'var(--text-muted)' }}>{p.athleticism_metrics_used ?? 0}/8 tests</div>
+            </>
+          ) : (
+            <span style={{ fontSize: '0.72rem', fontWeight: 400, color: 'var(--text-muted)' }}>
+              {p.athleticism_metrics_used ? `${p.athleticism_metrics_used}/8 — need more` : 'No tests yet'}
+            </span>
+          )}
+        </td>
+      )}
       <td style={{ padding:'0.55rem', fontSize:'0.8rem', color:'var(--text-secondary)' }}>{p.age_group || '—'}</td>
       <td style={cellStyle('age')}>{p.age != null ? p.age : '—'}</td>
       <td style={{ padding:'0.55rem', fontSize:'0.8rem', color:'var(--text-secondary)' }}>{p.position || '—'}</td>
-      <td style={cellStyle('height_in')}>{fi(p.height_in)}</td>
-      <td style={cellStyle('wingspan_in')}>{fi(p.wingspan_in)}</td>
-      <td style={cellStyle('standing_reach_in')}>{fi(p.standing_reach_in)}</td>
-      <td style={cellStyle('standing_vertical_in')}>{fi(p.standing_vertical_in)}</td>
-      <td style={cellStyle('standingVert')}>{fmtIn(sv)}</td>
-      <td style={cellStyle('approach_vertical_in')}>{fi(p.approach_vertical_in)}</td>
-      <td style={cellStyle('maxVert')}>{fmtIn(mv)}</td>
-      <td style={cellStyle('acceleration_sec')}>{fmtSec(p.acceleration_sec)}</td>
-      <td style={cellStyle('pro_agility_sec')}>{fmtSec(p.pro_agility_sec)}</td>
-      <td style={cellStyle('swing_velocity_mph')}>{fmtMph(p.swing_velocity_mph)}</td>
+      {FEATURES.measurements && (<>
+        <td style={cellStyle('height_in')}>{fi(p.height_in)}</td>
+        <td style={cellStyle('wingspan_in')}>{fi(p.wingspan_in)}</td>
+        <td style={cellStyle('standing_reach_in')}>{fi(p.standing_reach_in)}</td>
+        <td style={cellStyle('standing_vertical_in')}>{fi(p.standing_vertical_in)}</td>
+        <td style={cellStyle('standingVert')}>{fmtIn(sv)}</td>
+        <td style={cellStyle('approach_vertical_in')}>{fi(p.approach_vertical_in)}</td>
+        <td style={cellStyle('maxVert')}>{fmtIn(mv)}</td>
+        <td style={cellStyle('acceleration_sec')}>{fmtSec(p.acceleration_sec)}</td>
+        <td style={cellStyle('pro_agility_sec')}>{fmtSec(p.pro_agility_sec)}</td>
+        <td style={cellStyle('swing_velocity_mph')}>{fmtMph(p.swing_velocity_mph)}</td>
+      </>)}
       <td style={{ padding:'0.55rem 0.6rem', whiteSpace:'nowrap' }}>
         <button onClick={() => onEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Edit</button>
         <span style={{ color:'var(--gray-border)', margin:'0 0.4rem' }}>|</span>
@@ -249,7 +255,7 @@ export default function CoachPlayersPage() {
   const [saving, setSaving] = useState(false)
   const [search, setSearch] = useState('')
   const [viewMode, setViewMode] = useState<ViewMode>('leaderboard')
-  const [sortKey, setSortKey] = useState<SortKey>('approach_vertical_in')
+  const [sortKey, setSortKey] = useState<SortKey>(FEATURES.measurements ? 'approach_vertical_in' : 'name')
   const [sortDir, setSortDir] = useState<SortDir>('desc')
   const [scopeKey, setScopeKey] = useState<ScopeKey>('all')
   const [scopeValue, setScopeValue] = useState<string>('')
@@ -331,7 +337,7 @@ export default function CoachPlayersPage() {
     setForm({ name: p.name, jersey_number: p.jersey_number ?? '', position: p.position ?? '', pin: '', team_id: p.teamId ?? '', date_of_birth: p.date_of_birth ?? '' })
     setMeasurements({ height_in:'', wingspan_in:'', standing_reach_in:'', standing_vertical_in:'', approach_vertical_in:'', acceleration_sec:'', pro_agility_sec:'', swing_velocity_mph:'' })
     setEditTarget(p); setModal('edit'); setMsg('')
-    fetch(`/api/player/measurements?playerId=${p.id}`)
+    if (FEATURES.measurements) fetch(`/api/player/measurements?playerId=${p.id}`)
       .then(r => r.json())
       .then(d => {
         const m = d.measurements?.[0]
@@ -373,7 +379,7 @@ export default function CoachPlayersPage() {
           ? { ...p, ...data.player, age: calculateAge(data.player.date_of_birth), teamName: team?.name, teamColor: team?.color, teamId: team?.id }
           : p
         ))
-        const hasMeasurements = Object.values(measurements).some(v => v !== '')
+        const hasMeasurements = FEATURES.measurements && Object.values(measurements).some(v => v !== '')
         if (hasMeasurements) {
           await fetch('/api/player/measurements', {
             method: 'POST',
@@ -596,7 +602,7 @@ export default function CoachPlayersPage() {
               </FF>
             </div>
 
-            {modal === 'edit' && (
+            {modal === 'edit' && FEATURES.measurements && (
               <div style={{ borderTop:'1.5px solid var(--gray-border)', paddingTop:'1rem', marginBottom:'0.875rem' }}>
                 <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:700, marginBottom:'0.75rem' }}>Measurements (leave blank to keep current)</p>
                 <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'0.75rem' }}>

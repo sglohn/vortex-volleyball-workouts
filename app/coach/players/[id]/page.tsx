@@ -10,6 +10,7 @@ import FeetInchesInput from '@/components/FeetInchesInput'
 import MeasurementHistoryModal from '@/components/MeasurementHistoryModal'
 import PlayerHealthCard from '@/components/PlayerHealthCard'
 import VbtPanel from '@/components/VbtPanel'
+import { FEATURES } from '@/lib/features'
 
 const MEASUREMENT_FIELDS: { key: string; label: string; unit: 'ft-in' | 'sec' | 'mph' }[] = [
   { key: 'height_in', label: 'Height', unit: 'ft-in' },
@@ -204,7 +205,7 @@ export default function CoachPlayerDetailPage() {
 
       {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--volt)', fontSize: '0.9rem' }}>{msg}</div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 3fr) minmax(0, 2fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: FEATURES.vbt ? 'minmax(0, 3fr) minmax(0, 2fr)' : 'minmax(0, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
         {/* Left col: health + measurements */}
         <div>
           {/* Health card */}
@@ -215,82 +216,86 @@ export default function CoachPlayerDetailPage() {
             onUpdate={() => fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)}
           />
 
-          {/* Measurements */}
-          <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h2>
-              <button className="btn-ghost" onClick={() => setShowMeasForm(!showMeasForm)} style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}>{showMeasForm ? 'Cancel' : '+ Record'}</button>
-            </div>
+          {/* Measurements (volleyball only) */}
+          {FEATURES.measurements && (
+            <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Measurements</h2>
+                <button className="btn-ghost" onClick={() => setShowMeasForm(!showMeasForm)} style={{ padding: '0.3rem 0.75rem', fontSize: '0.8rem' }}>{showMeasForm ? 'Cancel' : '+ Record'}</button>
+              </div>
 
-            {(() => {
-              const score = (player as unknown as { athleticism_score?: number | null }).athleticism_score
-              const used = (player as unknown as { athleticism_metrics_used?: number }).athleticism_metrics_used ?? 0
-              return (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.6rem 0.875rem', marginBottom: '1rem' }}>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--carolina-deep)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Athleticism Score</span>
-                  {score != null ? (
-                    <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.15rem', color: 'var(--carolina-deep)' }}>
-                      {score.toFixed(1)} <span style={{ fontSize: '0.68rem', fontWeight: 500, color: 'var(--text-muted)' }}>({used}/8 tests)</span>
-                    </span>
-                  ) : (
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{used}/8 tests — need {5 - used > 0 ? 5 - used : 0} more</span>
-                  )}
-                </div>
-              )
-            })()}
-
-            {showMeasForm && (
-              <div style={{ marginBottom: '1rem' }}>
-                {MEASUREMENT_FIELDS.map(f => (
-                  <div key={f.key} style={{ marginBottom: '0.625rem' }}>
-                    <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>{f.label}</label>
-                    {f.unit === 'ft-in' ? (
-                      <FeetInchesInput
-                        value={measForm[f.key] ?? ''}
-                        onChange={val => setMeasForm(p => ({ ...p, [f.key]: val }))}
-                      />
+              {(() => {
+                const score = (player as unknown as { athleticism_score?: number | null }).athleticism_score
+                const used = (player as unknown as { athleticism_metrics_used?: number }).athleticism_metrics_used ?? 0
+                return (
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.6rem 0.875rem', marginBottom: '1rem' }}>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--carolina-deep)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Athleticism Score</span>
+                    {score != null ? (
+                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.15rem', color: 'var(--carolina-deep)' }}>
+                        {score.toFixed(1)} <span style={{ fontSize: '0.68rem', fontWeight: 500, color: 'var(--text-muted)' }}>({used}/8 tests)</span>
+                      </span>
                     ) : (
-                      <input
-                        className="input"
-                        type="number"
-                        step={f.unit === 'sec' ? '0.01' : '0.1'}
-                        placeholder={f.unit === 'sec' ? 'e.g. 4.85' : 'e.g. 47.3'}
-                        value={measForm[f.key] ?? ''}
-                        onChange={e => setMeasForm(p => ({ ...p, [f.key]: e.target.value }))}
-                      />
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{used}/8 tests — need {5 - used > 0 ? 5 - used : 0} more</span>
                     )}
                   </div>
-                ))}
-                <button className="btn-volt" onClick={saveMeasurement} disabled={savingMeas} style={{ width: '100%', padding: '0.625rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>{savingMeas ? 'Saving…' : 'Save Measurements'}</button>
-              </div>
-            )}
+                )
+              })()}
 
-            {latestMeas ? (
-              <div>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Recorded: {new Date(latestMeas.measured_at as string).toLocaleDateString()}</div>
-                {MEASUREMENT_FIELDS.map(f => {
-                  const val = latestMeas[f.key] as number | undefined
-                  return (
-                    <div key={f.key} onClick={() => setHistoryModal({ key: f.key, label: f.label })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid var(--gray-border)', cursor: 'pointer' }}>
-                      <div>
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{f.label}</span>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--carolina)', marginLeft: '0.4rem', fontWeight: 500 }}>history →</span>
-                      </div>
-                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '0.95rem' }}>
-                        {fmtMeasVal(val, f.unit)}
-                      </span>
+              {showMeasForm && (
+                <div style={{ marginBottom: '1rem' }}>
+                  {MEASUREMENT_FIELDS.map(f => (
+                    <div key={f.key} style={{ marginBottom: '0.625rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.3rem', fontWeight: 600 }}>{f.label}</label>
+                      {f.unit === 'ft-in' ? (
+                        <FeetInchesInput
+                          value={measForm[f.key] ?? ''}
+                          onChange={val => setMeasForm(p => ({ ...p, [f.key]: val }))}
+                        />
+                      ) : (
+                        <input
+                          className="input"
+                          type="number"
+                          step={f.unit === 'sec' ? '0.01' : '0.1'}
+                          placeholder={f.unit === 'sec' ? 'e.g. 4.85' : 'e.g. 47.3'}
+                          value={measForm[f.key] ?? ''}
+                          onChange={e => setMeasForm(p => ({ ...p, [f.key]: e.target.value }))}
+                        />
+                      )}
                     </div>
-                  )
-                })}
-              </div>
-            ) : <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No measurements yet.</p>}
-          </div>
+                  ))}
+                  <button className="btn-volt" onClick={saveMeasurement} disabled={savingMeas} style={{ width: '100%', padding: '0.625rem', marginTop: '0.5rem', fontSize: '0.9rem' }}>{savingMeas ? 'Saving…' : 'Save Measurements'}</button>
+                </div>
+              )}
+
+              {latestMeas ? (
+                <div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Recorded: {new Date(latestMeas.measured_at as string).toLocaleDateString()}</div>
+                  {MEASUREMENT_FIELDS.map(f => {
+                    const val = latestMeas[f.key] as number | undefined
+                    return (
+                      <div key={f.key} onClick={() => setHistoryModal({ key: f.key, label: f.label })} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.4rem 0', borderBottom: '1px solid var(--gray-border)', cursor: 'pointer' }}>
+                        <div>
+                          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{f.label}</span>
+                          <span style={{ fontSize: '0.65rem', color: 'var(--carolina)', marginLeft: '0.4rem', fontWeight: 500 }}>history →</span>
+                        </div>
+                        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '0.95rem' }}>
+                          {fmtMeasVal(val, f.unit)}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>No measurements yet.</p>}
+            </div>
+          )}
         </div>
 
-        {/* Right col: VBT panel */}
-        <div>
-          <VbtPanel playerId={id as string} />
-        </div>
+        {/* Right col: VBT panel (volleyball only) */}
+        {FEATURES.vbt && (
+          <div>
+            <VbtPanel playerId={id as string} />
+          </div>
+        )}
       </div>
 
       {/* Recent sessions */}
@@ -626,7 +631,7 @@ export default function CoachPlayerDetailPage() {
       </div>
     </div>
 
-      {historyModal && (
+      {FEATURES.measurements && historyModal && (
         <MeasurementHistoryModal
           playerId={id as string}
           playerName={player?.name ?? ''}
