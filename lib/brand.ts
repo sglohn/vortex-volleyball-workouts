@@ -2,7 +2,7 @@
 //
 // Which club this deployment is. One setting per Vercel project:
 //
-//   NEXT_PUBLIC_BRAND=lacrosse   → Bruiser Lacrosse (GPS girls' lacrosse)
+//   NEXT_PUBLIC_BRAND=lacrosse   → Bruisers Lacrosse (GPS girls' lacrosse)
 //   NEXT_PUBLIC_BRAND=vortex     → Vortex Volleyball (also used when not set;
 //                                   see next.config.js)
 //
@@ -57,10 +57,10 @@ const VORTEX: Brand = {
 // for highlight tints); here they become GPS blue and cool grays.
 const LACROSSE: Brand = {
   sport: 'lacrosse',
-  name: 'BRUISER LACROSSE',
-  appTitle: 'Bruiser Lacrosse',
+  name: 'BRUISERS LACROSSE',
+  appTitle: 'Bruisers Lacrosse',
   shortTitle: 'Bruisers',
-  description: 'Bruiser Lacrosse Strength & Conditioning',
+  description: 'Bruisers Lacrosse Strength & Conditioning',
   tagline: 'Strength & Conditioning',
   markSrc: '/brand/lacrosse/mark.png',
   icons: {

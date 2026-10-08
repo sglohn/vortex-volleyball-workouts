@@ -1,7 +1,7 @@
 // FILE: app/api/coach/exercises/import/route.ts   (new file)
 //
 // Imports exercises exported from another copy of this app (for example,
-// copying the exercise library into the Bruiser Lacrosse database).
+// copying the exercise library into the Bruisers Lacrosse database).
 // Coach-only: middleware.ts requires the coach cookie for /api/coach/*.
 //
 //   POST { exercises: ExportedExercise[] }   (up to 5 per call; the

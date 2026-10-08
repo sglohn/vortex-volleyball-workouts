@@ -4,7 +4,7 @@
 -- Oct 8, 2026 (after the auth_attempts and close_public_access changes).
 -- Replaces the out-of-date supabase/schema.sql for building a new database.
 --
--- Use it to set up a NEW, EMPTY Supabase project (the Bruiser Lacrosse
+-- Use it to set up a NEW, EMPTY Supabase project (the Bruisers Lacrosse
 -- database). Run once in that project's SQL Editor. It creates tables only;
 -- no data. Run it once only (a second run stops at "already exists").
 -- Do not run it on the Vortex database.

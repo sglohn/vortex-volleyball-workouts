@@ -10,7 +10,7 @@ own Supabase database:
 | Site | `NEXT_PUBLIC_BRAND` | Sport |
 |---|---|---|
 | Vortex Volleyball | `vortex` (default when not set) | volleyball |
-| Bruiser Lacrosse | `lacrosse` | lacrosse |
+| Bruisers Lacrosse | `lacrosse` | lacrosse |
 
 Pushing to `main` deploys both sites. The brand setting picks the names, logos
 and colors (`lib/brand.ts`) and switches off features the sport doesn't use
