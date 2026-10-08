@@ -1,6 +1,8 @@
+// FILE: app/api/player/history/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { canAccessPlayer, signInAgain } from '@/lib/playerAuth'
+import { asGeneratedWorkout } from '@/lib/fullBodyWorkout'
 
 export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
@@ -11,7 +13,7 @@ export async function GET(req: NextRequest) {
 
   const { data: sessions } = await db
     .from('sessions')
-    .select('id, checked_in_at, completed_at, team_id')
+    .select('*')   // '*' so this works before sessions.generated_workout exists
     .eq('player_id', playerId)
     .order('checked_in_at', { ascending: false })
 
@@ -22,7 +24,11 @@ export async function GET(req: NextRequest) {
     const { count: completedSets } = await db.from('set_logs').select('*', { count: 'exact', head: true }).eq('session_id', s.id).eq('completed', true)
 
     let workoutName = 'Workout'
-    if (s.team_id) {
+    const generated = asGeneratedWorkout(s.generated_workout)
+    if (generated) {
+      // Self-guided full-body workout (lib/fullBodyWorkout.ts)
+      workoutName = generated.name
+    } else if (s.team_id) {
       const date = s.checked_in_at.split('T')[0]
       const { data: schedule } = await db.from('team_schedule').select('workout_templates(name)').eq('team_id', s.team_id).eq('scheduled_date', date).single()
       if (schedule?.workout_templates) workoutName = (schedule.workout_templates as unknown as { name: string }).name

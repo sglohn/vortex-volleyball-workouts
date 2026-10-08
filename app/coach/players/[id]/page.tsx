@@ -71,6 +71,7 @@ export default function CoachPlayerDetailPage() {
   const [showDobForm, setShowDobForm] = useState(false)
   const [dobForm, setDobForm] = useState('')
   const [savingDob, setSavingDob] = useState(false)
+  const [savingSelfGuided, setSavingSelfGuided] = useState(false)
   const [newOverride, setNewOverride] = useState({ date: '', templateId: '', notes: '' })
   const [newSkip, setNewSkip] = useState({ exerciseId: '', replacementId: '', reason: '', skipType: 'avoid', endsOn: '' })
   const [replacementSearch, setReplacementSearch] = useState('')
@@ -121,6 +122,22 @@ export default function CoachPlayerDetailPage() {
     fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)
     setSavingDob(false)
     setShowDobForm(false)
+  }
+
+  // Self-guided: auto-built full-body workout every sign-in (lib/fullBodyWorkout.ts)
+  async function setSelfGuided(on: boolean) {
+    setSavingSelfGuided(true)
+    const res = await fetch('/api/coach/players/delete', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, self_guided: on }),
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      alert(`Could not save: ${d.error ?? 'Unknown error'}`)
+    }
+    fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)
+    setSavingSelfGuided(false)
   }
 
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading…</div>
@@ -349,6 +366,40 @@ export default function CoachPlayerDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── SELF-GUIDED WORKOUTS ── */}
+      {(() => {
+        const selfGuided = (player as unknown as { self_guided?: boolean }).self_guided === true
+        const hasProgram = programs.some(p => p.is_active)
+        return (
+          <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem', border: selfGuided ? '1.5px solid var(--carolina)' : undefined }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem' }}>Self-Guided Workouts</h3>
+                  {selfGuided && <span style={{ fontSize: '0.65rem', background: 'rgba(22,163,74,0.1)', color: 'var(--success)', border: '1px solid rgba(22,163,74,0.3)', borderRadius: 4, padding: '0.1rem 0.4rem', fontWeight: 600 }}>ON</span>}
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem', lineHeight: 1.45 }}>
+                  For former players and coaches not on a team. Every sign-in builds a new full-body workout: A Quad, B Hamstring, C Push, D Pull — each a main lift paired with a secondary exercise (set these on the Exercise Library page). Sore players can pick an easier option for the same area. Skips below are respected, and exercises from their last two workouts are avoided.
+                </p>
+                {selfGuided && hasProgram && (
+                  <p style={{ color: 'var(--carolina-dark)', fontSize: '0.72rem', marginTop: '0.35rem', fontWeight: 600 }}>
+                    This player has an active Individual Program — the program takes priority until it's stopped.
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => setSelfGuided(!selfGuided)}
+                disabled={savingSelfGuided}
+                aria-pressed={selfGuided}
+                title={selfGuided ? 'Turn off self-guided workouts' : 'Turn on self-guided workouts'}
+                style={{ flexShrink: 0, width: 52, height: 30, borderRadius: 15, border: 'none', cursor: savingSelfGuided ? 'default' : 'pointer', background: selfGuided ? 'var(--carolina)' : 'var(--gray-border)', position: 'relative', transition: 'background 0.15s', opacity: savingSelfGuided ? 0.6 : 1 }}>
+                <span style={{ position: 'absolute', top: 3, left: selfGuided ? 25 : 3, width: 24, height: 24, borderRadius: '50%', background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)', transition: 'left 0.15s' }} />
+              </button>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── WORKOUT ADJUSTMENTS ── */}
       <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>

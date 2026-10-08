@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react'
 import { EQUIPMENT_OPTIONS, asEquipment } from '@/lib/loads'
 import { FEATURES } from '@/lib/features'
 import ExerciseImport from '@/components/ExerciseImport'
+import { FULL_BODY_AREAS, SELF_GUIDED_ROLE_COLUMNS, roleTag } from '@/lib/fullBodyWorkout'
 
 const CATEGORIES = [
   'Upper - Push',
@@ -40,12 +41,22 @@ interface Exercise {
   logs_weight: boolean
   logs_velocity: boolean
   equipment?: string | null
+  self_guided_roles?: string[] | null
 }
 
 const BLANK = {
   name: '', category: 'Upper - Push', default_sets: 3, default_reps: '8',
   coaching_notes: '', demo_url: '', logs_weight: true, logs_velocity: false,
   equipment: '' as string,   // '' = not set yet
+  self_guided_roles: [] as string[],   // self-guided workout spots (lib/fullBodyWorkout.ts)
+}
+
+// Short label for a tag, e.g. 'quad_main' → 'A Quad · Main'
+function roleTagLabel(tag: string): string {
+  const [area, role] = tag.split('_')
+  const a = FULL_BODY_AREAS.find(x => x.area === area)
+  const r = SELF_GUIDED_ROLE_COLUMNS.find(x => x.role === role)
+  return a && r ? `${a.label} ${a.title} · ${r.label}` : tag
 }
 
 function equipmentLabel(value: string | null | undefined): string {
@@ -99,6 +110,7 @@ export default function ExercisesPage() {
       coaching_notes: ex.coaching_notes ?? '', demo_url: ex.demo_url ?? '',
       logs_weight: ex.logs_weight, logs_velocity: ex.logs_velocity,
       equipment: ex.equipment ?? '',
+      self_guided_roles: ex.self_guided_roles ?? [],
     })
     setStartImg(null); setEndImg(null)
     setStartPreview(ex.start_image_url ?? ex.demo_image_url ?? '')
@@ -365,6 +377,13 @@ export default function ExercisesPage() {
                     </select>
                   )}
                   {ex.coaching_notes && <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', fontStyle: 'italic', overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>{ex.coaching_notes}</div>}
+                  {(ex.self_guided_roles ?? []).length > 0 && (
+                    <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+                      {(ex.self_guided_roles ?? []).map(tag => (
+                        <span key={tag} title="Self-guided workout spot" style={{ fontSize: '0.62rem', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: 4, background: 'var(--carolina-light)', color: 'var(--carolina-dark)', border: '1px solid var(--carolina-border)' }}>{roleTagLabel(tag)}</span>
+                      ))}
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <button onClick={() => openEdit(ex)} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, padding: 0 }}>Edit</button>
                     <span style={{ color: 'var(--gray-border)' }}>|</span>
@@ -450,6 +469,40 @@ export default function ExercisesPage() {
                   Players can enter bar speed for this exercise, you can run VBT tests on it from a player&apos;s page, and you can set a target speed when adding it to a workout.
                 </p>
               )}
+            </div>
+
+            {/* Self-guided workout spots */}
+            <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1rem', marginBottom: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.375rem' }}>Self-Guided Workouts</div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem', lineHeight: 1.45 }}>
+                Where this exercise can go in auto-built workouts. <strong>Main</strong> = the bigger/heavier lift that starts the block, <strong>Secondary</strong> = what it&apos;s paired with, <strong>Easier option</strong> = offered to sore players (less weight or shorter range). If nothing is ticked for a spot, the app picks from the exercise category.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: `minmax(90px, 1.2fr) repeat(${SELF_GUIDED_ROLE_COLUMNS.length}, minmax(0, 1fr))`, gap: '0.35rem 0.5rem', alignItems: 'center' }}>
+                <span />
+                {SELF_GUIDED_ROLE_COLUMNS.map(c => (
+                  <span key={c.role} style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', textAlign: 'center' }}>{c.label}</span>
+                ))}
+                {FULL_BODY_AREAS.map(a => (
+                  <div key={a.area} style={{ display: 'contents' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 600 }}>{a.label} · {a.title}</span>
+                    {SELF_GUIDED_ROLE_COLUMNS.map(c => {
+                      const tag = roleTag(a.area, c.role)
+                      const checked = form.self_guided_roles.includes(tag)
+                      return (
+                        <label key={tag} style={{ display: 'flex', justifyContent: 'center', cursor: 'pointer', padding: '0.2rem 0' }}>
+                          <input type="checkbox" checked={checked} aria-label={`${a.title} ${c.label}`}
+                            onChange={e => setForm(p => ({
+                              ...p,
+                              self_guided_roles: e.target.checked
+                                ? [...p.self_guided_roles, tag]
+                                : p.self_guided_roles.filter(t => t !== tag),
+                            }))} />
+                        </label>
+                      )
+                    })}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* Photos */}
