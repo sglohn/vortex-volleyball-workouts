@@ -14,7 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import {
-  COACH_COOKIE, COACH_SESSION_DAYS, coachAuthConfigured, createCoachToken, isCoachRequest,
+  COACH_COOKIE, COACH_SESSION_DAYS, coachAuthConfigured, coachPin, createCoachToken, isCoachRequest,
 } from '@/lib/coachAuth'
 
 const MAX_TRIES = 5
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   failedCount = attempt?.failed_count ?? 0
 
   // ── Wrong PIN ──
-  if (typeof pin !== 'string' || pin !== process.env.COACH_PIN) {
+  if (typeof pin !== 'string' || pin.trim() !== coachPin()) {
     if (!attemptErr) {
       const next = failedCount + 1
       const lock = next >= MAX_TRIES

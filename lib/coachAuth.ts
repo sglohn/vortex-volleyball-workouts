@@ -21,9 +21,14 @@
 export const COACH_COOKIE = 'coach_session'
 export const COACH_SESSION_DAYS = 14
 
+/** The coach PIN from Vercel, ignoring stray spaces or line breaks */
+export function coachPin(): string {
+  return (process.env.COACH_PIN ?? '').trim()
+}
+
 function getSecret(): string | null {
-  const secret = process.env.COACH_SESSION_SECRET
-  const pin = process.env.COACH_PIN
+  const secret = process.env.COACH_SESSION_SECRET?.trim()
+  const pin = coachPin()
   if (!secret || secret.length < 32 || !pin) return null
   return `${secret}|${pin}`
 }
