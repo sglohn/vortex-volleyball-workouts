@@ -3,7 +3,7 @@
 -- Stores the player's end-of-workout rating (Easy / Medium / Hard) and
 -- optional note on the session, so coaches can see it in Workout Logs.
 --
--- Run once in BOTH Supabase projects (Vortex and Bruiser Lacrosse), in the
+-- Run once in BOTH Supabase projects (Vortex and Bruisers Lacrosse), in the
 -- SQL Editor, before the app update is merged. Safe to run again.
 
 alter table public.sessions add column if not exists rating text;
