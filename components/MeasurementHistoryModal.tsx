@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 import { inchesToFeetInches, calcVertical } from '@/lib/fitness'
+import { storedPlayerPass, withPass } from '@/lib/playerPass'
 
 interface MeasRow {
   measured_at: string
@@ -46,7 +47,7 @@ export default function MeasurementHistoryModal({ playerId, playerName, statKey,
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch(`/api/player/measurements?playerId=${playerId}`)
+    fetch(`/api/player/measurements?playerId=${playerId}`, withPass(storedPlayerPass()))
       .then(r => r.json())
       .then(d => { setRows((d.measurements ?? []).reverse()); setLoading(false) })
   }, [playerId])

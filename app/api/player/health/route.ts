@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { isCoachRequest } from '@/lib/coachAuth'
+import { canAccessPlayer, signInAgain } from '@/lib/playerAuth'
 
 const coachOnly = () => NextResponse.json({ error: 'Coach sign-in required' }, { status: 401 })
 
@@ -29,6 +30,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (playerId) {
+    if (!(await canAccessPlayer(req, playerId))) return signInAgain()
     const { data: reports } = await db
       .from('health_reports')
       .select('*')
@@ -46,6 +48,7 @@ export async function POST(req: NextRequest) {
   if (!playerId || !reportType || !bodyPart) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
+  if (!(await canAccessPlayer(req, playerId))) return signInAgain()
 
   const byCoach = reportedBy === 'coach' && (await isCoachRequest(req))
 

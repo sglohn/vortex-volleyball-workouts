@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { loadLabel, plateText, setPoundsMoved, weightInputLabel, type Equipment } from '@/lib/loads'
+import { playerFetch } from '@/lib/playerPass'
 
 interface SetLog { id?: string; set_number: number; reps_completed?: number; weight_lbs?: number; velocity_ms?: number; completed: boolean }
 interface Exercise {
@@ -54,7 +55,7 @@ export default function PlayerWorkoutPage() {
     setSession(s)
     const params = new URLSearchParams({ sessionId: s.sessionId })
     if (s.templateId) params.set('templateId', s.templateId)
-    fetch(`/api/workout?${params}`)
+    playerFetch(`/api/workout?${params}`)
       .then(r => r.json())
       .then(data => {
         if (data.source === 'template') setWorkout(data.template)
@@ -123,7 +124,7 @@ export default function PlayerWorkoutPage() {
     const block = workout.blocks[activeBlockIdx]
     const ex = block.exercises[currentExIdx]
 
-    const res = await fetch('/api/sets', {
+    const res = await playerFetch('/api/sets', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -201,7 +202,7 @@ export default function PlayerWorkoutPage() {
 
   async function handleFinish() {
     if (!session) return
-    await fetch('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId }) })
+    await playerFetch('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId }) })
 
     const completedSets = workout?.blocks.reduce((sum, b) => sum + b.exercises.reduce((s, e) => s + e.setLogs.filter(l => l.completed).length, 0), 0) ?? 0
     const totalSets = workout?.blocks.reduce((sum, b) => sum + b.exercises.filter(e => !e.skipped).length * b.sets, 0) ?? 0
@@ -236,7 +237,7 @@ export default function PlayerWorkoutPage() {
   async function submitRating() {
     if (!session || !sessionRating) return
     // Saved on the session (app/api/player/session-rating/route.ts)
-    await fetch('/api/player/session-rating', {
+    await playerFetch('/api/player/session-rating', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: session.sessionId, rating: sessionRating, note: ratingNote }),

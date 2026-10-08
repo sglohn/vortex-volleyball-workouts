@@ -91,6 +91,7 @@ export default function HomePage() {
         teamId: data.teamId, templateId: data.templateId,
         hasHealthFlags: data.hasHealthFlags, healthReports: data.healthReports,
         isResumed: data.isResumed,
+        playerPass: data.playerPass,
       }))
       router.push('/player/bodycheck')
     } catch { setError('Something went wrong'); setCheckingIn(false) }

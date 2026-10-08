@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { canAccessPlayer, signInAgain } from '@/lib/playerAuth'
 
 export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
   if (!playerId) return NextResponse.json({ error: 'Missing playerId' }, { status: 400 })
+  if (!(await canAccessPlayer(req, playerId))) return signInAgain()
 
   const db = createServerClient()
 

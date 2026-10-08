@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { playerFetch } from '@/lib/playerPass'
 
 interface SessionSummary {
   id: string
@@ -26,7 +27,7 @@ export default function PlayerHistoryPage() {
     if (!stored) { router.push('/'); return }
     const s = JSON.parse(stored)
     setPlayerId(s.playerId)
-    fetch(`/api/player/history?playerId=${s.playerId}`)
+    playerFetch(`/api/player/history?playerId=${s.playerId}`)
       .then(r => r.json())
       .then(d => { setSessions(d.sessions ?? []); setLoading(false) })
       .catch(() => setLoading(false))

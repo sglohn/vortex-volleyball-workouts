@@ -1,9 +1,10 @@
 // FILE: app/session/[date]/page.tsx
 'use client'
-import { useState, useEffect, useCallback, use } from 'react'
+import { useState, useEffect, useCallback, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadLabel, plateText, weightInputLabel, type Equipment } from '@/lib/loads'
 import BrandMark from '@/components/BrandMark'
+import { withPass } from '@/lib/playerPass'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface PlayerRow {
@@ -48,6 +49,11 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   const [velocityInput, setVelocityInput] = useState('')
   const [savingSet, setSavingSet] = useState(false)
 
+  // Each player's sign-in pass (lib/playerAuth.ts), kept only in this
+  // tablet's memory. A player can tap back in between sets without her PIN;
+  // after a page reload she enters her PIN again.
+  const passes = useRef<Map<string, string>>(new Map())
+
   // Get team IDs from URL search params
   const [teamIds, setTeamIds] = useState<string[]>([])
 
@@ -85,7 +91,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     setSelectedPlayer(player)
     setPin('')
     setPinError('')
-    if (player.checkedIn && player.sessionId) {
+    if (player.checkedIn && player.sessionId && passes.current.has(player.id)) {
       await loadWorkout(player)
     } else {
       setView('player_pin')
@@ -98,10 +104,17 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
       alert(`No workout scheduled today for this team. Please assign one in Coach → Schedule.`)
       return
     }
-    const res = await fetch(`/api/workout?sessionId=${player.sessionId}&templateId=${teamData.templateId}`)
+    const pass = passes.current.get(player.id)
+    const res = await fetch(`/api/workout?sessionId=${player.sessionId}&templateId=${teamData.templateId}`, withPass(pass))
+    if (res.status === 401) {
+      // Pass missing or expired: ask for her PIN again
+      passes.current.delete(player.id)
+      setPin(''); setPinError('Please enter your PIN again'); setView('player_pin')
+      return
+    }
     const d = await res.json()
     if (d.source === 'template' && d.template) {
-      const logsRes = await fetch(`/api/sets?sessionId=${player.sessionId}`)
+      const logsRes = await fetch(`/api/sets?sessionId=${player.sessionId}`, withPass(pass))
       const logsData = logsRes.ok ? await logsRes.json() : { logs: [] }
       const existingLogs: Array<{exercise_id: string; set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean}> = logsData.logs ?? []
 
@@ -174,6 +187,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     })
     const d = await res.json()
     if (!res.ok) { setPinError(d.error || 'Incorrect PIN'); setPin(''); setCheckingIn(false); return }
+    if (d.playerPass) passes.current.set(selectedPlayer.id, d.playerPass)
     const updatedPlayer = { ...selectedPlayer, checkedIn: true, sessionId: d.sessionId }
     setSelectedPlayer(updatedPlayer)
     setCheckingIn(false)
@@ -189,7 +203,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     const ex = block.exercises[activeExIdx]
     if (!ex) { setSavingSet(false); return }
 
-    const res = await fetch('/api/sets', {
+    const res = await fetch('/api/sets', withPass(passes.current.get(sessionInfo.playerId), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -201,7 +215,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
         targetVelocityMin: ex.targetVelocityMin ?? null,
         targetVelocityMax: ex.targetVelocityMax ?? null,
       }),
-    })
+    }))
 
     const result = await res.json()
 
@@ -226,7 +240,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
 
   async function finishWorkout() {
     if (!sessionInfo) return
-    await fetch('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionInfo.sessionId }) })
+    await fetch('/api/checkin', withPass(passes.current.get(sessionInfo.playerId), { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sessionInfo.sessionId }) }))
     await loadData()
     setView('leaderboard'); setSelectedPlayer(null); setWorkout(null); setSessionInfo(null)
   }

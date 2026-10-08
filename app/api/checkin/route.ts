@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
+import { canAccessSession, createPlayerPass, signInAgain } from '@/lib/playerAuth'
 
 export async function POST(req: NextRequest) {
   const { playerId, pin } = await req.json()
@@ -139,12 +140,15 @@ export async function POST(req: NextRequest) {
     isResumed: !!existingSession,
     hasHealthFlags: (healthReports?.length ?? 0) > 0,
     healthReports: healthReports ?? [],
+    // Signed pass for this player's own data (lib/playerAuth.ts)
+    playerPass: await createPlayerPass(playerId),
   })
 }
 
 export async function PATCH(req: NextRequest) {
   const { sessionId } = await req.json()
   if (!sessionId) return NextResponse.json({ error: 'Missing sessionId' }, { status: 400 })
+  if (!(await canAccessSession(req, sessionId))) return signInAgain()
   const db = createServerClient()
   await db.from('sessions').update({ completed_at: new Date().toISOString() }).eq('id', sessionId)
   return NextResponse.json({ ok: true })

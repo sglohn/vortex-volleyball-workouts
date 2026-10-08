@@ -9,6 +9,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { canAccessSession, signInAgain } from '@/lib/playerAuth'
 
 const RATINGS = new Set(['easy', 'medium', 'hard'])
 const ID_RE = /^[0-9a-f-]{8,64}$/i
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
   const { sessionId, rating, note } = await req.json().catch(() => ({}))
   if (typeof sessionId !== 'string' || !ID_RE.test(sessionId)) return NextResponse.json({ error: 'Bad session' }, { status: 400 })
   if (typeof rating !== 'string' || !RATINGS.has(rating)) return NextResponse.json({ error: 'Rating must be easy, medium or hard' }, { status: 400 })
+  if (!(await canAccessSession(req, sessionId))) return signInAgain()
   const cleanNote = typeof note === 'string' && note.trim() ? note.trim().slice(0, 500) : null
 
   const db = createServerClient()

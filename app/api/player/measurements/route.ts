@@ -1,10 +1,13 @@
 // FILE: app/api/player/measurements/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { canAccessPlayer, signInAgain } from '@/lib/playerAuth'
+import { isCoachRequest } from '@/lib/coachAuth'
 
 export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
   if (!playerId) return NextResponse.json({ error: 'Missing playerId' }, { status: 400 })
+  if (!(await canAccessPlayer(req, playerId))) return signInAgain()
   const db = createServerClient()
   const { data: measurements } = await db
     .from('measurements')
@@ -18,6 +21,8 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { playerId, ...fields } = body
   if (!playerId) return NextResponse.json({ error: 'Missing playerId' }, { status: 400 })
+  // Only coaches record measurements
+  if (!(await isCoachRequest(req))) return NextResponse.json({ error: 'Coach sign-in required' }, { status: 401 })
 
   const db = createServerClient()
   const today = new Date().toISOString().split('T')[0]

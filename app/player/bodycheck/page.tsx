@@ -2,6 +2,7 @@
 // app/player/bodycheck/page.tsx
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import { playerFetch } from '@/lib/playerPass'
 
 type Status = 'sore' | 'injured'
 type RegionMap = Record<string, Status>
@@ -118,7 +119,7 @@ export default function BodyCheckPage() {
     }
 
     try {
-      await fetch('/api/player/bodycheck', {
+      await playerFetch('/api/player/bodycheck', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, playerId, quickStatus: status, regions: sendRegions }),
