@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadLabel, plateText, weightInputLabel, type Equipment } from '@/lib/loads'
+import BrandMark from '@/components/BrandMark'
+import { BRAND } from '@/lib/brand'
 
 interface RosterPlayer {
   id: string
@@ -474,11 +476,9 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
 
       {/* Top bar */}
       <div style={{ background: 'var(--black)', padding: '0.875rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
-        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--volt)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--black)" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-        </div>
+        <BrandMark size={32} tone="accent" />
         <div>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', letterSpacing: '0.08em', color: 'var(--volt)', lineHeight: 1 }}>VORTEX S&C</div>
+          <div style={{ whiteSpace: 'nowrap', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', letterSpacing: '0.08em', color: 'var(--volt)', lineHeight: 1 }}>{BRAND.appTitle.toUpperCase()}</div>
           <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Team Mode</div>
         </div>
         <div style={{ flex: 1, textAlign: 'center' }}>

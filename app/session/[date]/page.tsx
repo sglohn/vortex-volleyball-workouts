@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, use } from 'react'
 import { useRouter } from 'next/navigation'
 import { loadLabel, plateText, weightInputLabel, type Equipment } from '@/lib/loads'
+import BrandMark from '@/components/BrandMark'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface PlayerRow {
@@ -425,9 +426,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
       <div style={{ width: 280, flexShrink: 0, display: 'flex', flexDirection: 'column', background: 'var(--black)', borderRight: '2px solid rgba(255,255,255,0.08)' }}>
         {/* Logo */}
         <div style={{ padding: '0.875rem 1rem', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--yellow)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--black)" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </div>
+          <BrandMark size={28} tone="accent" />
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.08em', color: 'var(--yellow)' }}>WEIGHT ROOM</span>
         </div>
 

@@ -2,6 +2,7 @@
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { EQUIPMENT_OPTIONS, asEquipment } from '@/lib/loads'
+import { FEATURES } from '@/lib/features'
 
 const CATEGORIES = [
   'Upper - Push',
@@ -347,7 +348,7 @@ export default function ExercisesPage() {
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.375rem' }}>
                     {ex.default_sets}×{ex.default_reps}
                     {ex.logs_weight && (ex.equipment ? ` · ${equipmentLabel(ex.equipment)}` : ' · weight')}
-                    {ex.logs_velocity && <span style={{ color: 'var(--carolina)', fontWeight: 600 }}> · ⚡ bar speed</span>}
+                    {FEATURES.vbt && ex.logs_velocity && <span style={{ color: 'var(--carolina)', fontWeight: 600 }}> · ⚡ bar speed</span>}
                   </div>
                   {ex.logs_weight && !ex.equipment && (
                     <select value="" onChange={e => setEquipmentInline(ex, e.target.value)}
@@ -418,10 +419,12 @@ export default function ExercisesPage() {
                   <input type="checkbox" checked={form.logs_weight} onChange={e => setForm(p => ({ ...p, logs_weight: e.target.checked }))} />
                   Log weight
                 </label>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>
-                  <input type="checkbox" checked={form.logs_velocity} onChange={e => setForm(p => ({ ...p, logs_velocity: e.target.checked }))} />
-                  Log velocity
-                </label>
+                {FEATURES.vbt && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>
+                    <input type="checkbox" checked={form.logs_velocity} onChange={e => setForm(p => ({ ...p, logs_velocity: e.target.checked }))} />
+                    Log velocity
+                  </label>
+                )}
               </div>
               {form.logs_weight && (
                 <div style={{ gridColumn: '1/-1' }}>
@@ -435,7 +438,7 @@ export default function ExercisesPage() {
                   </p>
                 </div>
               )}
-              {form.logs_velocity && (
+              {FEATURES.vbt && form.logs_velocity && (
                 <p style={{ gridColumn: '1/-1', fontSize: '0.75rem', color: 'var(--text-muted)', margin: 0 }}>
                   Players can enter bar speed for this exercise, you can run VBT tests on it from a player&apos;s page, and you can set a target speed when adding it to a workout.
                 </p>

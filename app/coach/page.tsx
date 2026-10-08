@@ -6,6 +6,8 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
+import BrandMark from '@/components/BrandMark'
+import { BRAND } from '@/lib/brand'
 
 export default function CoachLoginPage() {
   const router = useRouter()
@@ -43,11 +45,9 @@ export default function CoachLoginPage() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--volt)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0a0f0d" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </div>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--volt)' }}>VORTEX</h1>
+        <div style={{ display: 'flex', flexDirection: BRAND.markSrc ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+          <BrandMark size={BRAND.markSrc ? 88 : 40} tone="dark" />
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: BRAND.markSrc ? 'clamp(1.6rem, 8vw, 2rem)' : '2rem', whiteSpace: 'nowrap', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--volt)' }}>{BRAND.name}</h1>
         </div>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Strength & Conditioning — Coach</p>
       </div>

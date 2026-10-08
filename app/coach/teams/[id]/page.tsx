@@ -5,6 +5,7 @@ import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
 import { inchesToFeetInches, calcVertical, painLevelColor, painLevelLabel } from '@/lib/fitness'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
+import { FEATURES, POSITIONS } from '@/lib/features'
 
 interface Measurement { height_in?: number; wingspan_in?: number; standing_reach_in?: number; standing_vertical_in?: number; approach_vertical_in?: number; measured_at?: string }
 interface HealthReport { id: string; report_type: string; body_part: string; pain_level?: number; status: string; confirmed_by_coach: boolean; description?: string; reported_at: string; coach_notes?: string }
@@ -15,14 +16,15 @@ interface Phase { id: string; phase_type: string; name: string; description?: st
 
 type Tab = 'roster' | 'stats' | 'health'
 
-const MEAS_FIELDS = [
+// Volleyball measurements. Empty when measurements are off (lib/features.ts).
+const ALL_MEAS_FIELDS = [
   { key: 'height_in',            label: 'Height',          showFt: true  },
   { key: 'wingspan_in',          label: 'Wingspan',        showFt: true  },
   { key: 'standing_reach_in',    label: 'Standing Reach',  showFt: true  },
   { key: 'standing_vertical_in', label: 'Block Touch',     showFt: true  },
   { key: 'approach_vertical_in', label: 'Approach Touch',  showFt: true  },
 ]
-const POSITIONS = ['Setter','Outside Hitter','Middle Blocker','Opposite','Libero','Defensive Specialist','Other']
+const MEAS_FIELDS = FEATURES.measurements ? ALL_MEAS_FIELDS : []
 const TREND_COLOR: Record<string, string> = { up: 'var(--success)', down: 'var(--danger)', flat: 'var(--text-muted)' }
 const TREND_ICON: Record<string, string> = { up: '↑', down: '↓', flat: '→' }
 
@@ -92,7 +94,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     const res = await fetch('/api/coach/players/delete', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     if (!res.ok) { const d = await res.json(); setEditMsg(d.error || 'Error'); setEditSaving(false); return }
 
-    const hasMeas = Object.values(editMeas).some(v => v !== '')
+    const hasMeas = FEATURES.measurements && Object.values(editMeas).some(v => v !== '')
     if (hasMeas) {
       await fetch('/api/player/measurements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ playerId: editPlayer.id, ...editMeas }) })
     }
@@ -168,7 +170,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', background: 'var(--carolina-light)', padding: '0.25rem', borderRadius: 10, width: 'fit-content', border: '1.5px solid var(--carolina-border)' }}>
-        {([['roster','Roster'], ['stats','Measurements & Stats'], ['health','Health Board']] as [Tab, string][]).map(([t, label]) => (
+        {([['roster','Roster'], ['stats', FEATURES.measurements ? 'Measurements & Stats' : 'Stats'], ['health','Health Board']] as [Tab, string][]).map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)}
             style={{ padding: '0.5rem 1.1rem', borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.12s', background: tab === t ? 'var(--carolina)' : 'transparent', color: tab === t ? 'var(--white)' : 'var(--carolina-dark)' }}>
             {label}{t === 'health' && activeHealthCount > 0 ? ` (${activeHealthCount})` : ''}
@@ -292,8 +294,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
             </table>
           </div>
 
-          {/* Team averages */}
-          {roster.length > 0 && (() => {
+          {/* Team averages (measurements only) */}
+          {roster.length > 0 && MEAS_FIELDS.length > 0 && (() => {
             const avgs = MEAS_FIELDS.map(f => {
               const vals = roster.map(p => p.measurements?.[f.key as keyof Measurement] as number | undefined).filter((v): v is number => !!v)
               return { ...f, avg: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length * 10) / 10 : null, count: vals.length }
@@ -401,8 +403,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
               </div>
             </div>
 
-            {/* Measurements */}
-            <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1rem', marginBottom: '1.25rem' }}>
+            {/* Measurements (volleyball only) */}
+            {FEATURES.measurements && <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1rem', marginBottom: '1.25rem' }}>
               <div style={{ fontSize: '0.72rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.75rem' }}>Athletic Measurements (inches)</div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem' }}>
                 {MEAS_FIELDS.map(f => (
@@ -416,7 +418,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                 ))}
               </div>
               <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.5rem', fontStyle: 'italic' }}>Enter feet and inches. Blank fields are ignored — only filled fields update.</p>
-            </div>
+            </div>}
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button className="btn-ghost" onClick={() => setEditPlayer(null)} style={{ flex: 1, padding: '0.75rem' }}>Cancel</button>
