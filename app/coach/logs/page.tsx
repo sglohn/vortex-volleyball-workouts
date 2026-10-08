@@ -40,6 +40,8 @@ interface LogSession {
   teamColor: string | null
   checkedInAt: string
   completedAt: string | null
+  rating: 'easy' | 'medium' | 'hard' | null
+  ratingNote: string | null
   setsCompleted: number
   totalLbs: number
   flagCount: number
@@ -287,6 +289,12 @@ function WorkoutLogsInner() {
                     <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
                       {selected.teamName}. Checked in {clock(selected.checkedInAt)}{selected.completedAt ? `, finished ${clock(selected.completedAt)}` : ', didn’t tap finish'}
                     </div>
+                    {selected.rating && (
+                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                        Rated the workout <strong style={{ color: selected.rating === 'hard' ? 'var(--danger)' : selected.rating === 'medium' ? 'var(--warning)' : 'var(--success)' }}>{selected.rating}</strong>
+                        {selected.ratingNote ? <span>: “{selected.ratingNote}”</span> : null}
+                      </div>
+                    )}
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800 }}>{selected.totalLbs.toLocaleString()} lbs</div>

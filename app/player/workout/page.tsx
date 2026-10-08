@@ -235,10 +235,11 @@ export default function PlayerWorkoutPage() {
   // Rating submission
   async function submitRating() {
     if (!session || !sessionRating) return
-    await fetch('/api/player/health', {
+    // Saved on the session (app/api/player/session-rating/route.ts)
+    await fetch('/api/player/session-rating', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: session.sessionId, type: 'session_rating', rating: sessionRating, note: ratingNote }),
+      body: JSON.stringify({ sessionId: session.sessionId, rating: sessionRating, note: ratingNote }),
     }).catch(() => {})
     setRatingSubmitted(true)
   }
