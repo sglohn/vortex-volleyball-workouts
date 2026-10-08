@@ -533,3 +533,11 @@ alter table public.workouts enable row level security;
 insert into storage.buckets (id, name, public)
 values ('exercise-media', 'exercise-media', true)
 on conflict (id) do update set public = true;
+
+-- The app's server uses the service_role key. Grant it access explicitly,
+-- so the app works whether or not the project was created with
+-- "Automatically expose new tables" turned on. (Row level security still
+-- blocks the public anon and authenticated roles.)
+grant usage on schema public to service_role;
+grant all on all tables in schema public to service_role;
+grant all on all sequences in schema public to service_role;
