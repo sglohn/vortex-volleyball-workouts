@@ -40,9 +40,21 @@ export async function POST(req: NextRequest) {
   }
 
   const { pin } = await req.json().catch(() => ({ pin: '' }))
-  const db = createServerClient()
   const key = clientKey(req)
   const now = Date.now()
+
+  // The database is only needed for the lockout. If its settings are wrong
+  // (NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY), say so plainly
+  // instead of failing with an error the sign-in screen reads as "Wrong PIN".
+  let db: ReturnType<typeof createServerClient>
+  try {
+    db = createServerClient()
+  } catch (e) {
+    return NextResponse.json(
+      { error: `Server can't reach the database: ${(e as Error).message}. Check NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in Vercel.` },
+      { status: 500 },
+    )
+  }
 
   // ── Lockout check ──
   let failedCount = 0

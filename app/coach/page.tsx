@@ -36,7 +36,8 @@ export default function CoachLoginPage() {
       router.push('/coach/dashboard')
     } else {
       const data = await res.json().catch(() => ({}))
-      setError(data?.error || 'Wrong PIN')
+      // Only a 401 means the PIN itself was wrong; show anything else as-is
+      setError(data?.error || (res.status === 401 ? 'Wrong PIN' : `Server error (${res.status}). Try again in a minute.`))
       setPin('')
       setLoading(false)
     }
