@@ -28,8 +28,10 @@ export interface Brand {
   tagline: string
   /** Round logo shown in headers. null = the lightning-bolt circle. */
   markSrc: string | null
-  /** Home-screen and browser icons. null = none. */
-  icons: { favicon: string; apple: string; icon192: string; icon512: string } | null
+  /** Home-screen and browser icons. null = none.
+   *  maskable: Android version with extra margin (it gets cropped to a circle);
+   *  falls back to icon512 when not set. */
+  icons: { favicon: string; apple: string; icon192: string; icon512: string; maskable?: string } | null
   /** Phone status-bar / home-screen color */
   themeColor: string
   /** CSS variable overrides for app/globals.css. null = keep globals.css as is. */
@@ -46,7 +48,14 @@ const VORTEX: Brand = {
   description: 'Vortex Volleyball Strength & Conditioning',
   tagline: 'Strength & Conditioning',
   markSrc: null,
-  icons: null,
+  // WORK logo (public/brand/vortex). Favicon is the swirling ball only.
+  icons: {
+    favicon: '/brand/vortex/favicon-32.png',
+    apple: '/brand/vortex/apple-touch-icon.png',
+    icon192: '/brand/vortex/icon-192.png',
+    icon512: '/brand/vortex/icon-512.png',
+    maskable: '/brand/vortex/icon-maskable-512.png',
+  },
   themeColor: '#111827',
   cssVars: null,
   bodyBackgroundImage: null,
