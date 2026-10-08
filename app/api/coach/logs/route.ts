@@ -19,7 +19,7 @@ import { flagExerciseSets } from '@/lib/outliers'
 export const dynamic = 'force-dynamic'
 
 type Db = ReturnType<typeof createServerClient>
-type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
+type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null; rating?: string | null; rating_note?: string | null }
 type LogRow = {
   id: string; session_id: string; exercise_id: string; set_number: number
   weight_lbs: number | null; reps_completed: number | null; velocity_ms: number | null
@@ -75,7 +75,7 @@ export async function GET(req: NextRequest) {
   // ── Sessions that day ──
   const { data: sessionsRaw, error: sErr } = await db
     .from('sessions')
-    .select('id, player_id, checked_in_at, completed_at')
+    .select('id, player_id, checked_in_at, completed_at, rating, rating_note')
     .gte('checked_in_at', start)
     .lt('checked_in_at', end)
     .order('checked_in_at', { ascending: true })
@@ -232,6 +232,8 @@ export async function GET(req: NextRequest) {
       teamColor: team?.color ?? null,
       checkedInAt: s.checked_in_at,
       completedAt: s.completed_at,
+      rating: s.rating ?? null,
+      ratingNote: s.rating_note ?? null,
       setsCompleted,
       totalLbs: Math.round(totalLbs),
       flagCount,
