@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { EQUIPMENT_OPTIONS, asEquipment } from '@/lib/loads'
 import { FEATURES } from '@/lib/features'
+import ExerciseImport from '@/components/ExerciseImport'
 
 const CATEGORIES = [
   'Upper - Push',
@@ -76,12 +77,13 @@ export default function ExercisesPage() {
   const startRef = useRef<HTMLInputElement>(null)
   const endRef   = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
+  function loadExercises() {
     fetch('/api/coach/exercises').then(r => r.json()).then(d => {
       setExercises(d.exercises ?? [])
       setLoading(false)
     })
-  }, [])
+  }
+  useEffect(() => { loadExercises() }, [])
 
   function openAdd() {
     setForm(BLANK); setEditTarget(null)
@@ -308,6 +310,7 @@ export default function ExercisesPage() {
           )}
         </div>
         <div style={{ display: 'flex', gap: '0.75rem' }}>
+          <ExerciseImport onDone={loadExercises} />
           <button className="btn-volt" onClick={openAdd} style={{ padding: '0.625rem 1.25rem' }}>+ Add Exercise</button>
         </div>
       </div>
