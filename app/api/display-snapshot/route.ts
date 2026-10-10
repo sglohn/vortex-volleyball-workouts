@@ -18,9 +18,11 @@
 //              Roku can play the clips one at a time right on top of their
 //              still pictures. Base64 of JSON:
 //                [{ "url": "...mp4", "x": 1200, "y": 300, "w": 320, "h": 180 }, ...]
-//              x/y/w/h are pixels in the 1920x1080 picture, in reading
-//              order (top to bottom, left to right). Only MP4 clips are
-//              listed, since many Rokus can't play WebM. "[]" when none.
+//              x/y/w/h are pixels in the 1920x1080 picture. Listed in
+//              block order, the same order the page draws them: Block A
+//              exercise 1, exercise 2, then Block B, and so on. Only MP4
+//              clips are listed, since many Rokus can't play WebM. "[]"
+//              when none.
 //
 // The page is shown with ?still=1, so exercises with a demo clip show the
 // clip's still picture (the page looks the same otherwise). The hidden browser:
@@ -89,7 +91,9 @@ export async function GET(req: NextRequest) {
 
     const image = await page.screenshot({ type: 'jpeg', quality: 90 })
 
-    // Where each clip's still picture is (marked by components/ExerciseClip.tsx)
+    // Where each clip's still picture is (marked by components/ExerciseClip.tsx).
+    // querySelectorAll gives them in the page's own order, which is block
+    // order (A1, A2, B1, B2, ...), so they're kept in that order.
     const clips = await page.evaluate(() => {
       const out: { url: string; x: number; y: number; w: number; h: number }[] = []
       document.querySelectorAll<HTMLElement>('[data-clip-src]').forEach(el => {
@@ -105,7 +109,6 @@ export async function GET(req: NextRequest) {
     })
     const playable = clips
       .filter(c => /^https:\/\//i.test(c.url) && /\.(mp4|m4v)(\?|#|$)/i.test(c.url))
-      .sort((a, b) => (Math.abs(a.y - b.y) > 20 ? a.y - b.y : a.x - b.x))
 
     return new NextResponse(Buffer.from(image), {
       headers: {
