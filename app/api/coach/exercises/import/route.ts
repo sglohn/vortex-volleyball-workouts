@@ -1,4 +1,4 @@
-// FILE: app/api/coach/exercises/import/route.ts   (new file)
+// FILE: app/api/coach/exercises/import/route.ts
 //
 // Imports exercises exported from another copy of this app (for example,
 // copying the exercise library into the Bruisers Lacrosse database).
@@ -10,9 +10,9 @@
 //
 // For each exercise:
 //   - skipped if an exercise with the same name already exists
-//   - photos are downloaded from the export's Supabase storage and
-//     re-uploaded into this site's own "exercise-media" bucket, so this
-//     site never loads images from the other project
+//   - photos and demo clips are downloaded from the export's Supabase
+//     storage and re-uploaded into this site's own "exercise-media" bucket,
+//     so this site never loads images or clips from the other project
 //   - bar speed logging is turned off when VBT is off (lib/features.ts)
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -24,6 +24,7 @@ export const maxDuration = 120
 
 const MAX_PER_CALL = 5
 const MAX_IMAGE_BYTES = 8 * 1024 * 1024
+const MAX_CLIP_BYTES = 20 * 1024 * 1024
 
 interface ExportedExercise {
   name?: string
@@ -40,6 +41,8 @@ interface ExportedExercise {
   start_image_position?: string | null
   end_image_position?: string | null
   equipment?: string | null
+  clip_url?: string | null
+  clip_poster_url?: string | null
 }
 
 // Only copy photos from Supabase public storage, never arbitrary addresses
@@ -63,6 +66,19 @@ async function copyImage(db: Db, url: string, exerciseId: string, which: string)
   const path = `exercises/${exerciseId}/${which}_${Date.now()}.${ext}`
   const { error } = await db.storage.from('exercise-media').upload(path, buf, { upsert: true, contentType: type })
   if (error) throw new Error(`photo upload failed: ${error.message}`)
+  return db.storage.from('exercise-media').getPublicUrl(path).data.publicUrl
+}
+
+async function copyClip(db: Db, url: string, exerciseId: string): Promise<string | null> {
+  if (!isSupabasePublicImage(url)) return null
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`clip download failed (${res.status})`)
+  const buf = Buffer.from(await res.arrayBuffer())
+  if (buf.length > MAX_CLIP_BYTES) throw new Error('clip too large')
+  const type = (res.headers.get('content-type') ?? '').includes('webm') ? 'video/webm' : 'video/mp4'
+  const path = `exercises/${exerciseId}/clip_${Date.now()}.${type === 'video/webm' ? 'webm' : 'mp4'}`
+  const { error } = await db.storage.from('exercise-media').upload(path, buf, { upsert: true, contentType: type })
+  if (error) throw new Error(`clip upload failed: ${error.message}`)
   return db.storage.from('exercise-media').getPublicUrl(path).data.publicUrl
 }
 
@@ -113,10 +129,26 @@ export async function POST(req: NextRequest) {
           start_image_url: start, end_image_url: end, demo_image_url: demo ?? start,
         }).eq('id', created.id)
       }
-      results.push({ name, status: 'added' })
     } catch (e) {
       results.push({ name, status: 'added', detail: `added without photos (${(e as Error).message})` })
+      continue
     }
+
+    // Demo clip and its still picture (only if this site has the clip columns)
+    if (ex.clip_url) {
+      try {
+        const clip = await copyClip(db, ex.clip_url, created.id)
+        const poster = ex.clip_poster_url ? await copyImage(db, ex.clip_poster_url, created.id, 'poster') : null
+        if (clip) {
+          const { error: clipError } = await db.from('exercise_library').update({ clip_url: clip, clip_poster_url: poster }).eq('id', created.id)
+          if (clipError) throw new Error(clipError.message)
+        }
+      } catch (e) {
+        results.push({ name, status: 'added', detail: `added without its demo clip (${(e as Error).message})` })
+        continue
+      }
+    }
+    results.push({ name, status: 'added' })
   }
 
   return NextResponse.json({ results })

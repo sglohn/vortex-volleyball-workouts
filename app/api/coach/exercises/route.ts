@@ -24,8 +24,11 @@ export async function GET(req: NextRequest) {
     return query
   }
 
-  // Falls back to the old columns if the self-guided migration hasn't been run yet
-  let { data: exercises, error } = await run(`${BASE_COLUMNS}, self_guided_roles`)
+  // Falls back to fewer columns if the demo clip migration
+  // (2026-10-10_exercise_clips.sql) or the self-guided migration hasn't
+  // been run yet
+  let { data: exercises, error } = await run(`${BASE_COLUMNS}, self_guided_roles, clip_url, clip_poster_url`)
+  if (error) ({ data: exercises, error } = await run(`${BASE_COLUMNS}, self_guided_roles`))
   if (error) ({ data: exercises, error } = await run(BASE_COLUMNS))
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ exercises: exercises ?? [] })
@@ -93,6 +96,7 @@ export async function DELETE(req: NextRequest) {
   const db = createServerClient()
 
   // Fetch image URLs before deleting so we can clean up storage
+  // (photos, the demo clip and its still picture all live in exercises/{id}/)
   const { data: exercise } = await db
     .from('exercise_library')
     .select('start_image_url, end_image_url, demo_image_url')

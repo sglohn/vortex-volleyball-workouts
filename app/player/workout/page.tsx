@@ -9,11 +9,13 @@ import { useRouter } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { loadLabel, plateText, setPoundsMoved, weightInputLabel, type Equipment } from '@/lib/loads'
 import { playerFetch } from '@/lib/playerPass'
+import ExerciseClip from '@/components/ExerciseClip'
 
 interface SetLog { id?: string; set_number: number; reps_completed?: number; weight_lbs?: number; velocity_ms?: number; completed: boolean }
 interface Exercise {
   id: string; name: string; default_reps?: string; coaching_notes?: string
   demo_url?: string; demo_image_url?: string; start_image_url?: string; end_image_url?: string
+  clip_url?: string | null; clip_poster_url?: string | null
   logs_weight: boolean; logs_velocity: boolean
   equipment?: Equipment | null
   customReps?: string; customNotes?: string; skipped: boolean
@@ -450,8 +452,13 @@ export default function PlayerWorkoutPage() {
             )}
           </div>
 
-          {/* ── START / FINISH IMAGES ── */}
-          {(() => {
+          {/* ── DEMO CLIP (shows the whole motion) — or START / FINISH IMAGES ── */}
+          {ex.clip_url && (
+            <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--court-raised)', height: 200, margin: '0 0 1rem 0' }}>
+              <ExerciseClip src={ex.clip_url} poster={ex.clip_poster_url} alt={`${ex.name} demo`} />
+            </div>
+          )}
+          {!ex.clip_url && (() => {
             const startUrl = ex.start_image_url ?? ex.demo_image_url
             const endUrl = ex.end_image_url
             if (!startUrl && !endUrl) return null
@@ -727,7 +734,12 @@ export default function PlayerWorkoutPage() {
               <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem' }}>{demoEx.name}</h3>
               <button onClick={() => setDemoEx(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.2rem' }}>✕</button>
             </div>
-            {(() => {
+            {demoEx.clip_url && (
+              <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--court-raised)', height: 260, marginBottom: '1rem' }}>
+                <ExerciseClip src={demoEx.clip_url} poster={demoEx.clip_poster_url} alt={`${demoEx.name} demo`} />
+              </div>
+            )}
+            {!demoEx.clip_url && (() => {
               const startUrl = demoEx.start_image_url ?? demoEx.demo_image_url
               const endUrl = demoEx.end_image_url
               if (!startUrl && !endUrl) return null

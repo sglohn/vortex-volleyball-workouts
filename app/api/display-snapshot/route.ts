@@ -14,7 +14,8 @@
 //
 // Response header X-Team-Id tells the Roku which team was pictured.
 //
-// The page itself is not changed. The hidden browser:
+// The page is shown with ?still=1, so exercises with a demo clip show the
+// clip's still picture (the page looks the same otherwise). The hidden browser:
 //   - uses Eastern time, so "today" matches the club (Vercel runs on UTC)
 //   - looks signed in as a coach, so the coach-area login check doesn't
 //     send it to the login page
@@ -42,7 +43,8 @@ export async function GET(req: NextRequest) {
   }
 
   const origin = process.env.DISPLAY_SNAPSHOT_ORIGIN || req.nextUrl.origin
-  const pageUrl = `${origin}/coach/display${team ? `?team=${encodeURIComponent(team)}` : ''}`
+  // still=1: demo clips show as their still picture (a picture can't move)
+  const pageUrl = `${origin}/coach/display?still=1${team ? `&team=${encodeURIComponent(team)}` : ''}`
 
   let browser: Browser | null = null
   try {

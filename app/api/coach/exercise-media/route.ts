@@ -1,4 +1,4 @@
-// FILE: app/api/coach/exercise-media/route.ts   (new file)
+// FILE: app/api/coach/exercise-media/route.ts
 //
 // Uploads an exercise demo photo to Supabase storage (bucket
 // "exercise-media") from the server.
@@ -9,14 +9,19 @@
 // Supabase. Coach-only: middleware.ts requires the coach cookie for every
 // /api/coach/* route.
 //
-//   POST multipart form: file (image), exerciseId, which ('start' | 'end')
+//   POST multipart form: file (image), exerciseId, which ('start' | 'end' | 'poster')
 //   → { url }  public URL of the uploaded photo
+//
+// 'poster' is the still frame taken from an exercise's demo clip (see
+// app/api/coach/exercise-clip/route.ts). The clip itself is uploaded
+// differently because videos can be too big for this route.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 
 const MAX_BYTES = 4 * 1024 * 1024
 const ID_RE = /^[0-9a-f-]{8,64}$/i
+const SLOTS = ['start', 'end', 'poster']
 
 export async function POST(req: NextRequest) {
   const form = await req.formData().catch(() => null)
@@ -30,7 +35,7 @@ export async function POST(req: NextRequest) {
   if (file.size > MAX_BYTES) return NextResponse.json({ error: 'Photo is too large (4 MB max)' }, { status: 413 })
   if (!file.type.startsWith('image/')) return NextResponse.json({ error: 'File must be an image' }, { status: 400 })
   if (!ID_RE.test(exerciseId)) return NextResponse.json({ error: 'Bad exercise id' }, { status: 400 })
-  if (which !== 'start' && which !== 'end') return NextResponse.json({ error: 'Bad photo slot' }, { status: 400 })
+  if (!SLOTS.includes(which)) return NextResponse.json({ error: 'Bad photo slot' }, { status: 400 })
 
   const path = `exercises/${exerciseId}/${which}_${Date.now()}.jpg`
   const db = createServerClient()
