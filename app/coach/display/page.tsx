@@ -1,9 +1,15 @@
 // FILE: app/coach/display/page.tsx
+//
+// Exercises with a demo clip show one looping clip where the start/finish
+// photos would go. ?still=1 shows each clip's still picture instead; the
+// Roku snapshot (app/api/display-snapshot/route.ts) uses that, since the
+// Roku can only show a picture.
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { BRAND } from '@/lib/brand'
+import ExerciseClip from '@/components/ExerciseClip'
 
 interface Exercise {
   id: string
@@ -21,6 +27,8 @@ interface Exercise {
     end_image_url?: string
     start_image_position?: string
     end_image_position?: string
+    clip_url?: string | null
+    clip_poster_url?: string | null
     coaching_notes?: string
     logs_weight?: boolean
   }
@@ -40,6 +48,7 @@ function DisplayContent() {
   const searchParams = useSearchParams()
   const [teams, setTeams]             = useState<Team[]>([])
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(searchParams.get('team'))
+  const still = searchParams.get('still') === '1'
   const [workout, setWorkout]         = useState<WorkoutData | null>(null)
   const [phase, setPhase]             = useState<{ phase_type: string; name: string } | null>(null)
   const [loading, setLoading]         = useState(false)
@@ -246,8 +255,13 @@ function DisplayContent() {
                           )}
                         </div>
 
-                        {/* Right — start + end images side by side */}
-                        {(() => {
+                        {/* Right — demo clip, or start + end images side by side */}
+                        {lib.clip_url && (
+                          <div style={{ flexShrink: 0, height: '100%', aspectRatio: '16/9', overflow: 'hidden', background: '#0d1117' }}>
+                            <ExerciseClip src={lib.clip_url} poster={lib.clip_poster_url} alt={`${lib.name} demo`} still={still} />
+                          </div>
+                        )}
+                        {!lib.clip_url && (() => {
                           const startUrl = lib.start_image_url || lib.demo_image_url
                           const endUrl   = lib.end_image_url
                           const hasTwo   = !!(startUrl && endUrl)

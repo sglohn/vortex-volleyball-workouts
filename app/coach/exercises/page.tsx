@@ -1,9 +1,16 @@
 // FILE: app/coach/exercises/page.tsx
+//
+// Demo clips: an exercise can have a short looping clip (components/ClipPicker.tsx
+// on this form). Players and the TV see the clip instead of the start/finish
+// photos; the photos are kept. The clip goes straight from the browser to
+// Supabase with a one-time upload link (app/api/coach/exercise-clip/route.ts),
+// and its still picture goes through app/api/coach/exercise-media/route.ts.
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { EQUIPMENT_OPTIONS, asEquipment } from '@/lib/loads'
 import { FEATURES } from '@/lib/features'
 import ExerciseImport from '@/components/ExerciseImport'
+import ClipPicker, { type PickedClip } from '@/components/ClipPicker'
 import { FULL_BODY_AREAS, SELF_GUIDED_ROLE_COLUMNS, roleTag } from '@/lib/fullBodyWorkout'
 
 const CATEGORIES = [
@@ -38,6 +45,8 @@ interface Exercise {
   end_image_url?: string
   start_image_position?: string
   end_image_position?: string
+  clip_url?: string | null
+  clip_poster_url?: string | null
   logs_weight: boolean
   logs_velocity: boolean
   equipment?: string | null
@@ -88,6 +97,11 @@ export default function ExercisesPage() {
   const startRef = useRef<HTMLInputElement>(null)
   const endRef   = useRef<HTMLInputElement>(null)
 
+  // Demo clip state
+  const [newClip, setNewClip]             = useState<PickedClip | null>(null)
+  const [clipRemoved, setClipRemoved]     = useState(false)
+  const [uploadingClip, setUploadingClip] = useState(false)
+
   function loadExercises() {
     fetch('/api/coach/exercises').then(r => r.json()).then(d => {
       setExercises(d.exercises ?? [])
@@ -100,6 +114,7 @@ export default function ExercisesPage() {
     setForm(BLANK); setEditTarget(null)
     setStartImg(null); setEndImg(null); setStartPreview(''); setEndPreview('')
     setStartPos('50% 50%'); setEndPos('50% 50%')
+    setNewClip(null); setClipRemoved(false)
     setModal('add'); setMsg('')
   }
 
@@ -117,10 +132,54 @@ export default function ExercisesPage() {
     setEndPreview(ex.end_image_url ?? '')
     setStartPos(ex.start_image_position ?? '50% 50%')
     setEndPos(ex.end_image_position ?? '50% 50%')
+    setNewClip(null); setClipRemoved(false)
     setEditTarget(ex); setModal('edit'); setMsg('')
   }
 
-  function closeModal() { setModal(null); setEditTarget(null); setMsg('') }
+  function closeModal() { setModal(null); setEditTarget(null); setMsg(''); setNewClip(null); setClipRemoved(false) }
+
+  // Clip shown in the form: a newly picked one, else the saved one (unless removed)
+  const clipPreview = newClip?.previewUrl ?? (clipRemoved ? '' : editTarget?.clip_url ?? '')
+  const clipPosterPreview = newClip?.posterUrl ?? (clipRemoved ? '' : editTarget?.clip_poster_url ?? '')
+
+  // Uploads the clip straight to Supabase, then its still picture.
+  // Returns the two public URLs, or null if something failed.
+  async function uploadClip(clip: PickedClip, exerciseId: string): Promise<{ clipUrl: string; posterUrl: string } | null> {
+    const linkRes = await fetch('/api/coach/exercise-clip', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ exerciseId, contentType: clip.contentType }),
+    })
+    const link = await linkRes.json().catch(() => ({}))
+    if (!linkRes.ok || !link.uploadUrl) { console.error('Clip link error:', link.error ?? linkRes.status); return null }
+
+    const put = await fetch(link.uploadUrl, {
+      method: 'PUT',
+      headers: { 'Content-Type': clip.contentType, 'cache-control': 'max-age=31536000', 'x-upsert': 'false' },
+      body: clip.file,
+    })
+    if (!put.ok) { console.error('Clip upload error:', put.status, await put.text().catch(() => '')); return null }
+
+    const body = new FormData()
+    body.append('file', clip.poster, 'poster.jpg')
+    body.append('exerciseId', exerciseId)
+    body.append('which', 'poster')
+    const res = await fetch('/api/coach/exercise-media', { method: 'POST', body })
+    const data = await res.json().catch(() => ({}))
+    if (!res.ok || !data.url) { console.error('Clip picture error:', data.error ?? res.status); return null }
+
+    return { clipUrl: link.publicUrl as string, posterUrl: data.url as string }
+  }
+
+  // Removes old clip files from storage (failures are ignored)
+  async function deleteClipFiles(exerciseId: string, urls: (string | null | undefined)[]) {
+    for (const url of urls) {
+      if (!url) continue
+      await fetch('/api/coach/exercise-clip', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ exerciseId, url }),
+      }).catch(() => {})
+    }
+  }
 
   function pickFile(e: React.ChangeEvent<HTMLInputElement>, which: 'start' | 'end') {
     const file = e.target.files?.[0]
@@ -204,11 +263,42 @@ export default function ExercisesPage() {
         })
       }
 
+      // Demo clip: upload a new one, or clear a removed one
+      let clipUrl: string | null = editTarget?.clip_url ?? null
+      let clipPosterUrl: string | null = editTarget?.clip_poster_url ?? null
+      const oldClip = { url: editTarget?.clip_url, poster: editTarget?.clip_poster_url }
+      if (exerciseId && (newClip || (clipRemoved && oldClip.url))) {
+        let ok = true
+        if (newClip) {
+          setUploadingClip(true)
+          const up = await uploadClip(newClip, exerciseId)
+          setUploadingClip(false)
+          if (up) { clipUrl = up.clipUrl; clipPosterUrl = up.posterUrl }
+          else { ok = false; alert('Clip upload failed. Try again. If it keeps failing, make sure the clip migration has been run in Supabase.') }
+        } else {
+          clipUrl = null; clipPosterUrl = null
+        }
+        if (ok) {
+          const clipRes = await fetch('/api/coach/exercises', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: exerciseId, clip_url: clipUrl, clip_poster_url: clipPosterUrl }),
+          })
+          if (clipRes.ok) await deleteClipFiles(exerciseId, [oldClip.url, oldClip.poster])
+          else {
+            clipUrl = oldClip.url ?? null; clipPosterUrl = oldClip.poster ?? null
+            alert('The clip could not be saved. Make sure the clip migration has been run in Supabase.')
+          }
+        }
+      }
+
       const updated: Exercise = {
         ...data.exercise,
         start_image_url: startUrl,
         end_image_url:   endUrl,
         demo_image_url:  startUrl || data.exercise?.demo_image_url || '',
+        clip_url:        clipUrl,
+        clip_poster_url: clipPosterUrl,
       }
 
       if (modal === 'add') setExercises(prev => [...prev, updated])
@@ -368,6 +458,7 @@ export default function ExercisesPage() {
                     {ex.default_sets}×{ex.default_reps}
                     {ex.logs_weight && (ex.equipment ? ` · ${equipmentLabel(ex.equipment)}` : ' · weight')}
                     {FEATURES.vbt && ex.logs_velocity && <span style={{ color: 'var(--carolina)', fontWeight: 600 }}> · ⚡ bar speed</span>}
+                    {ex.clip_url && <span style={{ color: 'var(--carolina-dark)', fontWeight: 600 }}> · 🎬 clip</span>}
                   </div>
                   {ex.logs_weight && !ex.equipment && (
                     <select value="" onChange={e => setEquipmentInline(ex, e.target.value)}
@@ -513,12 +604,24 @@ export default function ExercisesPage() {
                 <PhotoUpload which="start" preview={startPreview} uploading={uploadingStart} inputRef={startRef} pos={startPos} onPosChange={setStartPos} />
                 <PhotoUpload which="end" preview={endPreview} uploading={uploadingEnd} inputRef={endRef} pos={endPos} onPosChange={setEndPos} />
               </div>
+              <div style={{ marginTop: '1rem' }}>
+                <ClipPicker
+                  previewUrl={clipPreview}
+                  posterUrl={clipPosterPreview}
+                  uploading={uploadingClip}
+                  onPick={clip => { setNewClip(clip); setClipRemoved(false) }}
+                  onRemove={() => { setNewClip(null); setClipRemoved(true) }}
+                />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.4rem 0 0', lineHeight: 1.45 }}>
+                  A short silent loop of one rep. When an exercise has a clip, players and the TV see the clip instead of the photos (the photos are kept). Film sideways (landscape), then run the video through the clip converter.
+                </p>
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button className="btn-ghost" onClick={closeModal} style={{ flex: 1, padding: '0.75rem' }}>Cancel</button>
-              <button className="btn-volt" onClick={save} disabled={saving || uploadingStart || uploadingEnd || !form.name} style={{ flex: 2, padding: '0.75rem' }}>
-                {saving || uploadingStart || uploadingEnd ? 'Saving…' : modal === 'add' ? 'Add Exercise' : 'Save Changes'}
+              <button className="btn-volt" onClick={save} disabled={saving || uploadingStart || uploadingEnd || uploadingClip || !form.name} style={{ flex: 2, padding: '0.75rem' }}>
+                {saving || uploadingStart || uploadingEnd || uploadingClip ? 'Saving…' : modal === 'add' ? 'Add Exercise' : 'Save Changes'}
               </button>
             </div>
           </div>
