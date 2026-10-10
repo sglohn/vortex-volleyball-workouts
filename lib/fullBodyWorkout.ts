@@ -31,6 +31,8 @@
 // EASIER OPTION (sore players)
 //   Before logging a set of an exercise, the player can swap it for an
 //   easier one that hits the same area (lighter weight or shorter range):
+//     0. easier levels of the same movement, one step down first, then the
+//        exercise's recommended backup (lib/exerciseLevels.ts)
 //     1. exercises tagged "Easier option" for that block
 //     2. other exercises from the same category — not ones tagged Main for
 //        that block, no barbell lifts when there's another choice, and
@@ -43,6 +45,7 @@
 // logging and history all work unchanged.
 
 import { createServerClient } from '@/lib/supabase'
+import { changeOptions } from '@/lib/exerciseLevels'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -122,7 +125,12 @@ export interface LibraryRow {
   logs_weight: boolean | null
   equipment: string | null
   self_guided_roles: string[] | null
+  variation_family?: string | null
+  variation_level?: number | null
+  backup_exercise_id?: string | null
 }
+
+export type EasierOption = LibraryRow & { tag?: string }
 
 function pickRandom<T>(items: T[]): T | null {
   if (!items.length) return null
@@ -159,10 +167,25 @@ export function easierOptions(
   area: FullBodyArea,
   role: FullBodyRole,
   excludeIds: Set<string>,
-): LibraryRow[] {
+  /** The workout's exercise — its easier levels and backup come first */
+  fromExerciseId?: string,
+): EasierOption[] {
+  // Easier levels of the same movement (one step down first), then the backup
+  const levelFirst: EasierOption[] = []
+  if (fromExerciseId) {
+    const opts = changeOptions(library, fromExerciseId)
+    for (const ex of opts.easier) {
+      if (!excludeIds.has(ex.id)) levelFirst.push({ ...ex, tag: ex.variation_level ? `Easier version · level ${ex.variation_level}` : 'Easier version' })
+    }
+    if (opts.backup && !excludeIds.has(opts.backup.id) && !levelFirst.some(o => o.id === opts.backup!.id)) {
+      levelFirst.push({ ...opts.backup, tag: 'Coach’s backup' })
+    }
+  }
+  const taken = new Set(levelFirst.map(o => o.id))
+
   const rule = areaRule(area)
   const categories = role === 'main' ? rule.mainCategories : rule.secondaryCategories
-  const usable = library.filter(ex => !excludeIds.has(ex.id))
+  const usable = library.filter(ex => !excludeIds.has(ex.id) && !taken.has(ex.id))
 
   const tagged = usable.filter(ex => hasTag(ex, roleTag(area, 'easier')))
   // Same category, minus lifts tagged as this block's Main (those aren't "easier")
@@ -178,11 +201,17 @@ export function easierOptions(
       return a.name.localeCompare(b.name)
     })
 
-  return [...tagged.sort((a, b) => a.name.localeCompare(b.name)), ...sameCategory].slice(0, MAX_EASIER_OPTIONS)
+  return [...levelFirst, ...tagged.sort((a, b) => a.name.localeCompare(b.name)), ...sameCategory].slice(0, Math.max(MAX_EASIER_OPTIONS, levelFirst.length))
 }
 
 /** Active exercise library, with or without the self_guided_roles column (before the migration). */
 export async function loadLibrary(db: Db): Promise<LibraryRow[]> {
+  const withLevels = await db
+    .from('exercise_library')
+    .select('id, name, category, default_reps, logs_weight, equipment, self_guided_roles, variation_family, variation_level, backup_exercise_id')
+    .eq('is_active', true)
+  if (!withLevels.error) return (withLevels.data ?? []) as LibraryRow[]
+
   const full = await db
     .from('exercise_library')
     .select('id, name, category, default_reps, logs_weight, equipment, self_guided_roles')

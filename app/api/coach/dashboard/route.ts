@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { requestSummary } from '@/lib/exerciseLevels'
 
 export async function GET() {
   const db = createServerClient()
@@ -95,7 +96,31 @@ export async function GET() {
     return (a.age_group ?? '').localeCompare(b.age_group ?? '')
   })
 
+  // Exercise change requests waiting + self-guided swaps not yet seen
+  // (empty before the levels migration; see app/api/coach/change-requests)
+  let changeRequests: Array<{ id: string; kind: string; playerName: string; exerciseName: string; summary: string; createdAt: string }> = []
+  const { data: openRequests, error: requestsError } = await db
+    .from('exercise_change_requests')
+    .select('id, kind, reason, body_part, pain_level, created_at, players(name), exercise:exercise_id(name), original:original_exercise_id(name)')
+    .or('status.eq.pending,and(kind.eq.self_guided_swap,coach_seen_at.is.null)')
+    .order('created_at', { ascending: false })
+    .limit(20)
+  if (!requestsError) {
+    changeRequests = (openRequests ?? []).map(r => {
+      const one = <T,>(v: unknown) => (Array.isArray(v) ? v[0] : v) as T | null
+      return {
+        id: r.id,
+        kind: r.kind,
+        playerName: one<{ name: string }>(r.players)?.name ?? 'Unknown',
+        exerciseName: one<{ name: string }>(r.original)?.name ?? one<{ name: string }>(r.exercise)?.name ?? 'an exercise',
+        summary: requestSummary(r),
+        createdAt: r.created_at,
+      }
+    })
+  }
+
   return NextResponse.json({
+    changeRequests,
     todaySessions,
     unconfirmedHealth,
     activeInjuries: activeInjuries ?? 0,

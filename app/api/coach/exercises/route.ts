@@ -13,6 +13,25 @@ function asRoles(value: unknown): string[] {
 }
 
 const BASE_COLUMNS = 'id, name, category, default_sets, default_reps, coaching_notes, demo_url, demo_image_url, start_image_url, end_image_url, logs_weight, logs_velocity, equipment, is_active'
+const LEVEL_COLUMNS = 'variation_family, variation_level, backup_exercise_id'
+
+// Easier/harder levels and the backup (lib/exerciseLevels.ts).
+// Blank family → not in a family; level is a whole number 1–20 (1 = easiest).
+function cleanLevelFields(updates: Record<string, unknown>, selfId?: string) {
+  if ('variation_family' in updates) {
+    const f = typeof updates.variation_family === 'string' ? updates.variation_family.trim().replace(/\s+/g, ' ') : ''
+    updates.variation_family = f || null
+  }
+  if ('variation_level' in updates) {
+    const n = Number(updates.variation_level)
+    updates.variation_level = Number.isInteger(n) && n >= 1 && n <= 20 ? n : null
+  }
+  if (updates.variation_family === null) updates.variation_level = null
+  if ('backup_exercise_id' in updates) {
+    const b = updates.backup_exercise_id
+    updates.backup_exercise_id = typeof b === 'string' && /^[0-9a-f-]{36}$/i.test(b) && b !== selfId ? b : null
+  }
+}
 
 export async function GET(req: NextRequest) {
   const db = createServerClient()
@@ -24,10 +43,12 @@ export async function GET(req: NextRequest) {
     return query
   }
 
-  // Falls back to fewer columns if the demo clip migration
-  // (2026-10-10_exercise_clips.sql) or the self-guided migration hasn't
-  // been run yet
-  let { data: exercises, error } = await run(`${BASE_COLUMNS}, self_guided_roles, clip_url, clip_poster_url`)
+  // Falls back to fewer columns if the levels migration
+  // (2026-10-10_exercise_levels_and_change_requests.sql), the demo clip
+  // migration (2026-10-10_exercise_clips.sql) or the self-guided migration
+  // hasn't been run yet
+  let { data: exercises, error } = await run(`${BASE_COLUMNS}, self_guided_roles, clip_url, clip_poster_url, ${LEVEL_COLUMNS}`)
+  if (error) ({ data: exercises, error } = await run(`${BASE_COLUMNS}, self_guided_roles, clip_url, clip_poster_url`))
   if (error) ({ data: exercises, error } = await run(`${BASE_COLUMNS}, self_guided_roles`))
   if (error) ({ data: exercises, error } = await run(BASE_COLUMNS))
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -40,9 +61,18 @@ export async function POST(req: NextRequest) {
     name, category, default_sets, default_reps,
     logs_weight, logs_velocity, coaching_notes,
     demo_url, demo_image_url, equipment, self_guided_roles,
+    variation_family, variation_level, backup_exercise_id,
   } = body
 
   if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
+
+  // Only sent when set, so adding exercises still works before the levels migration
+  const levels: Record<string, unknown> = {}
+  if (variation_family) {
+    Object.assign(levels, { variation_family, variation_level })
+  }
+  if (backup_exercise_id) levels.backup_exercise_id = backup_exercise_id
+  cleanLevelFields(levels)
 
   const db = createServerClient()
   const { data: exercise, error } = await db
@@ -59,6 +89,7 @@ export async function POST(req: NextRequest) {
       demo_url: demo_url ?? null,
       demo_image_url: demo_image_url ?? null,
       ...(Array.isArray(self_guided_roles) && self_guided_roles.length ? { self_guided_roles: asRoles(self_guided_roles) } : {}),
+      ...levels,
     })
     .select()
     .single()
@@ -76,6 +107,7 @@ export async function PUT(req: NextRequest) {
   // '' or anything unexpected → not set
   if ('equipment' in updates) updates.equipment = asEquipment(updates.equipment)
   if ('self_guided_roles' in updates) updates.self_guided_roles = asRoles(updates.self_guided_roles)
+  cleanLevelFields(updates, id)
 
   const db = createServerClient()
   const { data: exercise, error } = await db

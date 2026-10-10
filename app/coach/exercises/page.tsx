@@ -5,6 +5,13 @@
 // photos; the photos are kept. The clip goes straight from the browser to
 // Supabase with a one-time upload link (app/api/coach/exercise-clip/route.ts),
 // and its still picture goes through app/api/coach/exercise-media/route.ts.
+//
+// Easier & harder versions (lib/exerciseLevels.ts): exercises that are
+// versions of one movement share a family name and a level (1 = easiest),
+// e.g. Bulgarian Split Squat: 1 Bodyweight → 2 Dumbbell → 3 Barbell. Each is
+// still its own exercise. An exercise can also name a recommended backup.
+// These are what the coach picks from when approving a player's change
+// request, and what self-guided players are offered first when sore.
 'use client'
 import { useState, useEffect, useRef } from 'react'
 import { EQUIPMENT_OPTIONS, asEquipment } from '@/lib/loads'
@@ -12,6 +19,7 @@ import { FEATURES } from '@/lib/features'
 import ExerciseImport from '@/components/ExerciseImport'
 import ClipPicker, { type PickedClip } from '@/components/ClipPicker'
 import { FULL_BODY_AREAS, SELF_GUIDED_ROLE_COLUMNS, roleTag } from '@/lib/fullBodyWorkout'
+import { familyKey, familyOf } from '@/lib/exerciseLevels'
 
 const CATEGORIES = [
   'Upper - Push',
@@ -51,6 +59,9 @@ interface Exercise {
   logs_velocity: boolean
   equipment?: string | null
   self_guided_roles?: string[] | null
+  variation_family?: string | null
+  variation_level?: number | null
+  backup_exercise_id?: string | null
 }
 
 const BLANK = {
@@ -58,6 +69,9 @@ const BLANK = {
   coaching_notes: '', demo_url: '', logs_weight: true, logs_velocity: false,
   equipment: '' as string,   // '' = not set yet
   self_guided_roles: [] as string[],   // self-guided workout spots (lib/fullBodyWorkout.ts)
+  variation_family: '',                // easier/harder family (lib/exerciseLevels.ts)
+  variation_level: '' as string,       // '' = not set; 1 = easiest
+  backup_exercise_id: '',              // recommended backup exercise
 }
 
 // Short label for a tag, e.g. 'quad_main' → 'A Quad · Main'
@@ -84,6 +98,7 @@ export default function ExercisesPage() {
   const [msg, setMsg]             = useState('')
   const [deleteConfirm, setDeleteConfirm] = useState<Exercise | null>(null)
   const [onlyMissingEquipment, setOnlyMissingEquipment] = useState(false)
+  const [showFamilies, setShowFamilies] = useState(false)
 
   // Photo upload state
   const [startImg, setStartImg]           = useState<File | null>(null)
@@ -126,6 +141,9 @@ export default function ExercisesPage() {
       logs_weight: ex.logs_weight, logs_velocity: ex.logs_velocity,
       equipment: ex.equipment ?? '',
       self_guided_roles: ex.self_guided_roles ?? [],
+      variation_family: ex.variation_family ?? '',
+      variation_level: ex.variation_level ? String(ex.variation_level) : '',
+      backup_exercise_id: ex.backup_exercise_id ?? '',
     })
     setStartImg(null); setEndImg(null)
     setStartPreview(ex.start_image_url ?? ex.demo_image_url ?? '')
@@ -231,7 +249,14 @@ export default function ExercisesPage() {
 
     try {
       const method = modal === 'add' ? 'POST' : 'PUT'
-      const body = modal === 'edit' && editTarget ? { id: editTarget.id, ...form } : form
+      // Level fields are only sent when used, so saving still works before
+      // the levels migration has been run
+      const { variation_family, variation_level, backup_exercise_id, ...rest } = form
+      const usesLevels = !!(variation_family.trim() || backup_exercise_id || editTarget?.variation_family || editTarget?.backup_exercise_id)
+      const fields = usesLevels
+        ? { ...rest, variation_family, variation_level: variation_level ? Number(variation_level) : null, backup_exercise_id: backup_exercise_id || null }
+        : rest
+      const body = modal === 'edit' && editTarget ? { id: editTarget.id, ...fields } : fields
       const res  = await fetch('/api/coach/exercises', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const data = await res.json()
       if (!res.ok) { setMsg(data.error || 'Error saving'); setSaving(false); return }
@@ -332,6 +357,24 @@ export default function ExercisesPage() {
     return acc
   }, {})
 
+  // Families for the name suggestions and the "Easier & harder" view
+  const familyNames = [...new Map(
+    exercises.filter(e => e.variation_family?.trim()).map(e => [familyKey(e.variation_family), e.variation_family!.trim()]),
+  ).values()].sort((a, b) => a.localeCompare(b))
+  const families = familyNames.map(name => ({ name, members: familyOf(exercises, { id: '', name, variation_family: name }) }))
+  const nameById = new Map(exercises.map(e => [e.id, e.name]))
+
+  // Ladder shown in the form: the family's other exercises plus this one at the chosen level
+  const formLadder = (() => {
+    if (!form.variation_family.trim()) return []
+    const others = familyOf(exercises, { id: '', name: '', variation_family: form.variation_family })
+      .filter(e => e.id !== editTarget?.id)
+      .map(e => ({ id: e.id, name: e.name, level: e.variation_level ?? null, isThis: false }))
+    const me = { id: editTarget?.id ?? 'new', name: form.name || 'This exercise', level: form.variation_level ? Number(form.variation_level) : null, isThis: true }
+    return [...others, me].sort((a, b) => (a.level ?? 99) - (b.level ?? 99))
+  })()
+  const levelClash = formLadder.some(r => !r.isThis && r.level != null && r.level === (form.variation_level ? Number(form.variation_level) : -1))
+
   const Label = ({ children }: { children: React.ReactNode }) => (
     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>{children}</label>
   )
@@ -421,6 +464,10 @@ export default function ExercisesPage() {
       <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '1.25rem', flexWrap: 'wrap' }}>
         <input className="input" placeholder="Search exercises…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
         <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+          <button onClick={() => setShowFamilies(v => !v)} title="Exercises that are easier or harder versions of the same movement"
+            style={{ padding: '0.35rem 0.875rem', borderRadius: 20, border: `1.5px solid ${showFamilies ? 'var(--carolina-dark)' : 'var(--gray-border)'}`, background: showFamilies ? 'var(--carolina-dark)' : 'transparent', color: showFamilies ? '#fff' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>
+            ↕ Easier &amp; harder{families.length ? ` (${families.length})` : ''}
+          </button>
           <button onClick={() => setFilterCat('all')} style={{ padding: '0.35rem 0.875rem', borderRadius: 20, border: `1.5px solid ${filterCat === 'all' ? 'var(--carolina)' : 'var(--gray-border)'}`, background: filterCat === 'all' ? 'var(--carolina)' : 'transparent', color: filterCat === 'all' ? '#fff' : 'var(--text-muted)', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer' }}>All</button>
           {CATEGORY_GROUPS.map(g => (
             <details key={g.label} style={{ position: 'relative' }}>
@@ -434,6 +481,44 @@ export default function ExercisesPage() {
           ))}
         </div>
       </div>
+
+      {/* Easier & harder: each family as a ladder, easiest on the left */}
+      {showFamilies && (
+        <div className="card" style={{ padding: '1rem 1.125rem', marginBottom: '1.5rem' }}>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: '0.85rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--carolina-dark)', marginBottom: '0.25rem' }}>Easier &amp; Harder Versions</div>
+          <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.875rem', lineHeight: 1.45 }}>
+            Each one is its own exercise, and together they show how to make the movement easier or harder. To add one, edit an exercise and give it a family name and level.
+          </p>
+          {families.length === 0 && (
+            <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>No families yet. Example: give Bodyweight, DB and Barbell Bulgarian Split Squat the family &quot;Bulgarian Split Squat&quot; with levels 1, 2 and 3.</p>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+            {families.map(f => (
+              <div key={f.name}>
+                <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: '0.375rem' }}>{f.name}</div>
+                <div style={{ display: 'flex', alignItems: 'stretch', gap: '0.375rem', overflowX: 'auto', paddingBottom: '0.25rem' }}>
+                  {f.members.map((m, i) => (
+                    <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexShrink: 0 }}>
+                      {i > 0 && <span aria-hidden style={{ color: 'var(--carolina)', fontWeight: 800 }}>→</span>}
+                      <button onClick={() => openEdit(m)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.375rem 0.625rem 0.375rem 0.375rem', borderRadius: 8, border: '1.5px solid var(--carolina-border)', background: 'var(--carolina-light)', cursor: 'pointer', textAlign: 'left' }}>
+                        {(m.clip_poster_url || m.start_image_url || m.demo_image_url)
+                          ? <img src={m.clip_poster_url || m.start_image_url || m.demo_image_url || ''} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 5 }} />
+                          : <div style={{ width: 40, height: 40, borderRadius: 5, background: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>💪</div>}
+                        <span>
+                          <span style={{ display: 'block', fontSize: '0.62rem', fontWeight: 800, color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                            {m.variation_level ? `Level ${m.variation_level}` : 'No level'}{i === 0 ? ' · easiest' : i === f.members.length - 1 ? ' · hardest' : ''}
+                          </span>
+                          <span style={{ display: 'block', fontSize: '0.82rem', fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{m.name}</span>
+                        </span>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Exercise groups */}
       {Object.entries(grouped).map(([cat, exs]) => (
@@ -475,6 +560,24 @@ export default function ExercisesPage() {
                       ))}
                     </div>
                   )}
+                  {(ex.variation_family || ex.backup_exercise_id) && (() => {
+                    const fam = familyOf(exercises, ex)
+                    return (
+                      <div style={{ display: 'flex', gap: '0.25rem', flexWrap: 'wrap', marginTop: '0.35rem' }}>
+                        {fam.length > 0 && (
+                          <button onClick={() => setShowFamilies(true)} title={fam.map(m => `${m.variation_level ?? '?'}. ${m.name}`).join('\n')}
+                            style={{ fontSize: '0.62rem', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: 4, background: 'var(--white)', color: 'var(--carolina-deep)', border: '1px solid var(--carolina)', cursor: 'pointer' }}>
+                            ↕ {families.find(f => familyKey(f.name) === familyKey(ex.variation_family))?.name ?? ex.variation_family} · {ex.variation_level ? `Lv ${ex.variation_level} of ${fam.length}` : 'no level'}
+                          </button>
+                        )}
+                        {ex.backup_exercise_id && nameById.get(ex.backup_exercise_id) && (
+                          <span style={{ fontSize: '0.62rem', fontWeight: 700, padding: '0.1rem 0.4rem', borderRadius: 4, background: 'var(--white)', color: 'var(--text-secondary)', border: '1px solid var(--gray-border)' }}>
+                            Backup: {nameById.get(ex.backup_exercise_id)}
+                          </span>
+                        )}
+                      </div>
+                    )
+                  })()}
                   <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
                     <button onClick={() => openEdit(ex)} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, padding: 0 }}>Edit</button>
                     <span style={{ color: 'var(--gray-border)' }}>|</span>
@@ -593,6 +696,66 @@ export default function ExercisesPage() {
                     })}
                   </div>
                 ))}
+              </div>
+            </div>
+
+            {/* Easier & harder versions + backup */}
+            <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1rem', marginBottom: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.375rem' }}>Easier &amp; Harder Versions</div>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem', lineHeight: 1.45 }}>
+                Versions of the same movement share a family name. Level 1 is the easiest. When a player asks for a change, you can step them down or up a level, or use the backup.
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 110px', gap: '0.75rem' }}>
+                <div>
+                  <Label>Family</Label>
+                  <input className="input" list="variation-families" placeholder="e.g. Bulgarian Split Squat" value={form.variation_family}
+                    onChange={e => setForm(p => ({ ...p, variation_family: e.target.value }))} />
+                  <datalist id="variation-families">
+                    {familyNames.map(n => <option key={n} value={n} />)}
+                  </datalist>
+                </div>
+                <div>
+                  <Label>Level</Label>
+                  <input className="input" type="number" min="1" max="20" inputMode="numeric" placeholder="1 = easiest" disabled={!form.variation_family.trim()}
+                    value={form.variation_level} onChange={e => setForm(p => ({ ...p, variation_level: e.target.value }))} />
+                </div>
+              </div>
+              {formLadder.length > 1 && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.625rem' }}>
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginRight: '0.2rem' }}>Easier</span>
+                  {formLadder.map((r, i) => (
+                    <span key={r.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}>
+                      {i > 0 && <span aria-hidden style={{ color: 'var(--carolina)' }}>→</span>}
+                      <span style={{ fontSize: '0.75rem', padding: '0.15rem 0.45rem', borderRadius: 5, fontWeight: r.isThis ? 800 : 600, background: r.isThis ? 'var(--carolina)' : 'var(--carolina-light)', color: r.isThis ? '#fff' : 'var(--carolina-deep)', border: '1px solid var(--carolina-border)' }}>
+                        {r.level ?? '?'}. {r.name}
+                      </span>
+                    </span>
+                  ))}
+                  <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginLeft: '0.2rem' }}>Harder</span>
+                </div>
+              )}
+              {form.variation_family.trim() && !form.variation_level && (
+                <p style={{ fontSize: '0.75rem', color: '#b45309', margin: '0.4rem 0 0' }}>Give it a level so the app knows which versions are easier and harder.</p>
+              )}
+              {levelClash && (
+                <p style={{ fontSize: '0.75rem', color: '#b45309', margin: '0.4rem 0 0' }}>Another exercise in this family already has level {form.variation_level}.</p>
+              )}
+              <div style={{ marginTop: '0.875rem' }}>
+                <Label>Recommended backup</Label>
+                <select className="input" value={form.backup_exercise_id} onChange={e => setForm(p => ({ ...p, backup_exercise_id: e.target.value }))}>
+                  <option value="">None</option>
+                  {CATEGORIES.map(cat => {
+                    const opts = exercises.filter(e => e.category === cat && e.id !== editTarget?.id)
+                    return opts.length ? (
+                      <optgroup key={cat} label={cat}>
+                        {opts.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                      </optgroup>
+                    ) : null
+                  })}
+                </select>
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.35rem 0 0' }}>
+                  A different movement for the same area, for when no version of this one works (e.g. Step-Ups for a split squat).
+                </p>
               </div>
             </div>
 

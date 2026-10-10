@@ -45,7 +45,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ override: data })
   }
 
-  if (type === 'player_skip') {
+  // The player page sends 'exercise_skip'; older code used 'player_skip'
+  if (type === 'player_skip' || type === 'exercise_skip') {
     const { playerId, exerciseId, replacementId, skipType, reason, endsOn } = body
     const { data, error } = await db
       .from('player_exercise_skips')
@@ -76,7 +77,7 @@ export async function DELETE(req: NextRequest) {
 
   if (type === 'player_template') {
     await db.from('player_overrides').delete().eq('id', id)
-  } else if (type === 'player_skip') {
+  } else if (type === 'player_skip' || type === 'exercise_skip') {
     await db.from('player_exercise_skips').update({ is_active: false }).eq('id', id)
   } else if (type === 'schedule_exercise') {
     await db.from('schedule_exercise_overrides').delete().eq('id', id)

@@ -9,6 +9,15 @@
 //      easier option before any set of it is logged.
 //   3. legacy active workout
 //
+// Every template/generated exercise also gets:
+//   originalExerciseId  what the workout calls for (before any replacement)
+//   level               { family, level, count } when the exercise has
+//                       easier/harder versions (lib/exerciseLevels.ts)
+//   changeRequest       the player's latest change request for that spot
+//                       this session (app/api/player/change-request)
+//   canRequestChange    team/template workouts only; self-guided players
+//                       use the easier-option swap instead
+//
 // Templates and generated workouts come back in the same shape
 // (source: 'template'), so the player page, kiosk and session pages show
 // and log them the same way.
@@ -19,6 +28,8 @@ import { getPlayerRecommendation } from '@/lib/suggestions'
 import { PhaseType } from '@/lib/types'
 import { canAccessSession, signInAgain } from '@/lib/playerAuth'
 import { asGeneratedWorkout, slotId } from '@/lib/fullBodyWorkout'
+import { familyKey } from '@/lib/exerciseLevels'
+import { clubDateString } from '@/lib/clubTime'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -29,6 +40,22 @@ interface ExerciseContext {
   phaseType: PhaseType
   skippedIds: Set<string>
   replacements: Record<string, string>
+  /** family key → number of exercises in it */
+  familySizes: Map<string, number>
+  /** slot → latest change request this session */
+  requests: Map<string, ChangeRequestRow>
+}
+
+interface ChangeRequestRow {
+  id: string
+  slot: string | null
+  status: string
+  wants: string | null
+  reason: string | null
+  coach_note: string | null
+  applies: string | null
+  replacement_exercise_id: string | null
+  created_at: string
 }
 
 interface BlockExerciseInput {
@@ -95,8 +122,19 @@ async function buildExercise(ctx: ExerciseContext, be: BlockExerciseInput, block
     return found ?? { set_number: i + 1, completed: false }
   })
 
+  const fKey = familyKey(activeEx.variation_family)
+  const familySize = fKey ? ctx.familySizes.get(fKey) ?? 0 : 0
+  const req = ctx.requests.get(be.blockExerciseId)
+
   return {
     ...activeEx,
+    originalExerciseId: ex.id,
+    level: familySize > 1 && activeEx.variation_level
+      ? { family: String(activeEx.variation_family).trim(), level: activeEx.variation_level as number, count: familySize }
+      : null,
+    changeRequest: req
+      ? { id: req.id, status: req.status, wants: req.wants, reason: req.reason, coachNote: req.coach_note, applies: req.applies, createdAt: req.created_at }
+      : null,
     blockExerciseId: be.blockExerciseId,
     customReps: be.customReps,
     customNotes: be.customNotes,
@@ -118,7 +156,9 @@ export async function GET(req: NextRequest) {
   if (!(await canAccessSession(req, sessionId))) return signInAgain()
 
   const db = createServerClient()
-  const today = new Date().toISOString().split('T')[0]
+  // Club date, not UTC — after 8 PM Eastern the UTC date is already tomorrow,
+  // which would end today-only replacements early (lib/clubTime.ts)
+  const today = clubDateString()
 
   // Get session (select '*' so this works before the generated_workout column exists)
   const { data: session } = await db
@@ -148,10 +188,13 @@ export async function GET(req: NextRequest) {
   // Get exercises to skip/replace for this player
   const { data: skips } = await db
     .from('player_exercise_skips')
-    .select('exercise_id, replacement_exercise_id, skip_type')
+    .select('exercise_id, replacement_exercise_id, skip_type, created_at')
     .eq('player_id', session.player_id)
     .eq('is_active', true)
     .or(`ends_on.is.null,ends_on.gte.${today}`)
+    // Oldest first, so the newest replacement wins (e.g. a today-only change
+    // the coach approved over an ongoing one)
+    .order('created_at', { ascending: true })
 
   const skippedIds = new Set<string>(skips?.map(s => s.exercise_id) ?? [])
   const replacements: Record<string, string> = Object.fromEntries(
@@ -160,7 +203,34 @@ export async function GET(req: NextRequest) {
       .map(s => [s.exercise_id, s.replacement_exercise_id])
   )
 
-  const ctx: ExerciseContext = { db, sessionId, playerId: session.player_id, phaseType, skippedIds, replacements }
+  // Easier/harder family sizes (empty before the levels migration)
+  const familySizes = new Map<string, number>()
+  const { data: familyRows, error: familyError } = await db
+    .from('exercise_library')
+    .select('variation_family')
+    .eq('is_active', true)
+    .not('variation_family', 'is', null)
+  if (!familyError) {
+    for (const r of familyRows ?? []) {
+      const k = familyKey(r.variation_family as string)
+      if (k) familySizes.set(k, (familySizes.get(k) ?? 0) + 1)
+    }
+  }
+
+  // This session's change requests, latest per spot (empty before the migration)
+  const requests = new Map<string, ChangeRequestRow>()
+  const { data: requestRows, error: requestError } = await db
+    .from('exercise_change_requests')
+    .select('id, slot, status, wants, reason, coach_note, applies, replacement_exercise_id, created_at')
+    .eq('session_id', sessionId)
+    .eq('kind', 'request')
+    .neq('status', 'cancelled')
+    .order('created_at', { ascending: true })
+  if (!requestError) {
+    for (const r of (requestRows ?? []) as ChangeRequestRow[]) if (r.slot) requests.set(r.slot, r)
+  }
+
+  const ctx: ExerciseContext = { db, sessionId, playerId: session.player_id, phaseType, skippedIds, replacements, familySizes, requests }
 
   // ----- 1. Coach template -----
   if (templateId) {
@@ -193,7 +263,10 @@ export async function GET(req: NextRequest) {
           targetVelocityMax: be.target_velocity_max,
         }, block.sets)))
 
-        return { ...block, exercises: exercises.filter(Boolean) }
+        return {
+          ...block,
+          exercises: exercises.filter(Boolean).map(e => ({ ...e!, canRequestChange: true })),
+        }
       }))
 
       return NextResponse.json({
