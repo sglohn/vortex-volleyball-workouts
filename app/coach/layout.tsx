@@ -10,6 +10,7 @@ import { isHiddenPage } from '@/lib/features'
 const ALL_NAV = [
   { href: '/coach/dashboard', label: 'Dashboard',       short: 'Home',      icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
   { href: '/coach/health',    label: 'Health Board',    short: 'Health',    icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg> },
+  { href: '/coach/requests',  label: 'Requests',        short: 'Requests',  icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg> },
   { href: '/coach/schedule',  label: 'Schedule',        short: 'Schedule',  icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
   { href: '/coach/phases',    label: 'Phases',          short: 'Phases',    icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg> },
   { href: '/coach/templates', label: 'Workouts',        short: 'Workouts',  icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6.5 6.5h11M6.5 12h11M6.5 17.5h7"/><rect x="2" y="4" width="3" height="16" rx="1"/><rect x="19" y="4" width="3" height="16" rx="1"/></svg> },
@@ -31,6 +32,25 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
   const path = usePathname()
   const router = useRouter()
   const [menuOpen, setMenuOpen] = useState(false)
+  // Exercise change requests waiting + self-guided swaps not yet seen (app/coach/requests)
+  const [openRequests, setOpenRequests] = useState(0)
+
+  useEffect(() => {
+    if (path === '/coach' || path === '/coach/display') return
+    let stopped = false
+    const check = () => fetch('/api/coach/change-requests?count=1')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (!stopped && d) setOpenRequests(d.open ?? 0) })
+      .catch(() => {})
+    check()
+    const t = setInterval(check, 60000)
+    window.addEventListener('vx-requests-changed', check)
+    return () => { stopped = true; clearInterval(t); window.removeEventListener('vx-requests-changed', check) }
+  }, [path])
+
+  const badge = (n: number, style?: React.CSSProperties) => n > 0 ? (
+    <span aria-label={`${n} open`} style={{ marginLeft: 'auto', minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: '#f59e0b', color: '#111827', fontSize: '0.68rem', fontWeight: 800, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1, ...style }}>{n}</span>
+  ) : null
 
   // Quick check from the browser flag, then confirm with the server.
   // The server cookie is what actually lets coach pages load data; if it
@@ -96,6 +116,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
               return (
                 <Link key={item.href} href={item.href} style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.5rem 0.625rem', borderRadius: 7, textDecoration: 'none', fontSize: '0.85rem', fontWeight: 500, color: active ? 'var(--black)' : 'rgba(255,255,255,0.65)', background: active ? 'var(--yellow)' : 'transparent', transition: 'all 0.15s' }}>
                   {item.icon}{item.label}
+                  {item.href === '/coach/requests' && badge(openRequests)}
                 </Link>
               )
             })}
@@ -136,6 +157,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
                   return (
                     <Link key={item.href} href={item.href} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.75rem 0.875rem', borderRadius: 8, textDecoration: 'none', fontSize: '0.95rem', fontWeight: 500, color: active ? 'var(--black)' : 'rgba(255,255,255,0.75)', background: active ? 'var(--yellow)' : 'transparent', marginBottom: '2px' }}>
                       {item.icon}{item.label}
+                      {item.href === '/coach/requests' && badge(openRequests)}
                     </Link>
                   )
                 })}
@@ -165,7 +187,10 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
         })}
         {/* More button opens hamburger */}
         <button onClick={() => setMenuOpen(o => !o)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', padding: '0.35rem 0.5rem', background: 'none', border: 'none', color: menuOpen ? 'var(--yellow)' : 'rgba(255,255,255,0.45)', fontSize: '0.6rem', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.04em', flex: 1, cursor: 'pointer' }}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
+          <span style={{ position: 'relative', display: 'inline-flex' }}>
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="5" r="1" fill="currentColor"/><circle cx="12" cy="12" r="1" fill="currentColor"/><circle cx="12" cy="19" r="1" fill="currentColor"/></svg>
+            {badge(openRequests, { position: 'absolute', top: -7, right: -12, marginLeft: 0 })}
+          </span>
           More
         </button>
       </nav>

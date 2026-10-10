@@ -3,13 +3,22 @@
 // Self-guided full-body workouts (lib/fullBodyWorkout.ts): before logging a
 // set of an exercise, a sore player can tap "Sore? Pick an easier option" and
 // choose another exercise for the same area (app/api/player/self-guided-swap).
+// They say why first, and the coach sees each swap in Coach → Requests.
+//
+// Team workouts: players can't change an exercise themselves. "Need a
+// change? Ask Coach" sends a request with the reason
+// (components/ChangeRequestSheet.tsx → app/api/player/change-request). The
+// card shows "Waiting for Coach" and checks back every 20 seconds; once the
+// coach approves, the new exercise shows in that spot.
 'use client'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { loadLabel, plateText, setPoundsMoved, weightInputLabel, type Equipment } from '@/lib/loads'
 import { playerFetch } from '@/lib/playerPass'
 import ExerciseClip from '@/components/ExerciseClip'
+import ChangeRequestSheet, { type ChangeRequestInput } from '@/components/ChangeRequestSheet'
+import { BODY_AREAS, CHANGE_REASONS, reasonLabel, wantsLabel } from '@/lib/exerciseLevels'
 
 interface SetLog { id?: string; set_number: number; reps_completed?: number; weight_lbs?: number; velocity_ms?: number; completed: boolean }
 interface Exercise {
@@ -21,6 +30,11 @@ interface Exercise {
   customReps?: string; customNotes?: string; skipped: boolean
   blockExerciseId?: string
   swap?: { available: boolean; role: 'main' | 'secondary' | null; swappedFromName: string | null }
+  originalExerciseId?: string
+  isReplaced?: boolean; originalExerciseName?: string
+  level?: { family: string; level: number; count: number } | null
+  canRequestChange?: boolean
+  changeRequest?: { id: string; status: 'pending' | 'approved' | 'declined' | string; wants: string | null; reason: string | null; coachNote: string | null; applies: string | null; createdAt: string } | null
   targetVelocityMin?: number | null; targetVelocityMax?: number | null
   setLogs: SetLog[]
   recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number; sourceLabel?: string; detail?: string; adjustmentMessage?: string }
@@ -29,7 +43,7 @@ interface Block { id: string; block_label: string; title?: string | null; sets: 
 interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[] }
 
 type WorkoutView = 'blocks' | 'active_block'
-interface SwapOption { id: string; name: string; equipment?: string | null; imageUrl?: string | null }
+interface SwapOption { id: string; name: string; equipment?: string | null; imageUrl?: string | null; tag?: string | null }
 
 export default function PlayerWorkoutPage() {
   const router = useRouter()
@@ -63,6 +77,13 @@ export default function PlayerWorkoutPage() {
   const [swapLoading, setSwapLoading] = useState(false)
   const [swapSaving, setSwapSaving] = useState(false)
   const [swapError, setSwapError] = useState('')
+  // Self-guided: why they're swapping (shown to the coach)
+  const [swapReason, setSwapReason] = useState<string | null>(null)
+  const [swapBodyPart, setSwapBodyPart] = useState<string | null>(null)
+  // Team workouts: change request to the coach
+  const [requestFor, setRequestFor] = useState<Exercise | null>(null)
+  const [requestSaving, setRequestSaving] = useState(false)
+  const [requestError, setRequestError] = useState('')
 
   const loadWorkout = useCallback(async (s: { sessionId: string; templateId?: string }): Promise<WorkoutData | null> => {
     const params = new URLSearchParams({ sessionId: s.sessionId })
@@ -91,6 +112,7 @@ export default function PlayerWorkoutPage() {
   async function openSwap(ex: Exercise) {
     if (!session || !ex.blockExerciseId) return
     setSwapFor(ex); setSwapOptions([]); setSwapOriginal(null); setSwapError(''); setSwapLoading(true)
+    setSwapReason(null); setSwapBodyPart(null)
     try {
       const params = new URLSearchParams({ sessionId: session.sessionId, slot: ex.blockExerciseId })
       const res = await playerFetch(`/api/player/self-guided-swap?${params}`)
@@ -108,7 +130,7 @@ export default function PlayerWorkoutPage() {
       const res = await playerFetch('/api/player/self-guided-swap', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: session.sessionId, slot: swapFor.blockExerciseId, exerciseId }),
+        body: JSON.stringify({ sessionId: session.sessionId, slot: swapFor.blockExerciseId, exerciseId, reason: swapReason, bodyPart: swapBodyPart }),
       })
       const d = await res.json()
       if (!res.ok) { setSwapError(d.error ?? 'Swap not saved'); setSwapSaving(false); return }
@@ -122,6 +144,51 @@ export default function PlayerWorkoutPage() {
     } catch { setSwapError('Swap not saved') }
     setSwapSaving(false)
   }
+
+  // ── Change requests (team workouts) ──
+  async function sendChangeRequest(input: ChangeRequestInput) {
+    if (!session || !requestFor?.blockExerciseId) return
+    setRequestSaving(true); setRequestError('')
+    try {
+      const res = await playerFetch('/api/player/change-request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          slot: requestFor.blockExerciseId,
+          exerciseId: requestFor.id,
+          originalExerciseId: requestFor.originalExerciseId ?? requestFor.id,
+          templateId: session.templateId ?? null,
+          ...input,
+        }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setRequestError(d.error ?? 'Request not sent'); setRequestSaving(false); return }
+      await loadWorkout(session)
+      setRequestFor(null)
+    } catch { setRequestError('Request not sent') }
+    setRequestSaving(false)
+  }
+
+  async function withdrawChangeRequest(requestId: string) {
+    if (!session) return
+    await playerFetch('/api/player/change-request', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: session.sessionId, id: requestId }),
+    }).catch(() => {})
+    await loadWorkout(session)
+  }
+
+  // While a request is waiting, check back every 20 seconds for the coach's answer
+  const hasPendingRequest = !!workout?.blocks.some(b => b.exercises.some(e => e.changeRequest?.status === 'pending'))
+  const sessionRef = useRef(session)
+  sessionRef.current = session
+  useEffect(() => {
+    if (!hasPendingRequest) return
+    const t = setInterval(() => { if (sessionRef.current) loadWorkout(sessionRef.current).catch(() => {}) }, 20000)
+    return () => clearInterval(t)
+  }, [hasPendingRequest, loadWorkout])
 
   const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
 
@@ -432,6 +499,16 @@ export default function PlayerWorkoutPage() {
               <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '0.15rem' }}>
                 {ex.customReps ?? ex.default_reps ?? '—'} reps
               </div>
+              {ex.level && (
+                <div title={`${ex.level.family}: level 1 is the easiest`} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.3rem', marginTop: '0.3rem', fontSize: '0.66rem', fontWeight: 700, whiteSpace: 'nowrap', color: 'var(--carolina-dark)', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 5, padding: '0.1rem 0.4rem' }}>
+                  <span aria-hidden style={{ display: 'inline-flex', gap: 2, alignItems: 'flex-end' }}>
+                    {Array.from({ length: ex.level.count }, (_, i) => (
+                      <span key={i} style={{ width: 4, height: 5 + i * 3, borderRadius: 1, background: i < ex.level!.level ? 'var(--carolina)' : 'var(--carolina-border)' }} />
+                    ))}
+                  </span>
+                  Level {ex.level.level} of {ex.level.count}
+                </div>
+              )}
             </div>
             {ex.recommendation && ex.recommendation.weight > 0 && (
               <div style={{ textAlign: 'right', flexShrink: 0 }}>
@@ -498,6 +575,42 @@ export default function PlayerWorkoutPage() {
               {ex.swap.swappedFromName ? 'Change easier option' : 'Sore? Pick an easier option →'}
             </button>
           )}
+
+          {/* Change request to the coach (team workouts) */}
+          {ex.canRequestChange && (() => {
+            const r = ex.changeRequest
+            if (r?.status === 'pending') return (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', padding: '0.55rem 0.75rem', marginBottom: '0.875rem', background: 'rgba(245,158,11,0.1)', border: '1.5px solid rgba(245,158,11,0.45)', borderRadius: 8 }}>
+                <span aria-hidden style={{ fontSize: '1rem' }}>⏳</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#b45309' }}>Waiting for Coach</div>
+                  <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}>Asked for {wantsLabel(r.wants).toLowerCase()} · {reasonLabel(r.reason)}</div>
+                </div>
+                <button onClick={() => withdrawChangeRequest(r.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '0.72rem', fontWeight: 600, cursor: 'pointer', textDecoration: 'underline' }}>Withdraw</button>
+              </div>
+            )
+            return (
+              <>
+                {r?.status === 'approved' && (
+                  <div style={{ padding: '0.5rem 0.75rem', marginBottom: '0.5rem', background: 'rgba(22,163,74,0.08)', border: '1.5px solid rgba(22,163,74,0.35)', borderRadius: 8, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    <strong style={{ color: 'var(--success)' }}>✓ Coach changed this{ex.isReplaced && ex.originalExerciseName ? ` (was ${ex.originalExerciseName})` : ''}</strong>
+                    {r.applies === 'today' ? ' for today.' : '.'}
+                    {r.coachNote && <div style={{ marginTop: '0.2rem', fontStyle: 'italic' }}>“{r.coachNote}”</div>}
+                  </div>
+                )}
+                {r?.status === 'declined' && (
+                  <div style={{ padding: '0.5rem 0.75rem', marginBottom: '0.5rem', background: 'var(--court-raised)', border: '1.5px solid var(--gray-border)', borderRadius: 8, fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                    <strong>Coach kept this exercise.</strong>
+                    {r.coachNote && <div style={{ marginTop: '0.2rem', fontStyle: 'italic' }}>“{r.coachNote}”</div>}
+                  </div>
+                )}
+                <button onClick={() => { setRequestError(''); setRequestFor(ex) }}
+                  style={{ width: '100%', padding: '0.45rem 0.75rem', marginBottom: '0.875rem', background: 'transparent', border: '1.5px dashed var(--gray-border)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
+                  Need a change? Ask Coach →
+                </button>
+              </>
+            )
+          })()}
 
           {ex.recommendation?.adjustmentMessage && (
             <div style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, padding: '0.5rem 0.875rem', marginBottom: '0.875rem', fontSize: '0.82rem', fontWeight: 600, color: 'var(--carolina-dark)' }}>
@@ -590,8 +703,29 @@ export default function PlayerWorkoutPage() {
               {swapError && <div style={{ background: 'var(--danger-light)', borderRadius: 8, padding: '0.5rem 0.75rem', marginBottom: '0.75rem', color: 'var(--danger)', fontSize: '0.82rem' }}>{swapError}</div>}
               {swapLoading && <div style={{ padding: '1.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>Loading options…</div>}
 
-              {!swapLoading && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.5rem' }}>
+              {/* Why? (shown to the coach) */}
+              {!swapLoading && !swapOriginal && (
+                <div style={{ marginTop: '0.5rem' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: '0.4rem' }}>Why? <span style={{ textTransform: 'none', fontWeight: 500 }}>(your coach sees this)</span></div>
+                  <div style={{ display: 'flex', gap: '0.375rem', flexWrap: 'wrap' }}>
+                    {CHANGE_REASONS.filter(r => ['sore', 'painful', 'too_hard', 'equipment', 'other'].includes(r.value)).map(r => (
+                      <button key={r.value} onClick={() => { setSwapReason(r.value); if (!r.asksWhere) setSwapBodyPart(null) }}
+                        style={{ padding: '0.35rem 0.65rem', borderRadius: 20, fontSize: '0.78rem', fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${swapReason === r.value ? 'var(--carolina)' : 'var(--gray-border)'}`, background: swapReason === r.value ? 'var(--carolina)' : 'transparent', color: swapReason === r.value ? '#fff' : 'var(--text-primary)' }}>{r.label}</button>
+                    ))}
+                  </div>
+                  {CHANGE_REASONS.find(r => r.value === swapReason)?.asksWhere && (
+                    <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                      {BODY_AREAS.map(a => (
+                        <button key={a} onClick={() => setSwapBodyPart(a)}
+                          style={{ padding: '0.3rem 0.55rem', borderRadius: 20, fontSize: '0.74rem', fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${swapBodyPart === a ? 'var(--carolina-dark)' : 'var(--gray-border)'}`, background: swapBodyPart === a ? 'var(--carolina-light)' : 'transparent', color: 'var(--text-primary)' }}>{a}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {!swapLoading && (swapOriginal || swapReason) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginTop: '0.75rem' }}>
                   {swapOriginal && (
                     <button onClick={() => chooseSwap(swapOriginal.id)} disabled={swapSaving}
                       style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', width: '100%', padding: '0.75rem', borderRadius: 10, border: '1.5px solid var(--gray-border)', background: 'var(--court-raised)', cursor: 'pointer', textAlign: 'left' }}>
@@ -605,7 +739,10 @@ export default function PlayerWorkoutPage() {
                       {o.imageUrl
                         ? <img src={o.imageUrl} alt="" style={{ width: 44, height: 44, objectFit: 'cover', borderRadius: 6, flexShrink: 0 }} />
                         : <div style={{ width: 44, height: 44, borderRadius: 6, background: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>💪</div>}
-                      <span style={{ flex: 1, fontWeight: 600, fontSize: '0.9rem', color: 'var(--carolina-deep)' }}>{o.name}</span>
+                      <span style={{ flex: 1, fontWeight: 600, fontSize: '0.9rem', color: 'var(--carolina-deep)' }}>
+                        {o.name}
+                        {o.tag && <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 700, color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{o.tag}</span>}
+                      </span>
                       <span style={{ color: 'var(--carolina)', fontSize: '1.1rem' }}>→</span>
                     </button>
                   ))}
@@ -619,6 +756,17 @@ export default function PlayerWorkoutPage() {
               )}
             </div>
           </div>
+        )}
+
+        {/* Ask-coach sheet (team workouts) */}
+        {requestFor && (
+          <ChangeRequestSheet
+            target={{ name: requestFor.name, level: requestFor.level }}
+            saving={requestSaving}
+            error={requestError}
+            onSend={sendChangeRequest}
+            onClose={() => setRequestFor(null)}
+          />
         )}
 
         {/* Previous sets for this exercise */}

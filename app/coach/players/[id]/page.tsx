@@ -42,7 +42,7 @@ export default function CoachPlayerDetailPage() {
   const [savingMeas, setSavingMeas] = useState(false)
   const [msg, setMsg] = useState('')
   const [overrides, setOverrides] = useState<Array<{ id: string; override_date: string; template_id: string; notes?: string }>>([])
-  const [skips, setSkips] = useState<Array<{ id: string; exercise_id: string; reason?: string; ends_on?: string; exercise_library?: { name: string } }>>([])
+  const [skips, setSkips] = useState<Array<{ id: string; exercise_id: string; reason?: string; ends_on?: string; exercise_library?: { name: string }; replacement_library?: { name: string } | null }>>([])
   const [allTemplates, setAllTemplates] = useState<Array<{ id: string; name: string }>>([])
   const [allExercises, setAllExercises] = useState<Array<{ id: string; name: string; category: string }>>([])
   const [showOverrides, setShowOverrides] = useState(false)
@@ -430,7 +430,12 @@ export default function CoachPlayerDetailPage() {
               {skips.map(sk => (
                 <div key={sk.id} style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.5rem 0.75rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, marginBottom: '0.4rem' }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{sk.exercise_library?.name ?? sk.exercise_id}</div>
+                    <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>
+                      {sk.exercise_library?.name ?? sk.exercise_id}
+                      {sk.replacement_library?.name
+                        ? <span style={{ fontWeight: 500, color: 'var(--carolina-dark)' }}> → {sk.replacement_library.name}</span>
+                        : <span style={{ fontWeight: 500, color: 'var(--text-muted)' }}> · skipped</span>}
+                    </div>
                     {sk.reason && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{sk.reason}</div>}
                     {sk.ends_on && <div style={{ fontSize: '0.7rem', color: 'var(--carolina-dark)' }}>Until {new Date(sk.ends_on + 'T12:00:00').toLocaleDateString()}</div>}
                   </div>

@@ -6,8 +6,13 @@
 //
 //   GET  ?sessionId=&slot=gen-<block>-<exercise>
 //        → { current, original, options: [{ id, name, imageUrl, equipment }] }
-//   POST { sessionId, slot, exerciseId }
+//   POST { sessionId, slot, exerciseId, reason?, bodyPart? }
 //        → swaps that exercise in the session's saved workout
+//
+// Options: easier levels of the same movement and its backup come first
+// (lib/exerciseLevels.ts), each with a short tag. Every swap to an easier
+// option is also saved in exercise_change_requests (kind 'self_guided_swap')
+// with the player's reason, so the coach sees it in Coach → Requests.
 //
 // Rules:
 //   - Only on self-guided sessions (sessions.generated_workout).
@@ -18,8 +23,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { canAccessSession, signInAgain } from '@/lib/playerAuth'
 import { clubDateString } from '@/lib/clubTime'
+import { asReason, asText, BODY_AREAS, CHANGE_REASONS } from '@/lib/exerciseLevels'
 import {
-  asGeneratedWorkout, easierOptions, loadLibrary, parseSlotId, skippedExerciseIds,
+  asGeneratedWorkout, easierOptions, type EasierOption, loadLibrary, parseSlotId, skippedExerciseIds,
   type GeneratedWorkout, type LibraryRow,
 } from '@/lib/fullBodyWorkout'
 
@@ -30,8 +36,9 @@ interface Loaded {
   blockIndex: number
   exerciseIndex: number
   library: LibraryRow[]
-  options: LibraryRow[]
+  options: EasierOption[]
   originalId: string
+  playerId: string
 }
 
 async function load(db: Db, sessionId: string, slot: string | null): Promise<Loaded | NextResponse> {
@@ -56,8 +63,8 @@ async function load(db: Db, sessionId: string, slot: string | null): Promise<Loa
   const exclude = new Set<string>([entry.exerciseId, originalId])
   for (const b of workout.blocks) for (const e of b.exercises) exclude.add(e.exerciseId)
 
-  const options = easierOptions(library, entry.area, entry.role, exclude)
-  return { workout, ...where, library, options, originalId }
+  const options = easierOptions(library, entry.area, entry.role, exclude, originalId)
+  return { workout, ...where, library, options, originalId, playerId: session.player_id }
 }
 
 function brief(ex: LibraryRow | undefined | null, extra?: Record<string, unknown>) {
@@ -88,12 +95,12 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     current: brief(byId.get(entry.exerciseId)),
     original: entry.swappedFromId ? brief(byId.get(result.originalId)) ?? { id: result.originalId, name: entry.swappedFromName } : null,
-    options: result.options.map(o => brief(o, { imageUrl: imageById.get(o.id) ?? null })),
+    options: result.options.map(o => brief(o, { imageUrl: imageById.get(o.id) ?? null, tag: o.tag ?? null })),
   })
 }
 
 export async function POST(req: NextRequest) {
-  const { sessionId, slot, exerciseId } = await req.json()
+  const { sessionId, slot, exerciseId, reason: rawReason, bodyPart: rawBodyPart } = await req.json()
   if (!sessionId || !slot || !exerciseId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   if (!(await canAccessSession(req, sessionId))) return signInAgain()
 
@@ -135,6 +142,28 @@ export async function POST(req: NextRequest) {
 
   const { error } = await db.from('sessions').update({ generated_workout: updated }).eq('id', sessionId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Let the coach know (best effort — the swap already happened)
+  if (!backToOriginal) {
+    const reason = asReason(rawReason)
+    const asksWhere = CHANGE_REASONS.find(r => r.value === reason)?.asksWhere ?? false
+    const bodyPart = asText(rawBodyPart, 40)
+    await db.from('exercise_change_requests').insert({
+      player_id: result.playerId,
+      session_id: sessionId,
+      slot,
+      exercise_id: entry.exerciseId,
+      original_exercise_id: originalId,
+      kind: 'self_guided_swap',
+      wants: 'easier',
+      reason,
+      body_part: asksWhere && bodyPart && BODY_AREAS.includes(bodyPart) ? bodyPart : null,
+      status: 'noted',
+      replacement_exercise_id: exerciseId,
+      applies: 'today',
+      resolved_at: new Date().toISOString(),
+    }).then(() => {}, () => {})
+  }
 
   return NextResponse.json({ ok: true, swappedBack: backToOriginal })
 }

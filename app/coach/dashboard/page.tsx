@@ -14,6 +14,7 @@ interface SessionDetail {
 interface DashboardData {
   todaySessions: Array<{ id: string; playerName: string; jerseyNumber?: string; teamName?: string; teamColor?: string; checkedInAt: string; completedAt?: string; completionPct: number; hasHealthFlag: boolean }>
   unconfirmedHealth: Array<{ id: string; playerName: string; bodyPart: string; reportType: string; painLevel?: number }>
+  changeRequests?: Array<{ id: string; kind: string; playerName: string; exerciseName: string; summary: string; createdAt: string }>
   activeInjuries: number
   totalPlayers: number
   sessionsTodayCount: number
@@ -66,6 +67,35 @@ export default function CoachDashboardPage() {
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '0.2rem' }}>Dashboard</h1>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>{today}</p>
       </div>
+
+      {/* Exercise change requests (app/coach/requests) */}
+      {(data?.changeRequests?.length ?? 0) > 0 && (() => {
+        const list = data!.changeRequests!
+        const waiting = list.filter(r => r.kind === 'request').length
+        const swaps = list.length - waiting
+        return (
+          <Link href="/coach/requests" className="card" style={{ display: 'block', padding: '1rem 1.25rem', marginBottom: '1.5rem', borderColor: 'rgba(245,158,11,0.55)', background: 'rgba(245,158,11,0.06)', textDecoration: 'none', color: 'inherit' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: '#b45309' }}>
+                {waiting > 0 ? `${waiting} exercise change request${waiting === 1 ? '' : 's'}` : 'Exercise changes'}
+                {swaps > 0 ? ` · ${swaps} self-guided swap${swaps === 1 ? '' : 's'}` : ''}
+              </h2>
+              <span style={{ fontSize: '0.8rem', color: '#b45309', fontWeight: 700 }}>Review →</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              {list.slice(0, 4).map(r => (
+                <div key={r.id} style={{ fontSize: '0.84rem', color: 'var(--text-secondary)' }}>
+                  <strong style={{ color: 'var(--text-primary)' }}>{r.playerName}</strong>
+                  {r.kind === 'request' ? ' wants to change ' : ' swapped '}
+                  <strong>{r.exerciseName}</strong>
+                  <span style={{ color: 'var(--text-muted)' }}> · {r.summary}</span>
+                </div>
+              ))}
+              {list.length > 4 && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>+ {list.length - 4} more</div>}
+            </div>
+          </Link>
+        )
+      })()}
 
       {/* Stat row — clickable */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
