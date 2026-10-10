@@ -12,7 +12,15 @@
 //                     order) that has a workout scheduled today is used
 //                     (see lib/displayTeams.ts).
 //
-// Response header X-Team-Id tells the Roku which team was pictured.
+// Response headers:
+//   X-Team-Id  which team was pictured
+//   X-Clips    where each exercise demo clip sits in the picture, so the
+//              Roku can play the clips one at a time right on top of their
+//              still pictures. Base64 of JSON:
+//                [{ "url": "...mp4", "x": 1200, "y": 300, "w": 320, "h": 180 }, ...]
+//              x/y/w/h are pixels in the 1920x1080 picture, in reading
+//              order (top to bottom, left to right). Only MP4 clips are
+//              listed, since many Rokus can't play WebM. "[]" when none.
 //
 // The page is shown with ?still=1, so exercises with a demo clip show the
 // clip's still picture (the page looks the same otherwise). The hidden browser:
@@ -81,11 +89,30 @@ export async function GET(req: NextRequest) {
 
     const image = await page.screenshot({ type: 'jpeg', quality: 90 })
 
+    // Where each clip's still picture is (marked by components/ExerciseClip.tsx)
+    const clips = await page.evaluate(() => {
+      const out: { url: string; x: number; y: number; w: number; h: number }[] = []
+      document.querySelectorAll<HTMLElement>('[data-clip-src]').forEach(el => {
+        const url = el.dataset.clipSrc || ''
+        const r = el.getBoundingClientRect()
+        const x = Math.max(0, Math.round(r.left))
+        const y = Math.max(0, Math.round(r.top))
+        const w = Math.round(Math.min(r.right, window.innerWidth)) - x
+        const h = Math.round(Math.min(r.bottom, window.innerHeight)) - y
+        if (url && w >= 40 && h >= 30) out.push({ url, x, y, w, h })
+      })
+      return out
+    })
+    const playable = clips
+      .filter(c => /^https:\/\//i.test(c.url) && /\.(mp4|m4v)(\?|#|$)/i.test(c.url))
+      .sort((a, b) => (Math.abs(a.y - b.y) > 20 ? a.y - b.y : a.x - b.x))
+
     return new NextResponse(Buffer.from(image), {
       headers: {
         'Content-Type': 'image/jpeg',
         'Cache-Control': 'no-store',
         'X-Team-Id': team ?? '',
+        'X-Clips': Buffer.from(JSON.stringify(playable)).toString('base64'),
       },
     })
   } catch (err) {
