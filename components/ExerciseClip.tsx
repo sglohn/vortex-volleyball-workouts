@@ -13,6 +13,9 @@
 //   Tapping a playing clip pauses it.
 // - still: show only the still picture. Used for the Roku snapshot, which
 //   can only show a picture (see app/api/display-snapshot/route.ts).
+//   The still picture carries data-clip-src (the clip's address), so the
+//   snapshot can tell the Roku where each clip sits on screen and the Roku
+//   can play the clip in that spot. It doesn't change how anything looks.
 'use client'
 import { useEffect, useRef, useState } from 'react'
 
@@ -68,8 +71,8 @@ export default function ExerciseClip({ src, poster, alt, still = false }: Props)
 
   if (still || failed) {
     return poster
-      ? <img src={poster} alt={alt} style={fill} />
-      : <div aria-label={alt} style={{ ...fill, background: '#0d1117' }} />
+      ? <img src={poster} alt={alt} style={fill} data-clip-src={src} />
+      : <div aria-label={alt} style={{ ...fill, background: '#0d1117' }} data-clip-src={src} />
   }
 
   return (
