@@ -1,9 +1,11 @@
-// FILE: components/ExerciseClip.tsx   (new file)
+// FILE: components/ExerciseClip.tsx
 //
 // Plays an exercise's demo clip as a silent loop, like a GIF: no sound, no
 // controls, starts on its own. Fills whatever box it's placed in (the page
 // decides the size), cropped to fit like the photos.
 //
+// - Starts again on its own when the clip changes (moving to the next
+//   exercise or set reuses this player with a new clip).
 // - Only loads and plays while it's on screen, so a long workout page
 //   doesn't download every clip at once or drain phone batteries.
 // - Shows the clip's still picture (poster) while loading, or if the
@@ -57,8 +59,14 @@ export default function ExerciseClip({ src, poster, alt, still = false }: Props)
     return () => obs.disconnect()
   }, [still])
 
-  // Play while on screen, pause when not
-  useEffect(() => {
+  // A new clip (the player moved to the next exercise or set): the page
+  // reuses this same video player and only swaps the clip, which resets the
+  // video to stopped. Clear any error from the last clip so the new one
+  // gets its own chance; the play effect below then starts it again.
+  useEffect(() => { setFailed(false) }, [src])
+
+  // Start the clip if it should be playing right now
+  const tryPlay = () => {
     const el = videoRef.current
     if (!el || !loaded || failed) return
     // React doesn't always set the muted attribute itself, and phones only
@@ -67,7 +75,11 @@ export default function ExerciseClip({ src, poster, alt, still = false }: Props)
     el.defaultMuted = true
     if (visible && !paused) el.play().catch(() => { /* blocked: the poster stays up */ })
     else el.pause()
-  }, [visible, loaded, paused, failed])
+  }
+
+  // Play while on screen, pause when not. Runs again when the clip changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(tryPlay, [visible, loaded, paused, failed, src])
 
   if (still || failed) {
     return poster
@@ -86,6 +98,7 @@ export default function ExerciseClip({ src, poster, alt, still = false }: Props)
         playsInline
         preload={loaded ? 'auto' : 'none'}
         aria-label={alt}
+        onLoadedData={tryPlay}
         onError={() => setFailed(true)}
         onClick={() => setPaused(p => !p)}
         style={{ ...fill, background: '#0d1117', cursor: 'pointer' }}
