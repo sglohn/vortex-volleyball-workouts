@@ -2,7 +2,8 @@
 'use client'
 import { useState, useEffect, useCallback, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { loadLabel, plateText, weightInputLabel, type Equipment } from '@/lib/loads'
+import { loadLabel, plateText, type Equipment } from '@/lib/loads'
+import WeightPicker from '@/components/WeightPicker'
 import BrandMark from '@/components/BrandMark'
 import { withPass } from '@/lib/playerPass'
 
@@ -388,14 +389,17 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                     ))}
                   </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight && ex.logs_velocity ? '1fr 1fr 1fr' : ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.75rem', marginBottom: '1rem' }}>
-                    {ex.logs_weight && (
-                      <div>
-                        <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>{weightInputLabel(ex.equipment)}</label>
-                        <input className="input" type="number" inputMode="decimal" placeholder="0" value={weightInput} onChange={e => setWeightInput(e.target.value)}
-                          style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700 }} autoFocus />
-                      </div>
-                    )}
+                  {ex.logs_weight && (
+                    <div style={{ marginBottom: '0.875rem' }}>
+                      <WeightPicker big
+                        equipment={ex.equipment}
+                        value={weightInput}
+                        onChange={setWeightInput}
+                        suggested={ex.recommendation && ex.recommendation.weight > 0 ? ex.recommendation.weight : null} />
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: ex.logs_velocity ? '1fr 1fr' : '1fr', gap: '0.75rem', marginBottom: '1rem' }}>
                     <div>
                       <label style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>Reps</label>
                       <input className="input" type="number" inputMode="numeric" placeholder={ex.default_reps ?? '—'} value={repsInput} onChange={e => setRepsInput(e.target.value)}

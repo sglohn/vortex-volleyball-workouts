@@ -14,7 +14,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
-import { loadLabel, plateText, setPoundsMoved, weightInputLabel, type Equipment } from '@/lib/loads'
+import { loadLabel, plateText, setPoundsMoved, type Equipment } from '@/lib/loads'
+import WeightPicker from '@/components/WeightPicker'
 import { playerFetch } from '@/lib/playerPass'
 import ExerciseClip from '@/components/ExerciseClip'
 import ChangeRequestSheet, { type ChangeRequestInput } from '@/components/ChangeRequestSheet'
@@ -625,29 +626,20 @@ export default function PlayerWorkoutPage() {
             </div>
           )}
 
-          {/* Input fields */}
-          <div style={{ display: 'grid', gridTemplateColumns: ex.logs_weight && ex.logs_velocity ? '1fr 1fr 1fr' : ex.logs_weight ? '1fr 1fr' : '1fr', gap: '0.625rem', marginBottom: ex.logs_weight ? '0.5rem' : '1rem' }}>
-            {ex.logs_weight && (() => {
-              // Suggestions arrive already rounded to a loadable weight (lib/loads.ts)
-              const gymWeight = ex.recommendation && ex.recommendation.weight > 0 ? ex.recommendation.weight : null
-              return (
-                <div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.35rem' }}>
-                    <label style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{weightInputLabel(ex.equipment)}</label>
-                    {gymWeight && !weightInput && (
-                      <button onClick={() => setWeightInput(String(gymWeight))}
-                        style={{ fontSize: '0.7rem', color: 'var(--carolina)', fontWeight: 700, background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 5, padding: '0.15rem 0.5rem', cursor: 'pointer' }}>
-                        Use {loadLabel(gymWeight, ex.equipment)} →
-                      </button>
-                    )}
-                  </div>
-                  <input className="input" type="number" inputMode="decimal"
-                    placeholder={gymWeight ? `${gymWeight}` : '0'}
-                    value={weightInput} onChange={e => setWeightInput(e.target.value)}
-                    style={{ fontSize: '1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, padding: '0.75rem', borderColor: gymWeight && !weightInput ? 'var(--carolina)' : undefined }} autoFocus />
-                </div>
-              )
-            })()}
+          {/* Weight: tap plates / dumbbells (components/WeightPicker.tsx) */}
+          {ex.logs_weight && (
+            <div style={{ marginBottom: '0.75rem' }}>
+              <WeightPicker
+                equipment={ex.equipment}
+                value={weightInput}
+                onChange={setWeightInput}
+                // Suggestions arrive already rounded to a loadable weight (lib/loads.ts)
+                suggested={ex.recommendation && ex.recommendation.weight > 0 ? ex.recommendation.weight : null} />
+            </div>
+          )}
+
+          {/* Reps / velocity */}
+          <div style={{ display: 'grid', gridTemplateColumns: ex.logs_velocity ? '1fr 1fr' : '1fr', gap: '0.625rem', marginBottom: ex.logs_weight ? '0.5rem' : '1rem' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem' }}>Reps</label>
               <input className="input" type="number" inputMode="numeric" placeholder={ex.customReps ?? ex.default_reps ?? '—'} value={repsInput} onChange={e => setRepsInput(e.target.value)}
