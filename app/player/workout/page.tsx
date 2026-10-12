@@ -46,6 +46,22 @@ interface WorkoutData { id: string; name: string; description?: string; warmup_n
 type WorkoutView = 'blocks' | 'active_block'
 interface SwapOption { id: string; name: string; equipment?: string | null; imageUrl?: string | null; tag?: string | null }
 
+// Big, easy-to-spot "change this exercise" button (team: ask Coach;
+// self-guided: pick an easier option). Module scope so it doesn't remount.
+function ChangeExerciseButton({ onClick, title, sub }: { onClick: () => void; title: string; sub: string }) {
+  return (
+    <button type="button" onClick={onClick}
+      style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '0.7rem 0.875rem', marginBottom: '0.875rem', background: 'var(--warning-light)', border: '2px solid var(--warning)', borderRadius: 10, cursor: 'pointer', textAlign: 'left' }}>
+      <span aria-hidden style={{ flexShrink: 0, width: 36, height: 36, borderRadius: '50%', background: 'var(--warning)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', fontWeight: 800 }}>⇄</span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ display: 'block', fontSize: '0.98rem', fontWeight: 800, color: '#92400e' }}>{title}</span>
+        <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#b45309', marginTop: '0.1rem' }}>{sub}</span>
+      </span>
+      <span aria-hidden style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--warning)' }}>→</span>
+    </button>
+  )
+}
+
 export default function PlayerWorkoutPage() {
   const router = useRouter()
   const [session, setSession] = useState<{ sessionId: string; playerName: string; templateId?: string; checkedInAt?: string; teamMode?: boolean; teamModeUrl?: string } | null>(null)
@@ -571,10 +587,9 @@ export default function PlayerWorkoutPage() {
 
           {/* Easier option (self-guided workouts, before any set is logged) */}
           {ex.swap?.available && (
-            <button onClick={() => openSwap(ex)}
-              style={{ width: '100%', padding: '0.5rem 0.75rem', marginBottom: '0.875rem', background: 'transparent', border: '1.5px dashed var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600 }}>
-              {ex.swap.swappedFromName ? 'Change easier option' : 'Sore? Pick an easier option →'}
-            </button>
+            <ChangeExerciseButton onClick={() => openSwap(ex)}
+              title={ex.swap.swappedFromName ? 'Change your easier option' : 'Need a different exercise?'}
+              sub={ex.swap.swappedFromName ? `Switched from ${ex.swap.swappedFromName}` : 'Sore or it hurts? Pick an easier option'} />
           )}
 
           {/* Change request to the coach (team workouts) */}
@@ -605,10 +620,9 @@ export default function PlayerWorkoutPage() {
                     {r.coachNote && <div style={{ marginTop: '0.2rem', fontStyle: 'italic' }}>“{r.coachNote}”</div>}
                   </div>
                 )}
-                <button onClick={() => { setRequestError(''); setRequestFor(ex) }}
-                  style={{ width: '100%', padding: '0.45rem 0.75rem', marginBottom: '0.875rem', background: 'transparent', border: '1.5px dashed var(--gray-border)', borderRadius: 8, color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>
-                  Need a change? Ask Coach →
-                </button>
+                <ChangeExerciseButton onClick={() => { setRequestError(''); setRequestFor(ex) }}
+                  title="Need a different exercise?"
+                  sub="Sore or it hurts? Ask Coach to change it" />
               </>
             )
           })()}
