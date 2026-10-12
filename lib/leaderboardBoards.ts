@@ -61,8 +61,9 @@ export type Page = { name: string; boards: Board[] }
 
 // ── Small helpers ───────────────────────────────────────────────────────
 
-export function genderOf(teamName: string): Gender {
-  return teamName.toLowerCase().includes('boy') ? 'M' : 'F'
+/** A player's Girl / Boy setting (players.gender). Anything unset counts as a girl. */
+export function genderOf(value: string | null | undefined): Gender {
+  return value === 'M' ? 'M' : 'F'
 }
 
 /** 'YYYY-MM-DD' + n days → 'YYYY-MM-DD' (calendar math, no timezone). */

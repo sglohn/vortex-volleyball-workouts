@@ -7,13 +7,12 @@ export async function GET() {
 
   const { data: players, error: pErr } = await db
     .from('players')
-    .select('id, name, jersey_number, position, date_of_birth')
+    .select('id, name, jersey_number, position, date_of_birth, gender')
     .eq('is_active', true)
     .order('name')
 
   if (pErr) return NextResponse.json({ error: pErr.message, players: [] })
 
-  // teams table has: name, color, age_group — no gender column
   const { data: playerTeams } = await db
     .from('player_teams')
     .select('player_id, teams(id, name, color, age_group)')
@@ -48,8 +47,8 @@ export async function GET() {
     const team = teamMap[p.id]
     const meas = measMap[p.id] ?? { height_in: null, standing_reach_in: null, approach_vertical_in: null }
     const teamName = team?.name ?? 'No team'
-    // Derive gender from team name — "boy" anywhere in name = M, else F
-    const gender = teamName.toLowerCase().includes('boy') ? 'M' : 'F'
+    // Girl / Boy is set per player on the Edit Player window (girl by default)
+    const gender = p.gender === 'M' ? 'M' : 'F'
     // Team's assigned age group — still used for "My team" comparisons
     const age_group = team?.age_group ?? ''
     // Individual computed age from date of birth — used for "same age" comparisons
