@@ -186,7 +186,8 @@ export async function GET(req: NextRequest) {
     }
     const lifts = playerBestLifts[p.id] ?? { squat: 0, bench: 0, deadlift: 0 }
     const teamName = team?.name ?? ''
-    const gender = teamName.toLowerCase().includes('boy') ? 'M' : 'F'
+    // Girl / Boy is set per player on the Edit Player window (girl by default)
+    const gender = p.gender === 'M' ? 'M' : 'F'
     const athleticism = calculateAthleticismScore(
       {
         height_in: meas.height_in,
@@ -230,7 +231,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, pin, jersey_number, position, team_id, date_of_birth } = await req.json()
+  const { name, pin, jersey_number, position, team_id, date_of_birth, gender } = await req.json()
   if (!name || !pin) return NextResponse.json({ error: 'Name and PIN required' }, { status: 400 })
   if (pin.length !== 4 || !/^\d{4}$/.test(pin)) return NextResponse.json({ error: 'PIN must be exactly 4 digits' }, { status: 400 })
 
@@ -241,6 +242,7 @@ export async function POST(req: NextRequest) {
     jersey_number: jersey_number || null,
     position: position || null,
     date_of_birth: date_of_birth || null,
+    gender: gender === 'M' ? 'M' : 'F',
   }).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

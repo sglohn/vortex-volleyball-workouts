@@ -15,7 +15,7 @@
 //
 // Optional query params:
 //   ?teams=<id>,<id>   only these teams
-//   ?gender=F | M      girls or boys only (derived from team name, like elsewhere)
+//   ?gender=F | M      girls or boys only (each player's Girl / Boy setting)
 //   ?limit=10          rows per board (1–15, default 10; the TV shows 8)
 //   ?page=N            hold the board on page N (1 = Today) instead of rotating
 //   ?key=...           required only if LEADERBOARD_DISPLAY_KEY is set in Vercel
@@ -39,7 +39,7 @@ type LogRow = {
   session_id: string; exercise_id: string; weight_lbs: number | null; reps_completed: number | null
   completed: boolean; velocity_ms: number | null; logged_at: string | null
 }
-type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
+type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean; gender?: string | null }
 type TeamRow = { id: string; name: string; age_group?: string | null; color?: string | null }
 type ExerciseInfo = { id: string; name: string; equipment: Equipment | null; logsWeight: boolean; logsVelocity: boolean }
 type PoolPlayer = { id: string; name: string; team: TeamRow; gender: Gender; teamColor: string }
@@ -254,7 +254,7 @@ export async function GET(req: NextRequest) {
   const { data: playerTeams } = checkedInIds.length
     ? await db
         .from('player_teams')
-        .select('player_id, team_id, players(id, name, jersey_number, is_active)')
+        .select('player_id, team_id, players(id, name, jersey_number, is_active, gender)')
         .in('player_id', checkedInIds)
         .eq('is_primary', true)
     : { data: [] }
@@ -269,7 +269,7 @@ export async function GET(req: NextRequest) {
 
   const toPoolPlayer = (p: PlayerJoin, team: TeamRow): PoolPlayer => ({
     id: p.id, name: p.name, team,
-    gender: genderOf(team.name),
+    gender: genderOf(p.gender),
     teamColor: rokuColor(team.color, ACCENTS.weight),
   })
 
@@ -346,7 +346,7 @@ export async function GET(req: NextRequest) {
   // ── Everyone on the teams on the board (This Week includes players who missed today) ──
   const { data: rosterRaw } = shownTeamIds.length
     ? await db.from('player_teams')
-        .select('player_id, team_id, players(id, name, jersey_number, is_active)')
+        .select('player_id, team_id, players(id, name, jersey_number, is_active, gender)')
         .in('team_id', shownTeamIds).eq('is_primary', true)
     : { data: [] }
 

@@ -249,7 +249,7 @@ export default function CoachPlayersPage() {
   const [modal, setModal] = useState<'add'|'edit'|null>(null)
   const [editTarget, setEditTarget] = useState<Player|null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Player|null>(null)
-  const [form, setForm] = useState({ name:'', jersey_number:'', position:'', pin:'', team_id:'', date_of_birth:'' })
+  const [form, setForm] = useState({ name:'', jersey_number:'', position:'', pin:'', team_id:'', date_of_birth:'', gender:'F' })
   const [msg, setMsg] = useState('')
   const [msgErr, setMsgErr] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -330,11 +330,11 @@ export default function CoachPlayersPage() {
   }, [scopedPlayers, sortKey, sortDir])
 
   function openAdd() {
-    setForm({ name:'', jersey_number:'', position:'', pin:'', team_id:'', date_of_birth:'' })
+    setForm({ name:'', jersey_number:'', position:'', pin:'', team_id:'', date_of_birth:'', gender:'F' })
     setEditTarget(null); setModal('add'); setMsg('')
   }
   function openEdit(p: Player) {
-    setForm({ name: p.name, jersey_number: p.jersey_number ?? '', position: p.position ?? '', pin: '', team_id: p.teamId ?? '', date_of_birth: p.date_of_birth ?? '' })
+    setForm({ name: p.name, jersey_number: p.jersey_number ?? '', position: p.position ?? '', pin: '', team_id: p.teamId ?? '', date_of_birth: p.date_of_birth ?? '', gender: p.gender === 'M' ? 'M' : 'F' })
     setMeasurements({ height_in:'', wingspan_in:'', standing_reach_in:'', standing_vertical_in:'', approach_vertical_in:'', acceleration_sec:'', pro_agility_sec:'', swing_velocity_mph:'' })
     setEditTarget(p); setModal('edit'); setMsg('')
     if (FEATURES.measurements) fetch(`/api/player/measurements?playerId=${p.id}`)
@@ -369,7 +369,7 @@ export default function CoachPlayersPage() {
       } else { setMsg(data.error || 'Error saving'); setMsgErr(true) }
     } else if (modal === 'edit' && editTarget) {
       if (form.pin && !/^\d{4}$/.test(form.pin)) { setMsg('New PIN must be 4 digits, or leave blank'); setMsgErr(true); setSaving(false); return }
-      const body: Record<string,string> = { id: editTarget.id, name: form.name, jersey_number: form.jersey_number, position: form.position, team_id: form.team_id, date_of_birth: form.date_of_birth }
+      const body: Record<string,string> = { id: editTarget.id, name: form.name, jersey_number: form.jersey_number, position: form.position, team_id: form.team_id, date_of_birth: form.date_of_birth, gender: form.gender }
       if (form.pin) body.pin = form.pin
       const res = await fetch('/api/coach/players/delete', { method:'PATCH', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
       const data = await res.json()
@@ -600,6 +600,24 @@ export default function CoachPlayersPage() {
                   {POSITIONS.map(pos => <option key={pos} value={pos}>{pos}</option>)}
                 </select>
               </FF>
+              <div style={{ gridColumn:'1/-1' }}>
+                <FF label="Girl / Boy">
+                  <div style={{ display:'flex', gap:'0.5rem' }}>
+                    {([['F', 'Girl'], ['M', 'Boy']] as const).map(([value, label]) => (
+                      <button key={value} type="button" onClick={() => setForm(p => ({ ...p, gender: value }))} style={{
+                        flex:1, padding:'0.55rem 0.75rem', borderRadius:8, cursor:'pointer', fontSize:'0.9rem',
+                        border: `1.5px solid ${form.gender === value ? 'var(--carolina)' : 'var(--gray-border)'}`,
+                        background: form.gender === value ? 'var(--carolina-light)' : 'transparent',
+                        color: form.gender === value ? 'var(--carolina-deep)' : 'var(--text-secondary)',
+                        fontWeight: form.gender === value ? 700 : 500,
+                      }}>{label}</button>
+                    ))}
+                  </div>
+                  <p style={{ fontSize:'0.75rem', color:'var(--text-muted)', marginTop:'0.35rem' }}>
+                    Leaderboards and comparisons rank girls only with girls and boys only with boys.
+                  </p>
+                </FF>
+              </div>
             </div>
 
             {modal === 'edit' && FEATURES.measurements && (

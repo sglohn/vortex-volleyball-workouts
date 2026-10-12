@@ -71,7 +71,7 @@ export default function ComparisonsPage(){
   useEffect(()=>{
     fetch('/api/coach/comparisons').then(r=>r.json()).then(d=>{
       const pl:Player[]=(d.players??[]).map((p:Player)=>({
-        ...p,gender:p.gender??(p.teamName?.toLowerCase().includes('boy')?'M':'F'),
+        ...p,gender:p.gender==='M'?'M':'F',
       }))
       setPlayers(pl)
       const first=pl.find(p=>(p.gender??'F')==='F')??pl[0]
@@ -81,8 +81,7 @@ export default function ComparisonsPage(){
   },[])
 
   const filteredByGender=players.filter(p=>{
-    const g=p.gender??(p.teamName?.toLowerCase().includes('boy')?'M':'F')
-    return g===gender
+    return (p.gender==='M'?'M':'F')===gender
   })
   const sp=players.find(p=>p.id===selId)
 
@@ -164,7 +163,7 @@ export default function ComparisonsPage(){
       <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',marginBottom:'0.75rem'}}>
         <div style={{display:'flex',flexDirection:'column',gap:3}}>
           <label style={{fontSize:13,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}}>Net</label>
-          <select className="input" value={gender} onChange={e=>{const g=e.target.value as 'F'|'M';setGender(g);const first=players.find(p=>{const pg=p.gender??(p.teamName?.toLowerCase().includes('boy')?'M':'F');return pg===g});if(first)setSelId(first.id)}} style={{fontSize:13}}>
+          <select className="input" value={gender} onChange={e=>{const g=e.target.value as 'F'|'M';setGender(g);const first=players.find(p=>{return (p.gender==='M'?'M':'F')===g});if(first)setSelId(first.id)}} style={{fontSize:13}}>
             <option value="F">Girls — 7'4.25"</option>
             <option value="M">Boys — 7'11.5"</option>
           </select>
