@@ -3,10 +3,11 @@
 // Tap-to-enter weight for logging a set, so players don't have to do gym math.
 // What it shows depends on the exercise's equipment (lib/loads.ts):
 //
-//   Barbell     - "The bar is 45. Tap the plates on ONE side." Each tap puts
-//                 that plate on both sides; the total (bar included) is shown
-//                 big and is what gets saved.
-//   Landmine    - Tap the plates on the end of the bar. Saves plates only
+//   Barbell     - "Tap each plate ONCE: it goes on both sides." The drawing
+//                 shows the whole bar loaded on both ends; the total (bar
+//                 included) is shown big and is what gets saved.
+//   Landmine    - Tap the plates on the end of the bar (drawing shows that one
+//                 end). Saves plates only
 //                 (the bar's felt weight is added in pounds-moved math).
 //   1 dumbbell  - Tap the number printed on the dumbbell.
 //   2 dumbbells - Tap the number on ONE dumbbell; shows "2 × 30 = 60 lbs".
@@ -77,24 +78,49 @@ function TotalBox({ main, sub }: { main: string; sub?: string }) {
   )
 }
 
-/** Drawing of one side of the bar (or the landmine end) with its plates. */
-function BarDrawing({ plates, label }: { plates: number[]; label: string }) {
+function Plate({ p }: { p: number }) {
+  const look = PLATE_LOOK[String(p)] ?? PLATE_LOOK['5']
+  return <div title={`${p}`} style={{ width: look.w, height: look.h, background: look.bg, borderRadius: 3, flexShrink: 1, minWidth: 4 }} />
+}
+
+/**
+ * Barbell: the whole bar with the same plates on BOTH ends, heaviest
+ * (first tapped) closest to the middle, so one tap visibly loads both sides.
+ */
+function FullBarDrawing({ plates }: { plates: number[] }) {
+  const end = <div style={{ width: 14, height: 10, background: 'var(--gray-mid)', borderRadius: 3, flexShrink: 0 }} />
+  const collar = <div style={{ width: 6, height: 26, background: 'var(--black-soft)', borderRadius: 2, flexShrink: 0 }} />
   return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, height: 72, padding: '0 0.5rem' }}>
-      <div style={{ width: 40, height: 10, background: 'var(--gray-mid)', borderRadius: 3 }} />
-      <div style={{ width: 6, height: 26, background: 'var(--black-soft)', borderRadius: 2 }} />
-      {plates.map((p, i) => {
-        const look = PLATE_LOOK[String(p)] ?? PLATE_LOOK['5']
-        return <div key={i} title={`${p}`} style={{ width: look.w, height: look.h, background: look.bg, borderRadius: 3 }} />
-      })}
-      <div style={{ flex: 1, minWidth: 30, maxWidth: 120, height: 10, background: 'var(--gray-border)', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        {!plates.length && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700, whiteSpace: 'nowrap', marginTop: 22 }}>{label}</span>}
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, height: 72, padding: '0 0.5rem', overflow: 'hidden' }}>
+      {end}
+      {[...plates].reverse().map((p, i) => <Plate key={`l${i}`} p={p} />)}
+      {collar}
+      <div style={{ flex: 1, minWidth: 40, maxWidth: 140, height: 8, background: 'var(--gray-border)', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        {!plates.length && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700, whiteSpace: 'nowrap', marginTop: 22 }}>empty bar</span>}
       </div>
+      {collar}
+      {plates.map((p, i) => <Plate key={`r${i}`} p={p} />)}
+      {end}
     </div>
   )
 }
 
-function PlateButtons({ onAdd, big }: { onAdd: (p: number) => void; big?: boolean }) {
+/** Landmine / Viking Press: one end of the bar, plates only on that end. */
+function LandmineDrawing({ plates }: { plates: number[] }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, height: 72, padding: '0 0.5rem', overflow: 'hidden' }}>
+      <div style={{ flex: 1, minWidth: 30, maxWidth: 160, height: 10, background: 'var(--gray-border)', borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700, whiteSpace: 'nowrap', marginTop: 22 }}>← wall end</span>
+      </div>
+      <div style={{ width: 6, height: 26, background: 'var(--black-soft)', borderRadius: 2, flexShrink: 0 }} />
+      {plates.map((p, i) => <Plate key={i} p={p} />)}
+      <div style={{ width: 40, height: 10, background: 'var(--gray-mid)', borderRadius: 3, flexShrink: 0 }} />
+      {!plates.length && <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700, marginLeft: 6 }}>no plates</span>}
+    </div>
+  )
+}
+
+function PlateButtons({ onAdd, big, bothSides }: { onAdd: (p: number) => void; big?: boolean; bothSides?: boolean }) {
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.4rem' }}>
       {PLATES_LBS.map(p => {
@@ -103,6 +129,7 @@ function PlateButtons({ onAdd, big }: { onAdd: (p: number) => void; big?: boolea
           <button key={p} type="button" onClick={() => onAdd(p)}
             style={{ padding: big ? '0.85rem 0' : '0.65rem 0', borderRadius: 10, border: 'none', background: look.bg, color: look.fg, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: big ? '1.4rem' : '1.2rem', cursor: 'pointer' }}>
             + {p}
+            {bothSides && <span style={{ display: 'block', fontFamily: 'var(--font-body)', fontSize: '0.62rem', fontWeight: 700, opacity: 0.85, letterSpacing: '0.03em' }}>both sides</span>}
           </button>
         )
       })}
@@ -176,7 +203,7 @@ export default function WeightPicker({ equipment, value, onChange, suggested, bi
   // ── Header line: what to do, in plain words ──
   let title = 'Weight (lbs)'
   let help = 'Enter the weight you used.'
-  if (isBar) { title = 'Barbell'; help = `The bar is ${BAR_LBS} lbs and already counted. Tap the plates you put on ONE side.` }
+  if (isBar) { title = 'Barbell'; help = `The bar is ${BAR_LBS} lbs and already counted. Tap each plate ONCE: it goes on both sides.` }
   if (isLandmine) { title = 'Landmine'; help = 'Tap the plates on the end of the bar. Nothing on it? Tap "Empty bar".' }
   if (equipment === 'dumbbell_1') { title = '1 dumbbell'; help = 'Tap the number printed on the dumbbell.' }
   if (equipment === 'dumbbell_2') { title = '2 dumbbells'; help = 'Holding two? Tap the number on ONE of them. We add both up for you.' }
@@ -193,7 +220,7 @@ export default function WeightPicker({ equipment, value, onChange, suggested, bi
       {(isBar || isLandmine) && !typing && (
         <>
           <div style={{ background: 'var(--gray-light)', borderRadius: 10, padding: '0.25rem 0' }}>
-            <BarDrawing plates={plates} label={isBar ? 'empty bar' : 'no plates'} />
+            {isBar ? <FullBarDrawing plates={plates} /> : <LandmineDrawing plates={plates} />}
           </div>
           {value === '' ? (
             <button type="button" onClick={() => setFromPlates([])}
@@ -209,7 +236,7 @@ export default function WeightPicker({ equipment, value, onChange, suggested, bi
               main={plates.length ? `${fmt(sum(plates))} lbs of plates` : 'Empty bar'}
               sub={plates.length ? `${plates.join(' + ')} on the end · bar counts as ~${LANDMINE_BAR_LBS}` : `Bar counts as ~${LANDMINE_BAR_LBS} lbs`} />
           )}
-          <PlateButtons big={big} onAdd={p => setFromPlates([...plates, p])} />
+          <PlateButtons big={big} bothSides={isBar} onAdd={p => setFromPlates([...plates, p])} />
           <UndoClear disabled={value === ''}
             onUndo={() => setFromPlates(plates.slice(0, -1))}
             onClear={() => { setPlates([]); onChange('') }} />
