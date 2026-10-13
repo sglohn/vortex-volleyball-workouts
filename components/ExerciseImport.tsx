@@ -7,7 +7,10 @@
 // Two choices before picking the file:
 //   Add new only          - exercises already here (same name) are skipped
 //   Add new + update      - exercises already here are brought up to date
-//                           from the file too (details, new photos, new clip)
+//                           from the file too (details, family/level/backup,
+//                           new photos, new clip)
+// After all exercises are in, a last step sets each one's recommended backup
+// by name (the backup may come later in the file than the exercise).
 // Either way it's safe to run the same file again later.
 'use client'
 import { useRef, useState } from 'react'
@@ -64,14 +67,39 @@ export default function ExerciseImport({ onDone }: { onDone: () => void }) {
         all.push(...(data.results ?? []))
       }
     }
+    const imported = [...all]   // counted in the summary; backup problems are listed only
+
+    // Recommended backups, now that every exercise is in. Only for exercises
+    // this run added, or (when updating) ones already here too.
+    const touched = new Set(all.filter(r => r.status === 'added' || (updateExisting && (r.status === 'updated' || r.status === 'unchanged'))).map(r => r.name))
+    const backups = list
+      .map(e => ({ name: String(e.name ?? '').trim(), backup: String(e.backup_exercise_name ?? '').trim() }))
+      .filter(b => b.backup && touched.has(b.name))
+    let backupNote = ''
+    if (backups.length) {
+      setProgress('Linking backup exercises…')
+      const res = await fetch('/api/coach/exercises/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ backups }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (res.ok) {
+        if (data.linked) backupNote = `, ${data.linked} backup${data.linked === 1 ? '' : 's'} linked`
+        for (const m of (data.missing ?? []) as string[]) all.push({ name: m.split(' → ')[0], status: 'error', detail: `backup "${m.split(' → ')[1]}" isn't in this library` })
+      } else {
+        all.push({ name: 'Backups', status: 'error', detail: data.error ?? `error ${res.status}` })
+      }
+    }
+
     setRunning(false)
     setResults(all)
-    const count = (s: Result['status']) => all.filter(r => r.status === s).length
+    const count = (s: Result['status']) => imported.filter(r => r.status === s).length
     const parts = [`${count('added')} added`]
     if (updateExisting) parts.push(`${count('updated')} updated`, `${count('unchanged')} already up to date`)
     else parts.push(`${count('skipped')} already here`)
     if (count('error')) parts.push(`${count('error')} failed`)
-    setProgress(`Done: ${parts.join(', ')}.`)
+    setProgress(`Done: ${parts.join(', ')}${backupNote}.`)
     onDone()
   }
 
@@ -90,7 +118,7 @@ export default function ExerciseImport({ onDone }: { onDone: () => void }) {
           <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Import exercises from a file</div>
           {([
             [false, 'Add new exercises only', 'Exercises already here are left as they are.'],
-            [true, 'Add new and update ones already here', 'Exercises with the same name get the file\'s category, sets/reps, equipment, notes, and any new photos or demo clip. Blanks in the file never erase anything here.'],
+            [true, 'Add new and update ones already here', 'Exercises with the same name get the file\'s category, sets/reps, equipment, notes, easier/harder family, level and backup, and any new photos or demo clip. Blanks in the file never erase anything here.'],
           ] as const).map(([value, label, hint]) => (
             <label key={label} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginBottom: '0.5rem', cursor: 'pointer' }}>
               <input type="radio" name="import-mode" checked={updateExisting === value} onChange={() => setUpdateExisting(value)} style={{ marginTop: 3 }} />
