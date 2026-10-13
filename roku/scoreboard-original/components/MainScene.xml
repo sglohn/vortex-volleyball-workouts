@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="MainScene" extends="Scene">
+    <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
+
+    <children>
+        <Rectangle id="bg" translation="[0,0]" width="1280" height="720" color="0x0B1220FF" />
+
+        <!-- Team A (left) panel -->
+        <Rectangle id="panelA" translation="[40,165]" width="520" height="465" color="0x14213DFF" />
+        <Rectangle id="scoreAFrame" translation="[40,285]" width="520" height="295" color="0x00000000" />
+        <Rectangle id="setsAFrame" translation="[40,580]" width="520" height="50" color="0x00000000" />
+        <Group id="nameAGlyphGroup" />
+        <Poster id="scoreATens" translation="[40,295]" width="191" height="275" />
+        <Poster id="scoreAOnes" translation="[40,295]" width="191" height="275" />
+        <Label id="labelTeamASets" text="SETS WON: 0" translation="[40,585]" width="520" height="40" horizAlign="center" vertAlign="center" color="0xAAB4C8FF" font="font:SmallBoldSystemFont" />
+
+        <!-- Team B (right) panel -->
+        <Rectangle id="panelB" translation="[720,165]" width="520" height="465" color="0x14213DFF" />
+        <Rectangle id="scoreBFrame" translation="[720,285]" width="520" height="295" color="0x00000000" />
+        <Rectangle id="setsBFrame" translation="[720,580]" width="520" height="50" color="0x00000000" />
+        <Group id="nameBGlyphGroup" />
+        <Poster id="scoreBTens" translation="[720,295]" width="191" height="275" />
+        <Poster id="scoreBOnes" translation="[720,295]" width="191" height="275" />
+        <Label id="labelTeamBSets" text="SETS WON: 0" translation="[720,585]" width="520" height="40" horizAlign="center" vertAlign="center" color="0xAAB4C8FF" font="font:SmallBoldSystemFont" />
+
+        <!-- Timer panel (center) - image-based digits, much larger than any available font -->
+        <Rectangle id="panelTimer" translation="[430,5]" width="420" height="150" color="0x1F2A44FF" />
+        <Poster id="timerMinTens" translation="[447,25]" width="80" height="110" />
+        <Poster id="timerMinOnes" translation="[535,25]" width="80" height="110" />
+        <Rectangle id="timerColonDot1" translation="[633,55]" width="14" height="14" color="0xFFD166FF" />
+        <Rectangle id="timerColonDot2" translation="[633,90]" width="14" height="14" color="0xFFD166FF" />
+        <Poster id="timerSecTens" translation="[665,25]" width="80" height="110" />
+        <Poster id="timerSecOnes" translation="[753,25]" width="80" height="110" />
+
+        <!-- Control legend - plain text only (arrow symbols don't render on this hardware), split across lines so nothing runs off-screen -->
+        <Label id="labelLegend1" text="Left/Right: Select spot     Up/Down: Adjust score, sets, or timer" translation="[40,636]" width="1200" height="24" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
+        <Label id="labelLegend2" text="OK: Rename team     Play/Pause: Start or pause timer     Replay: Reset timer" translation="[40,660]" width="1200" height="24" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
+        <Label id="labelLegend3" text="Rewind/Fast Fwd: +1 point Left/Right     Star: Add set (Timer focus: reset all)     Back: Reset scores" translation="[40,684]" width="1200" height="24" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
+
+        <Timer id="countdownTimer" repeat="true" duration="1" />
+        <Audio id="hornAudio" />
+
+        <!-- On-screen keyboard overlay for renaming a team, hidden until OK is pressed on a team panel -->
+        <Group id="keyboardOverlay" visible="false">
+            <Rectangle id="kbBg" translation="[140,80]" width="1000" height="560" color="0x0F1830F5" />
+            <Label id="kbTitle" text="ENTER TEAM NAME" translation="[140,100]" width="1000" height="35" horizAlign="center" vertAlign="center" color="0xFFFFFFFF" font="font:MediumBoldSystemFont" />
+            <Label id="kbNameDisplay" text="" translation="[140,150]" width="1000" height="55" horizAlign="center" vertAlign="center" color="0xFFD166FF" font="font:LargeBoldSystemFont" />
+            <Label id="kbInstructions" text="Arrows: move   OK: pick   Back: cancel" translation="[140,590]" width="1000" height="30" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
+        </Group>
+    </children>
+</component>

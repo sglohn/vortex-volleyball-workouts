@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- FILE: components/LeaderboardView.xml  (Vortex Weight Room Leaderboard) -->
+<!-- Full-screen leaderboard laid out on a 1280x720 canvas.
+     Uses only Roku's preset fonts and plain ASCII text, which render
+     reliably on this hardware.
+
+     Remote: Left/Right (or Rewind/Fast-forward) step through the pages.
+     After 60 seconds without a press it goes back to turning pages by
+     itself. -->
+<component name="LeaderboardView" extends="Group">
+  <interface>
+    <!-- true: Back or OK asks the parent app to switch away (combined / TV Display apps)
+         false: Back is left alone so the app exits (standalone app) -->
+    <field id="backGoesToMenu" type="boolean" value="false" />
+    <!-- set to true when Back or OK is pressed and backGoesToMenu is on -->
+    <field id="exitRequested" type="boolean" value="false" alwaysNotify="true" />
+    <!-- set to false to stop polling before removing this view -->
+    <field id="active" type="boolean" value="true" onChange="onActiveChanged" />
+  </interface>
+
+  <script type="text/brightscript" uri="pkg:/components/LeaderboardView.brs" />
+
+  <children>
+    <Rectangle id="background" width="1280" height="720" color="0x0b1220ff" />
+
+    <!-- Header -->
+    <Label id="title" translation="[50, 18]" width="660" height="54" vertAlign="center"
+           color="0xfbbf24ff" font="font:LargeBoldSystemFont" text="WEIGHT ROOM LEADERBOARD" />
+    <Label id="summary" translation="[50, 76]" width="760" height="32" vertAlign="center"
+           color="0x94a3b8ff" font="font:SmallSystemFont" text="Connecting..." />
+
+    <!-- "PAGE 3 OF 9", and "HELD" while someone is using the remote -->
+    <Label id="pageLabel" translation="[720, 24]" width="410" height="42" horizAlign="right" vertAlign="center"
+           color="0x94a3b8ff" font="font:MediumBoldSystemFont" text="" />
+
+    <Rectangle id="liveDot" translation="[1146, 39]" width="12" height="12" color="0x22c55eff" />
+    <Label id="liveLabel" translation="[1164, 24]" width="70" height="42" vertAlign="center"
+           color="0x22c55eff" font="font:MediumBoldSystemFont" text="LIVE" />
+    <Label id="status" translation="[730, 76]" width="500" height="32" horizAlign="right" vertAlign="center"
+           color="0x94a3b8ff" font="font:SmallSystemFont" text="" />
+
+    <Animation id="blink" duration="1.6" repeat="true" easeFunction="linear">
+      <FloatFieldInterpolator key="[0.0, 0.5, 1.0]" keyValue="[1.0, 0.25, 1.0]" fieldToInterp="liveDot.opacity" />
+    </Animation>
+
+    <!-- Board columns are built in LeaderboardView.brs -->
+    <Group id="boards" />
+
+    <!-- Shown when nobody has checked in yet -->
+    <Group id="emptyState" visible="false">
+      <Label translation="[0, 300]" width="1280" height="56" horizAlign="center" vertAlign="center"
+             color="0xffffffff" font="font:LargeBoldSystemFont" text="No one has checked in yet today" />
+      <Label translation="[0, 362]" width="1280" height="40" horizAlign="center" vertAlign="center"
+             color="0x94a3b8ff" font="font:MediumSystemFont" text="The leaderboard fills in as players check in and log sets." />
+    </Group>
+
+    <!-- After this long without a button press, pages turn by themselves again -->
+    <Timer id="holdTimer" repeat="false" duration="60" />
+    <!-- How long the "Left/Right: change page" note stays up -->
+    <Timer id="hintTimer" repeat="false" duration="4" />
+  </children>
+</component>

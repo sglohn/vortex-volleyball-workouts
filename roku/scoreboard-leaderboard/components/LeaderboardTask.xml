@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- FILE: components/LeaderboardTask.xml  (Vortex Weight Room Leaderboard) -->
+<!-- Background worker: fetches the leaderboard JSON every few seconds. -->
+<component name="LeaderboardTask" extends="Task">
+  <interface>
+    <field id="data" type="assocarray" alwaysNotify="true" />
+    <field id="status" type="string" alwaysNotify="true" />
+    <field id="active" type="boolean" value="true" />
+    <!-- 0 = let the site turn pages; N = ask the site for page N -->
+    <field id="pinnedPage" type="integer" value="0" />
+    <!-- set true to fetch right away instead of waiting for the next poll -->
+    <field id="refreshNow" type="boolean" value="false" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/LeaderboardTask.brs" />
+</component>
