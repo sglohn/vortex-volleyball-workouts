@@ -8,17 +8,24 @@
 //        (up to 5 per call; the Import button sends them in small batches)
 //   → { results: [{ name, status: 'added' | 'updated' | 'unchanged' | 'skipped' | 'error', detail? }] }
 //
+//   POST { backups: [{ name, backup }] }   (sent once at the end, after every
+//        exercise is in, since a backup may come later in the file)
+//   → { linked, missing: string[] }
+//
+// Easier/harder families: the family name and level come across with each
+// exercise. The recommended backup is matched by name in the final step.
+//
 // For each exercise:
 //   - new name: added
 //   - name already in the library:
 //       updateExisting off (default) → skipped
-//       updateExisting on → its details are brought up to date from the
-//         file. Only details the file actually has are copied, so a blank
-//         in the export never wipes out something set here. Photos and the
-//         demo clip are only copied again when the export's one is
-//         different from the one copied last time. Nothing is ever
-//         removed, and settings this site keeps for itself (level family,
-//         backup exercise, self-guided spots, bar speed, active/hidden)
+//       updateExisting on → its details (including family, level and
+//         backup) are brought up to date from the file. Only details the
+//         file actually has are copied, so a blank in the export never
+//         wipes out something set here. Photos and the demo clip are only
+//         copied again when the export's one is different from the one
+//         copied last time. Nothing is ever removed, and settings this site
+//         keeps for itself (self-guided spots, bar speed, active/hidden)
 //         are left alone.
 //   - photos and demo clips are downloaded from the export's Supabase
 //     storage and re-uploaded into this site's own "exercise-media" bucket,
@@ -54,6 +61,21 @@ interface ExportedExercise {
   equipment?: string | null
   clip_url?: string | null
   clip_poster_url?: string | null
+  variation_family?: string | null
+  variation_level?: number | null
+  backup_exercise_name?: string | null
+}
+
+/** Family name tidied the same way the Exercise Library page saves it */
+function cleanFamily(value: string | null | undefined): string | null {
+  const f = (value ?? '').trim().replace(/\s+/g, ' ')
+  return f || null
+}
+
+/** Level 1–20, or null */
+function cleanLevel(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isInteger(n) && n >= 1 && n <= 20 ? n : null
 }
 
 // Only copy photos from Supabase public storage, never arbitrary addresses
@@ -115,6 +137,7 @@ type ExistingRow = {
   start_image_url: string | null; end_image_url: string | null; demo_image_url: string | null
   start_image_position: string | null; end_image_position: string | null
   clip_url?: string | null; clip_poster_url?: string | null
+  variation_family?: string | null; variation_level?: number | null
 }
 
 const has = (v: unknown) => v !== null && v !== undefined && !(typeof v === 'string' && v.trim() === '')
@@ -139,6 +162,11 @@ async function updateExisting(db: Db, ex: ExportedExercise, row: ExistingRow, na
   set('demo_url', ex.demo_url, 'demo link')
   set('start_image_position', ex.start_image_position, 'photo framing')
   set('end_image_position', ex.end_image_position, 'photo framing')
+  const family = cleanFamily(ex.variation_family)
+  if (family) {
+    set('variation_family', family, 'family')
+    set('variation_level', cleanLevel(ex.variation_level), 'family')
+  }
   if (Object.keys(details).length) {
     const { error } = await db.from('exercise_library').update(details).eq('id', row.id)
     if (error) return { name, status: 'error', detail: error.message }
@@ -190,8 +218,41 @@ async function updateExisting(db: Db, ex: ExportedExercise, row: ExistingRow, na
     : { name, status: 'unchanged' }
 }
 
+/** Final step: set each exercise's recommended backup by name. */
+async function linkBackups(db: Db, links: { name?: string; backup?: string }[]) {
+  const pairs = links
+    .map(l => ({ name: (l.name ?? '').trim(), backup: (l.backup ?? '').trim() }))
+    .filter(l => l.name && l.backup && l.name !== l.backup)
+  const names = [...new Set(pairs.flatMap(p => [p.name, p.backup]))]
+  const { data } = names.length
+    ? await db.from('exercise_library').select('id, name, backup_exercise_id').in('name', names)
+    : { data: [] }
+  const byName = new Map((data ?? []).map(r => [r.name as string, r as { id: string; name: string; backup_exercise_id: string | null }]))
+
+  let linked = 0
+  const missing: string[] = []
+  for (const p of pairs) {
+    const ex = byName.get(p.name)
+    const backup = byName.get(p.backup)
+    if (!ex) continue
+    if (!backup) { missing.push(`${p.name} → ${p.backup}`); continue }
+    if (ex.backup_exercise_id === backup.id) continue
+    const { error } = await db.from('exercise_library').update({ backup_exercise_id: backup.id }).eq('id', ex.id)
+    if (!error) linked++
+  }
+  return { linked, missing }
+}
+
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null) as { exercises?: ExportedExercise[]; updateExisting?: boolean } | null
+  const body = await req.json().catch(() => null) as {
+    exercises?: ExportedExercise[]; updateExisting?: boolean; backups?: { name?: string; backup?: string }[]
+  } | null
+
+  if (Array.isArray(body?.backups)) {
+    if (body!.backups!.length > 500) return NextResponse.json({ error: 'Too many backups' }, { status: 400 })
+    return NextResponse.json(await linkBackups(createServerClient(), body!.backups!))
+  }
+
   const list = Array.isArray(body?.exercises) ? body!.exercises! : null
   const update = body?.updateExisting === true
   if (!list || list.length === 0) return NextResponse.json({ error: 'No exercises' }, { status: 400 })
@@ -224,6 +285,9 @@ export async function POST(req: NextRequest) {
       demo_url: ex.demo_url ?? null,
       start_image_position: ex.start_image_position ?? '50% 50%',
       end_image_position: ex.end_image_position ?? '50% 50%',
+      ...(cleanFamily(ex.variation_family)
+        ? { variation_family: cleanFamily(ex.variation_family), variation_level: cleanLevel(ex.variation_level) }
+        : {}),
     }).select('id').single()
     if (error || !created) { results.push({ name, status: 'error', detail: error?.message ?? 'insert failed' }); continue }
 
