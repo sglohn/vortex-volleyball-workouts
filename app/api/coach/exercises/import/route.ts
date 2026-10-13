@@ -4,17 +4,28 @@
 // copying the exercise library into the Bruisers Lacrosse database).
 // Coach-only: middleware.ts requires the coach cookie for /api/coach/*.
 //
-//   POST { exercises: ExportedExercise[] }   (up to 5 per call; the
-//        Import button sends them in small batches)
-//   → { results: [{ name, status: 'added' | 'skipped' | 'error', detail? }] }
+//   POST { exercises: ExportedExercise[], updateExisting?: boolean }
+//        (up to 5 per call; the Import button sends them in small batches)
+//   → { results: [{ name, status: 'added' | 'updated' | 'unchanged' | 'skipped' | 'error', detail? }] }
 //
 // For each exercise:
-//   - skipped if an exercise with the same name already exists
+//   - new name: added
+//   - name already in the library:
+//       updateExisting off (default) → skipped
+//       updateExisting on → its details are brought up to date from the
+//         file. Only details the file actually has are copied, so a blank
+//         in the export never wipes out something set here. Photos and the
+//         demo clip are only copied again when the export's one is
+//         different from the one copied last time. Nothing is ever
+//         removed, and settings this site keeps for itself (level family,
+//         backup exercise, self-guided spots, bar speed, active/hidden)
+//         are left alone.
 //   - photos and demo clips are downloaded from the export's Supabase
 //     storage and re-uploaded into this site's own "exercise-media" bucket,
 //     so this site never loads images or clips from the other project
 //   - bar speed logging is turned off when VBT is off (lib/features.ts)
 
+import { createHash } from 'crypto'
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { asEquipment } from '@/lib/loads'
@@ -55,6 +66,20 @@ function isSupabasePublicImage(url: string): boolean {
 
 type Db = ReturnType<typeof createServerClient>
 
+/**
+ * Short fingerprint of where a photo or clip came from. It goes into the
+ * copied file's name, so a later update can tell whether the export's file
+ * is the same one already copied (and skip downloading it again).
+ */
+function sourceTag(url: string): string {
+  return createHash('sha1').update(url).digest('hex').slice(0, 10)
+}
+
+/** True if `current` (this site's copy) was copied from `source`. */
+function copiedFrom(current: string | null | undefined, source: string): boolean {
+  return !!current && current.includes(`_${sourceTag(source)}.`)
+}
+
 async function copyImage(db: Db, url: string, exerciseId: string, which: string): Promise<string | null> {
   if (!isSupabasePublicImage(url)) return null
   const res = await fetch(url)
@@ -63,7 +88,7 @@ async function copyImage(db: Db, url: string, exerciseId: string, which: string)
   if (buf.length > MAX_IMAGE_BYTES) throw new Error('photo too large')
   const type = res.headers.get('content-type') ?? 'image/jpeg'
   const ext = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : 'jpg'
-  const path = `exercises/${exerciseId}/${which}_${Date.now()}.${ext}`
+  const path = `exercises/${exerciseId}/${which}_${Date.now()}_${sourceTag(url)}.${ext}`
   const { error } = await db.storage.from('exercise-media').upload(path, buf, { upsert: true, contentType: type })
   if (error) throw new Error(`photo upload failed: ${error.message}`)
   return db.storage.from('exercise-media').getPublicUrl(path).data.publicUrl
@@ -76,27 +101,116 @@ async function copyClip(db: Db, url: string, exerciseId: string): Promise<string
   const buf = Buffer.from(await res.arrayBuffer())
   if (buf.length > MAX_CLIP_BYTES) throw new Error('clip too large')
   const type = (res.headers.get('content-type') ?? '').includes('webm') ? 'video/webm' : 'video/mp4'
-  const path = `exercises/${exerciseId}/clip_${Date.now()}.${type === 'video/webm' ? 'webm' : 'mp4'}`
+  const path = `exercises/${exerciseId}/clip_${Date.now()}_${sourceTag(url)}.${type === 'video/webm' ? 'webm' : 'mp4'}`
   const { error } = await db.storage.from('exercise-media').upload(path, buf, { upsert: true, contentType: type })
   if (error) throw new Error(`clip upload failed: ${error.message}`)
   return db.storage.from('exercise-media').getPublicUrl(path).data.publicUrl
 }
 
+type Result = { name: string; status: 'added' | 'updated' | 'unchanged' | 'skipped' | 'error'; detail?: string }
+
+type ExistingRow = {
+  id: string; category: string | null; default_sets: number | null; default_reps: string | null
+  logs_weight: boolean | null; equipment: string | null; coaching_notes: string | null; demo_url: string | null
+  start_image_url: string | null; end_image_url: string | null; demo_image_url: string | null
+  start_image_position: string | null; end_image_position: string | null
+  clip_url?: string | null; clip_poster_url?: string | null
+}
+
+const has = (v: unknown) => v !== null && v !== undefined && !(typeof v === 'string' && v.trim() === '')
+
+/** Brings an exercise already in this library up to date from the export. */
+async function updateExisting(db: Db, ex: ExportedExercise, row: ExistingRow, name: string): Promise<Result> {
+  const changed: string[] = []
+
+  // ── Details ──
+  const details: Record<string, unknown> = {}
+  const set = (column: keyof ExistingRow, value: unknown, label: string) => {
+    if (!has(value) || row[column] === value) return
+    details[column] = value
+    if (!changed.includes(label)) changed.push(label)
+  }
+  set('category', ex.category, 'category')
+  set('default_sets', ex.default_sets, 'sets/reps')
+  set('default_reps', ex.default_reps, 'sets/reps')
+  set('logs_weight', ex.logs_weight, 'logs weight')
+  set('equipment', asEquipment(ex.equipment ?? null), 'equipment')
+  set('coaching_notes', ex.coaching_notes, 'notes')
+  set('demo_url', ex.demo_url, 'demo link')
+  set('start_image_position', ex.start_image_position, 'photo framing')
+  set('end_image_position', ex.end_image_position, 'photo framing')
+  if (Object.keys(details).length) {
+    const { error } = await db.from('exercise_library').update(details).eq('id', row.id)
+    if (error) return { name, status: 'error', detail: error.message }
+  }
+
+  // ── Photos (only ones that are different from what was copied before) ──
+  try {
+    const photos: Record<string, string | null> = {}
+    const copied = new Map<string, string | null>()
+    const copy = async (url: string, which: string) => {
+      if (!copied.has(url)) copied.set(url, await copyImage(db, url, row.id, which))
+      return copied.get(url) ?? null
+    }
+    if (ex.start_image_url && !copiedFrom(row.start_image_url, ex.start_image_url)) {
+      const u = await copy(ex.start_image_url, 'start'); if (u) photos.start_image_url = u
+    }
+    if (ex.end_image_url && !copiedFrom(row.end_image_url, ex.end_image_url)) {
+      const u = await copy(ex.end_image_url, 'end'); if (u) photos.end_image_url = u
+    }
+    if (ex.demo_image_url && !copiedFrom(row.demo_image_url, ex.demo_image_url)) {
+      const u = await copy(ex.demo_image_url, 'start'); if (u) photos.demo_image_url = u
+    }
+    if (Object.keys(photos).length) {
+      const { error } = await db.from('exercise_library').update(photos).eq('id', row.id)
+      if (error) throw new Error(error.message)
+      changed.push('photos')
+    }
+  } catch (e) {
+    return { name, status: 'updated', detail: `updated without new photos (${(e as Error).message})` }
+  }
+
+  // ── Demo clip ──
+  if (ex.clip_url && !copiedFrom(row.clip_url, ex.clip_url)) {
+    try {
+      const clip = await copyClip(db, ex.clip_url, row.id)
+      const poster = ex.clip_poster_url ? await copyImage(db, ex.clip_poster_url, row.id, 'poster') : null
+      if (clip) {
+        const { error } = await db.from('exercise_library').update({ clip_url: clip, clip_poster_url: poster ?? row.clip_poster_url ?? null }).eq('id', row.id)
+        if (error) throw new Error(error.message)
+        changed.push('demo clip')
+      }
+    } catch (e) {
+      return { name, status: 'updated', detail: `updated without its new demo clip (${(e as Error).message})` }
+    }
+  }
+
+  return changed.length
+    ? { name, status: 'updated', detail: changed.join(', ') }
+    : { name, status: 'unchanged' }
+}
+
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null) as { exercises?: ExportedExercise[] } | null
+  const body = await req.json().catch(() => null) as { exercises?: ExportedExercise[]; updateExisting?: boolean } | null
   const list = Array.isArray(body?.exercises) ? body!.exercises! : null
+  const update = body?.updateExisting === true
   if (!list || list.length === 0) return NextResponse.json({ error: 'No exercises' }, { status: 400 })
   if (list.length > MAX_PER_CALL) return NextResponse.json({ error: `Send at most ${MAX_PER_CALL} at a time` }, { status: 400 })
 
   const db = createServerClient()
-  const results: { name: string; status: 'added' | 'skipped' | 'error'; detail?: string }[] = []
+  const results: Result[] = []
 
   for (const ex of list) {
     const name = (ex.name ?? '').trim()
     if (!name) { results.push({ name: '(no name)', status: 'error', detail: 'missing name' }); continue }
 
-    const { data: existing } = await db.from('exercise_library').select('id').eq('name', name).maybeSingle()
-    if (existing) { results.push({ name, status: 'skipped', detail: 'already in library' }); continue }
+    const { data: existing } = await db.from('exercise_library').select('*').eq('name', name).maybeSingle()
+    if (existing) {
+      results.push(update
+        ? await updateExisting(db, ex, existing as ExistingRow, name)
+        : { name, status: 'skipped', detail: 'already in library' })
+      continue
+    }
 
     const { data: created, error } = await db.from('exercise_library').insert({
       name,

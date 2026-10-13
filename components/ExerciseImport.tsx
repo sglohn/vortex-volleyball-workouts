@@ -4,14 +4,17 @@
 // Reads an exercise export file (the CSV from running
 // supabase/export-exercises.sql in another copy of this app, or plain JSON),
 // then sends the exercises to /api/coach/exercises/import a few at a time.
-// Exercises already in the library (same name) are skipped, so it's safe to
-// run the same file again later to pick up new exercises.
+// Two choices before picking the file:
+//   Add new only          - exercises already here (same name) are skipped
+//   Add new + update      - exercises already here are brought up to date
+//                           from the file too (details, new photos, new clip)
+// Either way it's safe to run the same file again later.
 'use client'
 import { useRef, useState } from 'react'
 
 const BATCH = 5
 
-type Result = { name: string; status: 'added' | 'skipped' | 'error'; detail?: string }
+type Result = { name: string; status: 'added' | 'updated' | 'unchanged' | 'skipped' | 'error'; detail?: string }
 
 // Accepts the Supabase SQL Editor CSV download (header line + one quoted
 // JSON cell) or a plain JSON file.
@@ -35,6 +38,8 @@ export default function ExerciseImport({ onDone }: { onDone: () => void }) {
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState('')
   const [results, setResults] = useState<Result[] | null>(null)
+  const [choosing, setChoosing] = useState(false)
+  const [updateExisting, setUpdateExisting] = useState(false)
 
   async function handleFile(file: File) {
     setResults(null)
@@ -50,7 +55,7 @@ export default function ExerciseImport({ onDone }: { onDone: () => void }) {
       const res = await fetch('/api/coach/exercises/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ exercises: list.slice(i, i + BATCH) }),
+        body: JSON.stringify({ exercises: list.slice(i, i + BATCH), updateExisting }),
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok) {
@@ -61,25 +66,54 @@ export default function ExerciseImport({ onDone }: { onDone: () => void }) {
     }
     setRunning(false)
     setResults(all)
-    const added = all.filter(r => r.status === 'added').length
-    const skipped = all.filter(r => r.status === 'skipped').length
-    const errors = all.filter(r => r.status === 'error').length
-    setProgress(`Done: ${added} added, ${skipped} already here${errors ? `, ${errors} failed` : ''}.`)
+    const count = (s: Result['status']) => all.filter(r => r.status === s).length
+    const parts = [`${count('added')} added`]
+    if (updateExisting) parts.push(`${count('updated')} updated`, `${count('unchanged')} already up to date`)
+    else parts.push(`${count('skipped')} already here`)
+    if (count('error')) parts.push(`${count('error')} failed`)
+    setProgress(`Done: ${parts.join(', ')}.`)
     onDone()
   }
 
-  const problems = (results ?? []).filter(r => r.status === 'error' || r.detail?.startsWith('added without'))
+  const problems = (results ?? []).filter(r => r.status === 'error' || r.detail?.includes(' without '))
+  const updated = (results ?? []).filter(r => r.status === 'updated' && !r.detail?.includes(' without '))
 
   return (
     <div style={{ position: 'relative' }}>
       <input ref={fileRef} type="file" accept=".csv,.json,text/csv,application/json" style={{ display: 'none' }}
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handleFile(f) }} />
-      <button className="btn-ghost" disabled={running} onClick={() => fileRef.current?.click()} style={{ padding: '0.625rem 1rem' }}>
+      <button className="btn-ghost" disabled={running} onClick={() => { setProgress(''); setResults(null); setChoosing(c => !c) }} style={{ padding: '0.625rem 1rem' }}>
         {running ? 'Importing…' : 'Import'}
       </button>
+      {choosing && !running && (
+        <div className="card" style={{ position: 'absolute', right: 0, top: '110%', zIndex: 20, width: 320, maxWidth: 'none', padding: '0.875rem', fontSize: '0.82rem' }}>
+          <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Import exercises from a file</div>
+          {([
+            [false, 'Add new exercises only', 'Exercises already here are left as they are.'],
+            [true, 'Add new and update ones already here', 'Exercises with the same name get the file\'s category, sets/reps, equipment, notes, and any new photos or demo clip. Blanks in the file never erase anything here.'],
+          ] as const).map(([value, label, hint]) => (
+            <label key={label} style={{ display: 'flex', gap: '0.5rem', alignItems: 'flex-start', marginBottom: '0.5rem', cursor: 'pointer' }}>
+              <input type="radio" name="import-mode" checked={updateExisting === value} onChange={() => setUpdateExisting(value)} style={{ marginTop: 3 }} />
+              <span>
+                <span style={{ fontWeight: 600 }}>{label}</span>
+                <span style={{ display: 'block', color: 'var(--text-muted)', fontSize: '0.75rem' }}>{hint}</span>
+              </span>
+            </label>
+          ))}
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+            <button className="btn-volt" onClick={() => { setChoosing(false); fileRef.current?.click() }} style={{ padding: '0.5rem 0.875rem' }}>Choose file…</button>
+            <button className="btn-ghost" onClick={() => setChoosing(false)} style={{ padding: '0.5rem 0.875rem' }}>Cancel</button>
+          </div>
+        </div>
+      )}
       {progress && (
         <div className="card" style={{ position: 'absolute', right: 0, top: '110%', zIndex: 20, width: 300, maxWidth: 'none', padding: '0.75rem', fontSize: '0.8rem' }}>
           <div style={{ fontWeight: 600, marginBottom: problems.length ? '0.4rem' : 0 }}>{progress}</div>
+          {updated.length > 0 && (
+            <ul style={{ margin: '0 0 0.4rem', paddingLeft: '1rem', maxHeight: 140, overflowY: 'auto', color: 'var(--text-secondary)' }}>
+              {updated.map((u, i) => <li key={i}>{u.name}: {u.detail}</li>)}
+            </ul>
+          )}
           {problems.length > 0 && (
             <ul style={{ margin: 0, paddingLeft: '1rem', maxHeight: 160, overflowY: 'auto', color: 'var(--text-secondary)' }}>
               {problems.map((p, i) => <li key={i}>{p.name}: {p.detail}</li>)}
