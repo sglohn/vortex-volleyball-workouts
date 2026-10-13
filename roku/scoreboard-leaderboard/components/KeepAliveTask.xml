@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<component name="KeepAliveTask" extends="Task">
+    <script type="text/brightscript" uri="pkg:/components/KeepAliveTask.brs" />
+    <interface>
+        <field id="control" type="string" value="stop" />
+    </interface>
+</component>

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- FILE: components/JsonFetchTask.xml  (Vortex TV Display) -->
+<!-- One-time download of a JSON address (used for the team list). -->
+<component name="JsonFetchTask" extends="Task">
+  <interface>
+    <field id="url" type="string" />
+    <field id="data" type="assocarray" />
+    <field id="status" type="string" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/JsonFetchTask.brs" />
+</component>

@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- FILE: components/AppScene.xml  (Vortex Scoreboard + Leaderboard) -->
+<!-- Launch menu: pick Scoreboard or Leaderboard. Laid out on 1280x720. -->
+<component name="AppScene" extends="Scene">
+  <script type="text/brightscript" uri="pkg:/components/AppScene.brs" />
+
+  <children>
+    <Group id="menu">
+      <Rectangle width="1280" height="720" color="0x0B1220FF" />
+
+      <Label translation="[0, 90]" width="1280" height="60" horizAlign="center" vertAlign="center"
+             color="0xFFD166FF" font="font:LargeBoldSystemFont" text="VORTEX" />
+      <Label translation="[0, 152]" width="1280" height="40" horizAlign="center" vertAlign="center"
+             color="0xAAB4C8FF" font="font:MediumSystemFont" text="Choose a display" />
+
+      <!-- Scoreboard tile -->
+      <Rectangle id="frame0" translation="[174, 234]" width="452" height="272" color="0x00000000" />
+      <Rectangle id="tile0" translation="[180, 240]" width="440" height="260" color="0x14213DFF" />
+      <Label translation="[180, 320]" width="440" height="60" horizAlign="center" vertAlign="center"
+             color="0xFFFFFFFF" font="font:LargeBoldSystemFont" text="SCOREBOARD" />
+      <Label translation="[180, 385]" width="440" height="36" horizAlign="center" vertAlign="center"
+             color="0xAAB4C8FF" font="font:SmallSystemFont" text="Scores, sets and timer" />
+
+      <!-- Leaderboard tile -->
+      <Rectangle id="frame1" translation="[654, 234]" width="452" height="272" color="0x00000000" />
+      <Rectangle id="tile1" translation="[660, 240]" width="440" height="260" color="0x14213DFF" />
+      <Label translation="[660, 320]" width="440" height="60" horizAlign="center" vertAlign="center"
+             color="0xFFFFFFFF" font="font:LargeBoldSystemFont" text="LEADERBOARD" />
+      <Label translation="[660, 385]" width="440" height="36" horizAlign="center" vertAlign="center"
+             color="0xAAB4C8FF" font="font:SmallSystemFont" text="Weight room, live" />
+
+      <Label translation="[0, 560]" width="1280" height="30" horizAlign="center" vertAlign="center"
+             color="0x8895ADFF" font="font:SmallSystemFont" text="Left/Right: choose     OK: open     Back: exit" />
+      <Label translation="[0, 592]" width="1280" height="30" horizAlign="center" vertAlign="center"
+             color="0x8895ADFF" font="font:SmallSystemFont" text="Leaderboard: Left/Right change page, Back returns here.     Scoreboard: press Home, then reopen this app." />
+    </Group>
+  </children>
+</component>

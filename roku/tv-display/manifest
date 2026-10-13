@@ -1,0 +1,28 @@
+title=Vortex TV Display
+subtitle=Today's workout and the weight room leaderboard
+major_version=1
+minor_version=0
+build_version=5
+mm_icon_focus_hd=pkg:/images/icon_focus_hd.png
+splash_screen_hd=pkg:/images/splash_hd.png
+splash_color=#0B1220
+splash_min_time=1500
+ui_resolutions=hd
+
+# ── Vortex settings ──
+# Your site. The workout picture comes from <site>/api/display-snapshot
+# and the team list from <site>/api/coach/teams
+site_url=https://vortex-volleyball-workouts.vercel.app
+
+# Where the leaderboard data comes from. Optional filters on the end, e.g.
+#   .../api/leaderboard?gender=F
+leaderboard_url=https://vortex-volleyball-workouts.vercel.app/api/leaderboard
+# How often the leaderboard refreshes while it's on screen, in seconds
+poll_seconds=5
+# After paging with Left/Right, seconds until pages turn by themselves again
+hold_seconds=60
+
+# Demo clips: the workout picture plays one exercise's demo clip at a time,
+# right on top of its still picture, then moves to the next one.
+# How long each clip plays before moving on, in seconds
+clip_seconds=8

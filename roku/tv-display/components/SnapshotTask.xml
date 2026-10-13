@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- FILE: components/SnapshotTask.xml  (Vortex TV Display) -->
+<!-- Downloads one picture of the TV Display page to a temporary file,
+     plus where each demo clip sits in that picture. -->
+<component name="SnapshotTask" extends="Task">
+  <interface>
+    <field id="url" type="string" />
+    <field id="file" type="string" />
+    <field id="oldFile" type="string" />
+    <field id="requestId" type="integer" />
+    <!-- outputs -->
+    <field id="teamId" type="string" />
+    <!-- [{ url, x, y, w, h }] in 1920x1080 picture pixels; empty if none -->
+    <field id="clips" type="array" />
+    <field id="errorText" type="string" />
+    <field id="status" type="string" alwaysNotify="true" />
+  </interface>
+  <script type="text/brightscript" uri="pkg:/components/SnapshotTask.brs" />
+</component>

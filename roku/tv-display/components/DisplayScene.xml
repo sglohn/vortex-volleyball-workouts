@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!-- FILE: components/DisplayScene.xml  (Vortex TV Display) -->
+<!-- Shows a full-screen picture of the TV Display page, with one exercise
+     demo clip at a time playing on top of its still picture. 1280x720 canvas. -->
+<component name="DisplayScene" extends="Scene">
+  <script type="text/brightscript" uri="pkg:/components/DisplayScene.brs" />
+
+  <children>
+    <Rectangle width="1280" height="720" color="0x0D1117FF" />
+
+    <!-- Shown until the first picture arrives -->
+    <Group id="firstLoad">
+      <Label id="firstLoadTitle" translation="[0, 300]" width="1280" height="56" horizAlign="center" vertAlign="center"
+             color="0xFBBF24FF" font="font:LargeBoldSystemFont" text="VORTEX S&amp;C" />
+      <Label id="firstLoadText" translation="[0, 362]" width="1280" height="40" horizAlign="center" vertAlign="center"
+             color="0x94A3B8FF" font="font:MediumSystemFont" text="Loading today's workout..." />
+    </Group>
+
+    <!-- Two pictures: the new one loads behind the old one, then they swap -->
+    <Poster id="posterA" width="1280" height="720" loadDisplayMode="scaleToFit" visible="false" />
+    <Poster id="posterB" width="1280" height="720" loadDisplayMode="scaleToFit" visible="false" />
+
+    <!-- The demo clip now playing. Moved and sized to sit exactly over that
+         exercise's still picture; hidden until the clip is actually playing,
+         so the still picture shows while it loads. A Roku can only play one
+         video at a time. -->
+    <Video id="clipVideo" width="320" height="180" visible="false"
+           enableUI="false" enableTrickPlay="false" loop="true" mute="true" />
+
+    <!-- Small status note, bottom right -->
+    <Group id="statusNote" visible="false">
+      <Rectangle id="statusBg" translation="[760, 610]" width="500" height="44" color="0x000000C0" />
+      <Label id="statusText" translation="[772, 610]" width="476" height="44" horizAlign="right" vertAlign="center"
+             color="0xFFFFFFFF" font="font:SmallSystemFont" text="" />
+    </Group>
+
+    <!-- Button help, shown at start and when * is pressed -->
+    <Group id="hint" visible="false">
+      <Rectangle translation="[0, 668]" width="1280" height="52" color="0x000000D0" />
+      <Label translation="[0, 668]" width="1280" height="52" horizAlign="center" vertAlign="center"
+             color="0xFFFFFFFF" font="font:SmallSystemFont"
+             text="Left/Right: team    Replay: refresh    OK: leaderboard    Play: hold clip    Rew/FF: change clip    Back: exit" />
+    </Group>
+
+    <Timer id="hintTimer" repeat="false" duration="10" />
+    <Timer id="teamChangeTimer" repeat="false" duration="1.2" />
+    <Timer id="statusTimer" repeat="false" duration="6" />
+    <Timer id="clipTimer" repeat="false" duration="8" />
+  </children>
+</component>
