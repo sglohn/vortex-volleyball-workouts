@@ -4,11 +4,17 @@ The current source for the sideloaded Roku apps. The website doesn't use
 anything in this folder; it's kept here so the latest version is always
 in one place. **Whenever a Roku app changes, update its folder here.**
 
-| Folder | Roku | App |
+| Folder | Install on | App |
 |---|---|---|
-| `tv-display/` | Weight room TV Display Roku | **Vortex TV Display** v1.0.5: picture of today's workout with demo clips, OK flips to the live leaderboard |
-| `scoreboard-leaderboard/` | Scoreboard Roku | **Vortex Scoreboard + Leaderboard** v2.1.0: menu to pick the scoreboard or the live leaderboard |
+| `tv-display/` | **Weight Room Roku**, http://10.1.10.219/ | **Vortex TV Display** v1.0.5: picture of today's workout with demo clips, OK flips to the live leaderboard |
+| `scoreboard-leaderboard/` | **Scoreboard Roku**, http://10.1.10.95/ | **Vortex Scoreboard + Leaderboard** v2.1.0: menu to pick the scoreboard or the live leaderboard |
 | `scoreboard-original/` | (not installed) | The original plain **Volleyball Scoreboard**, kept to go back to |
+
+Last installed on both Rokus: Oct 13, 2026 (the versions above).
+
+The addresses only work on the club's Wi-Fi. If one stops loading, the
+Roku may have been given a new address: on that Roku go to
+**Settings → Network → About** to see its current one, then update it here.
 
 The version is in each app's `manifest` (`major_version`, `minor_version`,
 `build_version`).
@@ -37,5 +43,7 @@ The zip must have `manifest` at its top level, not inside a folder.
 - **Mac:** open the app's folder, select everything inside it, right-click,
   then **Compress**.
 
-Upload it at `http://<roku-ip>` (username `rokudev`) and press
-**Replace**.
+Open that Roku's address from the table above in a browser on the club
+Wi-Fi, sign in with username `rokudev` and that Roku's developer password,
+upload the zip and press **Replace**. Check the app name on the page before
+pressing Replace, so the right app goes on the right Roku.
