@@ -28,6 +28,11 @@ export async function GET(req: NextRequest) {
     if (generated) {
       // Self-guided full-body workout (lib/fullBodyWorkout.ts)
       workoutName = generated.name
+    } else if (s.template_id) {
+      // Week plan session (lacrosse, lib/weekPlan.ts): "Day 2 · Lower Body"
+      const { data: tmpl } = await db.from('workout_templates').select('name').eq('id', s.template_id).single()
+      const name = tmpl?.name ?? 'Workout'
+      workoutName = s.week_slot ? `Day ${s.week_slot} · ${name}` : name
     } else if (s.team_id) {
       const date = s.checked_in_at.split('T')[0]
       const { data: schedule } = await db.from('team_schedule').select('workout_templates(name)').eq('team_id', s.team_id).eq('scheduled_date', date).single()
