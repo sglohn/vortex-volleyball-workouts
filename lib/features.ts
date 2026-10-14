@@ -8,6 +8,12 @@
 //   vbt           bar speed (velocity) fields and VBT testing
 //   tvDisplay     the weight room TV / Roku display
 //
+// How workouts are scheduled (one or the other):
+//   datedSchedule volleyball: a workout on set dates per team (Schedule page,
+//                 team_schedule)
+//   weekPlan      lacrosse: Day 1, Day 2... each week, done in order whenever
+//                 players can, one per day (Week Plan page, lib/weekPlan.ts)
+//
 // Pages and API routes for switched-off features are blocked in
 // middleware.ts, so they can't be reached by typing the address either.
 
@@ -22,6 +28,8 @@ export const FEATURES = {
   measurements: VOLLEYBALL,
   vbt: VOLLEYBALL,
   tvDisplay: VOLLEYBALL,
+  datedSchedule: VOLLEYBALL,
+  weekPlan: !VOLLEYBALL,
 } as const
 
 // Address prefixes that belong to each feature
@@ -41,6 +49,16 @@ const FEATURE_PATHS: { on: boolean; pages: string[]; apis: string[] }[] = [
     pages: ['/coach/display'],
     apis: ['/api/display-snapshot', '/api/display-teams'],
   },
+  {
+    on: FEATURES.datedSchedule,
+    pages: ['/coach/schedule'],
+    apis: ['/api/coach/schedule'],
+  },
+  {
+    on: FEATURES.weekPlan,
+    pages: ['/coach/week-plan'],
+    apis: ['/api/coach/week-plan'],
+  },
 ]
 
 function startsWithAny(path: string, prefixes: string[]): boolean {
@@ -50,6 +68,14 @@ function startsWithAny(path: string, prefixes: string[]): boolean {
 /** True when this page address belongs to a switched-off feature */
 export function isHiddenPage(path: string): boolean {
   return FEATURE_PATHS.some(f => !f.on && startsWithAny(path, f.pages))
+}
+
+/** Where a switched-off page sends people instead */
+export function hiddenPageHome(path: string): string {
+  if (path.startsWith('/player')) return '/player/workout'
+  // Old Schedule links (Teams and Dashboard pages) go to the Week Plan
+  if (FEATURES.weekPlan && startsWithAny(path, ['/coach/schedule'])) return '/coach/week-plan'
+  return '/coach/dashboard'
 }
 
 /** True when this API address belongs to a switched-off feature */

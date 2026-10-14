@@ -17,6 +17,12 @@ and colors (`lib/brand.ts`) and switches off features the sport doesn't use
 (`lib/features.ts`): measurements, bar speed (VBT) and the TV display are
 volleyball-only.
 
+Scheduling differs by sport. Volleyball teams get a workout on set dates
+(**Schedule** page). Lacrosse teams get a **Week Plan** instead: Day 1, Day 2...
+(up to 7) each Monday–Sunday week, done in order, one per day, whenever players
+can. Every Monday starts over at Day 1, and a week with no plan of its own
+repeats the most recent earlier one (`lib/weekPlan.ts`).
+
 ## Environment variables (per Vercel project)
 
 ```

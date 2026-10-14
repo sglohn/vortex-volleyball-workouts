@@ -6,7 +6,8 @@
 // Left open on purpose:
 //   /api/coach                 POST sign in, DELETE sign out, GET "am I signed in?"
 //   GET /api/coach/teams       team list on the player sign-in screen + TV display
-//   GET /api/coach/schedule    TV display (workout calendar, no player data)
+//   GET /api/coach/schedule    TV display (workout calendar, no player data;
+//                              volleyball only, see lib/features.ts)
 //   GET /api/coach/phases      TV display (training phases, no player data)
 //   GET /api/coach/templates   TV display (workout contents, no player data)
 //
@@ -19,7 +20,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { COACH_COOKIE, coachAuthConfigured, verifyCoachToken } from '@/lib/coachAuth'
-import { isHiddenApi, isHiddenPage } from '@/lib/features'
+import { hiddenPageHome, isHiddenApi, isHiddenPage } from '@/lib/features'
 
 const PUBLIC_GET = new Set([
   '/api/coach/teams',
@@ -33,8 +34,10 @@ export async function middleware(req: NextRequest) {
 
   // ── Features this sport doesn't use ──
   if (isHiddenPage(path)) {
-    const home = path.startsWith('/player') ? '/player/workout' : '/coach/dashboard'
-    return NextResponse.redirect(new URL(home, req.url))
+    const to = new URL(hiddenPageHome(path), req.url)
+    // keep ?team=... so an old Schedule link opens that team's week plan
+    if (to.pathname === '/coach/week-plan') to.search = req.nextUrl.search
+    return NextResponse.redirect(to)
   }
   if (isHiddenApi(path)) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   if (!path.startsWith('/api/coach')) return NextResponse.next()
@@ -64,6 +67,8 @@ export const config = {
     '/player/profile', '/player/profile/:path*',
     '/coach/vbt', '/coach/vbt/:path*',
     '/coach/display', '/coach/display/:path*',
+    '/coach/schedule', '/coach/schedule/:path*',
+    '/coach/week-plan', '/coach/week-plan/:path*',
     '/api/player/measurements', '/api/player/measurements/:path*',
     '/api/display-snapshot', '/api/display-snapshot/:path*',
     '/api/display-teams', '/api/display-teams/:path*',

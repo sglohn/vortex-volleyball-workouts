@@ -1,6 +1,10 @@
 // FILE: app/page.tsx
 //
 // Player sign-in: team → name → 4-digit PIN.
+// Lacrosse (week plan teams, lib/weekPlan.ts): after the PIN, a "this week"
+// card shows her Days in order — the one waiting, the ones done, the ones
+// still locked — or why nothing is waiting (done today, done for the week,
+// no workouts posted). Volleyball goes straight to the body check as before.
 // Roster comes from /api/player/roster (names only). It used to come from
 // /api/coach/team-detail, which is now coach-only.
 
@@ -13,7 +17,54 @@ import { BRAND } from '@/lib/brand'
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface Player { id: string; name: string; jersey_number?: string; teamId: string }
 
-type Step = 'team' | 'player' | 'pin'
+type Step = 'team' | 'player' | 'pin' | 'week'
+
+// From /api/checkin on week plan teams (publicWeek in lib/weekPlan.ts)
+type DayState = 'done' | 'in_progress' | 'next' | 'locked'
+interface WeekDay { slot: number; name: string; state: DayState; finishedOn: string | null }
+interface WeekInfo {
+  weekStart: string
+  status: 'ready' | 'done_today' | 'week_done' | 'no_plan'
+  total: number
+  nextSlot: number | null
+  resumed: boolean
+  days: WeekDay[]
+}
+
+function dayName(date: string): string {
+  return new Date(date + 'T00:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' })
+}
+
+function WeekDayRow({ day, onStart, resumed, starting }: { day: WeekDay; onStart: () => void; resumed: boolean; starting: boolean }) {
+  const current = day.state === 'next' || day.state === 'in_progress'
+  const done = day.state === 'done'
+  const prev = day.slot - 1
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: '0.875rem', padding: current ? '1rem' : '0.75rem 1rem', borderRadius: 12,
+      background: current ? 'var(--white)' : done ? 'var(--success-light)' : 'var(--white)',
+      border: current ? '2px solid var(--carolina)' : `1.5px solid ${done ? '#bbf7d0' : 'var(--gray-border)'}`,
+      boxShadow: current ? '0 2px 10px rgba(0,0,0,0.08)' : 'none',
+      opacity: day.state === 'locked' ? 0.55 : 1,
+    }}>
+      <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.05rem',
+        background: done ? 'var(--success)' : current ? 'var(--carolina)' : 'var(--gray-border)', color: '#fff' }}>
+        {done ? '✓' : day.state === 'locked' ? <span aria-hidden style={{ fontSize: '0.95rem' }}>🔒</span> : day.slot}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', color: 'var(--black)' }}>Day {day.slot}</div>
+        <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{day.name}</div>
+        {done && day.finishedOn && <div style={{ fontSize: '0.72rem', color: 'var(--success)', fontWeight: 600 }}>Done {dayName(day.finishedOn)}</div>}
+        {day.state === 'locked' && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Finish Day {prev} first</div>}
+      </div>
+      {current && (
+        <button className="btn-volt" onClick={onStart} disabled={starting} style={{ padding: '0.625rem 1.1rem', fontSize: '0.9rem', flexShrink: 0 }}>
+          {resumed ? 'Keep going' : 'Start'}
+        </button>
+      )}
+    </div>
+  )
+}
 
 export default function HomePage() {
   const router = useRouter()
@@ -28,6 +79,7 @@ export default function HomePage() {
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [checkingIn, setCheckingIn] = useState(false)
+  const [week, setWeek] = useState<WeekInfo | null>(null)
 
   useEffect(() => {
     localStorage.removeItem('vx_session')
@@ -86,15 +138,36 @@ export default function HomePage() {
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Invalid PIN'); setPin(''); setCheckingIn(false); return }
-      localStorage.setItem('vx_session', JSON.stringify({
+      if (data.week) {
+        // Week plan team: show her week first. Only save a sign-in when
+        // there's a workout waiting.
+        if (data.sessionId) saveSession(data)
+        setWeek(data.week as WeekInfo)
+        setStep('week')
+        setCheckingIn(false)
+        return
+      }
+      saveSession(data)
+      router.push('/player/bodycheck')
+    } catch { setError('Something went wrong'); setCheckingIn(false) }
+  }
+
+  function saveSession(data: Record<string, unknown>) {
+    if (!selectedPlayer) return
+    localStorage.setItem('vx_session', JSON.stringify({
         sessionId: data.sessionId, playerId: selectedPlayer.id, playerName: selectedPlayer.name,
         teamId: data.teamId, templateId: data.templateId,
         hasHealthFlags: data.hasHealthFlags, healthReports: data.healthReports,
         isResumed: data.isResumed,
         playerPass: data.playerPass,
       }))
-      router.push('/player/bodycheck')
-    } catch { setError('Something went wrong'); setCheckingIn(false) }
+  }
+
+  // Back to the start, signed out
+  function doneWithWeek() {
+    localStorage.removeItem('vx_session')
+    setWeek(null); setSelectedPlayer(null); setPin(''); setError('')
+    setStep(selectedTeam ? 'player' : 'team')
   }
 
   const keys = ['1','2','3','4','5','6','7','8','9','←','0','✓']
@@ -249,6 +322,51 @@ export default function HomePage() {
             {checkingIn && <div style={{ textAlign: 'center', color: 'var(--carolina-dark)', fontWeight: 500 }}>Checking in…</div>}
           </div>
         )}
+
+        {/* ── STEP 4: THIS WEEK (week plan teams) ── */}
+        {step === 'week' && week && selectedPlayer && (() => {
+          const done = week.days.filter(d => d.state === 'done').length
+          const next = week.days.find(d => d.slot === week.nextSlot)
+          let heading: string
+          let sub: string
+          if (week.status === 'ready') {
+            heading = week.resumed ? `Day ${week.nextSlot} is waiting` : `Day ${week.nextSlot} of ${week.total} is waiting`
+            sub = week.resumed ? 'Pick up where you left off.' : done ? `${done} down, ${week.total - done} to go this week.` : 'Here\'s your week. Do them in order, one a day.'
+          } else if (week.status === 'done_today') {
+            heading = 'Nice work today!'
+            sub = next ? `Day ${next.slot} will be ready tomorrow. One workout a day.` : 'Your next workout will be ready tomorrow.'
+          } else if (week.status === 'week_done') {
+            heading = 'You\'re done for the week!'
+            sub = 'All workouts finished. New ones start Monday.'
+          } else {
+            heading = 'No workouts posted yet'
+            sub = 'Check back later this week.'
+          }
+          return (
+            <div>
+              <div style={{ textAlign: 'center', marginBottom: '1.25rem' }}>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Hi, {selectedPlayer.name.split(' ')[0]}</div>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: 'var(--black)', lineHeight: 1.15 }}>{heading}</div>
+                <div style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', marginTop: '0.375rem' }}>{sub}</div>
+              </div>
+
+              {week.days.length > 0 && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
+                  {week.days.map(d => (
+                    <WeekDayRow key={d.slot} day={d} resumed={week.resumed} starting={checkingIn}
+                      onStart={() => { setCheckingIn(true); router.push('/player/bodycheck') }} />
+                  ))}
+                </div>
+              )}
+
+              <div style={{ textAlign: 'center' }}>
+                <button className="btn-ghost" onClick={doneWithWeek} style={{ padding: '0.6rem 1.5rem', fontSize: '0.9rem' }}>
+                  {week.status === 'ready' ? 'Not now' : 'Sign out'}
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       </div>
     </div>
   )

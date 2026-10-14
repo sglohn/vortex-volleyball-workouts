@@ -10,14 +10,20 @@
 //   3. Self-guided player (players.self_guided) → auto-built full-body
 //      workout (lib/fullBodyWorkout.ts), saved on the session so resuming
 //      shows the same exercises. Each new session gets a new one.
-//   4. Team schedule
-//   5. Legacy active workout
+//   4. Team schedule (volleyball), or this week's plan (lacrosse,
+//      FEATURES.weekPlan): the next Day she hasn't finished, in order, one
+//      per day. See lib/weekPlan.ts. When nothing is waiting (done today,
+//      done for the week, no workouts) no session is made and the reply has
+//      sessionId: null plus `week`, for the sign-in screen to explain.
+//   5. Legacy active workout (not for week plan teams)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
 import { canAccessSession, createPlayerPass, signInAgain } from '@/lib/playerAuth'
 import { buildFullBodyWorkout, asGeneratedWorkout } from '@/lib/fullBodyWorkout'
+import { FEATURES } from '@/lib/features'
+import { loadPlayerWeek, publicWeek, type PlayerWeek } from '@/lib/weekPlan'
 
 export async function POST(req: NextRequest) {
   const { playerId, pin } = await req.json()
@@ -65,6 +71,7 @@ export async function POST(req: NextRequest) {
   // Find today's template — priority: date override → player program → self-guided → team schedule
   let templateId: string | null = null
   let selfGuided = false
+  let week: PlayerWeek | null = null
 
   const { data: override } = await db
     .from('player_overrides')
@@ -103,6 +110,14 @@ export async function POST(req: NextRequest) {
     } else if (player.self_guided === true) {
       // Auto-built full-body workout (built below, when the session is known)
       selfGuided = true
+    } else if (teamId && FEATURES.weekPlan) {
+      // Lacrosse: next workout in this week's plan
+      try {
+        week = await loadPlayerWeek(db, playerId, teamId, today)
+      } catch (e) {
+        return NextResponse.json({ error: 'Could not load this week\'s workouts: ' + (e as Error).message }, { status: 500 })
+      }
+      templateId = week.templateId
     } else if (teamId) {
       const { data: schedule } = await db
         .from('team_schedule')
@@ -116,7 +131,7 @@ export async function POST(req: NextRequest) {
 
   // Fallback legacy (not for self-guided players — they get their own workout)
   let legacyWorkoutId: string | null = null
-  if (!templateId && !selfGuided) {
+  if (!templateId && !selfGuided && !week) {
     const { data: workout } = await db
       .from('workouts')
       .select('id')
@@ -133,8 +148,58 @@ export async function POST(req: NextRequest) {
     .eq('status', 'active')
 
   let sessionId: string
+  let isResumed = !!existingSession
 
-  if (existingSession) {
+  if (week) {
+    if (week.status !== 'ready' || !templateId) {
+      // Nothing to start right now — no session; the sign-in screen says why
+      return NextResponse.json({
+        sessionId: null,
+        playerName: player.name,
+        teamId,
+        templateId: null,
+        selfGuided: false,
+        isResumed: false,
+        hasHealthFlags: (healthReports?.length ?? 0) > 0,
+        healthReports: healthReports ?? [],
+        week: publicWeek(week),
+        playerPass: await createPlayerPass(playerId),
+      })
+    }
+    if (week.resumeSessionId) {
+      // Pick her unfinished Day back up (any day this week), logged sets and all
+      sessionId = week.resumeSessionId
+      isResumed = true
+    } else {
+      const { data: session, error: sessionError } = await db
+        .from('sessions')
+        .insert({
+          player_id: playerId,
+          team_id: teamId,
+          template_id: templateId,
+          week_start: week.weekStart,
+          week_slot: week.nextSlot,
+        })
+        .select('id')
+        .single()
+      if (session) {
+        sessionId = session.id
+      } else {
+        // A second tap got there first (one session per Day, see the
+        // migration) — use that one
+        const { data: same } = await db
+          .from('sessions')
+          .select('id')
+          .eq('player_id', playerId)
+          .eq('week_start', week.weekStart)
+          .eq('week_slot', week.nextSlot as number)
+          .single()
+        if (!same) return NextResponse.json({ error: 'Could not create session' + (sessionError ? ': ' + sessionError.message : '') }, { status: 500 })
+        sessionId = same.id
+        isResumed = true
+      }
+    }
+  } else if (existingSession) {
     // Resume existing session — keep the same generated workout if it has one
     sessionId = existingSession.id
     if (selfGuided && !asGeneratedWorkout(existingSession.generated_workout)) {
@@ -167,9 +232,10 @@ export async function POST(req: NextRequest) {
     teamId,
     templateId,
     selfGuided,
-    isResumed: !!existingSession,
+    isResumed,
     hasHealthFlags: (healthReports?.length ?? 0) > 0,
     healthReports: healthReports ?? [],
+    ...(week ? { week: publicWeek(week) } : {}),
     // Signed pass for this player's own data (lib/playerAuth.ts)
     playerPass: await createPlayerPass(playerId),
   })

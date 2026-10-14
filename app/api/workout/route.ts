@@ -3,7 +3,11 @@
 // The workout a player sees for a session.
 //
 // Sources, in order:
-//   1. templateId passed in      → coach template (team schedule, override, program)
+//   1. session.template_id       → the week plan workout this session was
+//                                  started for (lacrosse, lib/weekPlan.ts).
+//                                  Wins over templateId below, so a player
+//                                  can't open a later Day by changing the address.
+//      templateId passed in      → coach template (team schedule, override, program)
 //   2. session.generated_workout → self-guided full-body workout (lib/fullBodyWorkout.ts)
 //      Each exercise also gets `swap`, so the player page can offer an
 //      easier option before any set of it is logged.
@@ -233,11 +237,13 @@ export async function GET(req: NextRequest) {
   const ctx: ExerciseContext = { db, sessionId, playerId: session.player_id, phaseType, skippedIds, replacements, familySizes, requests }
 
   // ----- 1. Coach template -----
-  if (templateId) {
+  // Week plan sessions carry their own workout (never set on Vortex)
+  const useTemplateId: string | null = (session.template_id as string | null | undefined) ?? templateId
+  if (useTemplateId) {
     const { data: template } = await db
       .from('workout_templates')
       .select('id, name, description, warmup_notes, phase_type')
-      .eq('id', templateId)
+      .eq('id', useTemplateId)
       .single()
 
     if (template) {
