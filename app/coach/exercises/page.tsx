@@ -17,6 +17,7 @@ import { useState, useEffect, useRef } from 'react'
 import { EQUIPMENT_OPTIONS, asEquipment } from '@/lib/loads'
 import { FEATURES } from '@/lib/features'
 import ExerciseImport from '@/components/ExerciseImport'
+import ExerciseSync from '@/components/ExerciseSync'
 import ClipPicker, { type PickedClip } from '@/components/ClipPicker'
 import { FULL_BODY_AREAS, SELF_GUIDED_ROLE_COLUMNS, roleTag } from '@/lib/fullBodyWorkout'
 import { familyKey, familyOf } from '@/lib/exerciseLevels'
@@ -454,7 +455,8 @@ export default function ExercisesPage() {
             </button>
           )}
         </div>
-        <div style={{ display: 'flex', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <ExerciseSync onDone={loadExercises} />
           <ExerciseImport onDone={loadExercises} />
           <button className="btn-volt" onClick={openAdd} style={{ padding: '0.625rem 1.25rem' }}>+ Add Exercise</button>
         </div>
