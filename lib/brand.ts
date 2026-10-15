@@ -72,11 +72,15 @@ const LACROSSE: Brand = {
   description: 'Bruisers Lacrosse Strength & Conditioning',
   tagline: 'Strength & Conditioning',
   markSrc: '/brand/lacrosse/mark.png',
+  // Home-screen icon: GPS Lacrosse logo with "Strength & Conditioning" on
+  // white (full logo: /brand/lacrosse/gps-lacrosse-sc-logo.png). New file
+  // names so phones don't reuse a cached copy of the old seal icon.
   icons: {
     favicon: '/brand/lacrosse/favicon-32.png',
-    apple: '/brand/lacrosse/apple-touch-icon.png',
-    icon192: '/brand/lacrosse/icon-192.png',
-    icon512: '/brand/lacrosse/icon-512.png',
+    apple: '/brand/lacrosse/home-icon-180.png',
+    icon192: '/brand/lacrosse/home-icon-192.png',
+    icon512: '/brand/lacrosse/home-icon-512.png',
+    maskable: '/brand/lacrosse/home-icon-maskable-512.png',
   },
   themeColor: '#111827',
   cssVars: {
