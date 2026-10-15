@@ -31,6 +31,11 @@ NEXT_PUBLIC_SUPABASE_URL=https://<project>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service_role key>   # server only
 COACH_PIN=<4 digits>
 COACH_SESSION_SECRET=<random, 32+ characters>
+
+# Exercise library Sync (optional, lib/exerciseFeed.ts)
+EXERCISE_FEED_SECRET=<random, 32+ characters>     # on the SOURCE site (Vortex)
+EXERCISE_SOURCE_URL=https://<source site>          # on the syncing site (lacrosse)
+EXERCISE_SOURCE_SECRET=<same as EXERCISE_FEED_SECRET>
 ```
 
 The app only talks to Supabase from the server, so no Supabase key is sent to
@@ -41,9 +46,12 @@ browsers. `NEXT_PUBLIC_SUPABASE_ANON_KEY` is no longer used.
 1. Create an empty Supabase project.
 2. In its SQL Editor, run `supabase/migrations/0001_baseline.sql` once. It
    builds every table with row level security on and no public access.
-3. To copy an exercise library: run `supabase/export-exercises.sql` in the
-   source project, download the result as CSV, then use
-   **Coach → Exercise Library → Import** on the new site.
+3. To copy an exercise library: set the three Sync variables above, then use
+   **Coach → Exercise Library → Sync library** on the new site. It shows what's
+   new and changed before anything happens, and can be run any time to pick up
+   new exercises. Exercises edited on the new site are left alone. (Fallback
+   without Sync: run `supabase/export-exercises.sql` in the source project,
+   download the result as CSV, then use **Import**.)
 
 Later migrations in `supabase/migrations/` are dated and already included in
 the baseline. (`supabase/schema.sql` is the original, out-of-date schema and is

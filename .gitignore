@@ -1,0 +1,14 @@
+# FILE: .gitignore
+#
+# Local build output. Vercel builds these itself.
+
+node_modules/
+.next/
+next-env.d.ts
+
+# The repo doesn't keep a lock file (Vercel installs from package.json)
+package-lock.json
+
+# Local settings
+.env*.local
+.DS_Store
