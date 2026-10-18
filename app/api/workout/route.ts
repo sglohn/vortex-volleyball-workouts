@@ -22,6 +22,11 @@
 //   canRequestChange    team/template workouts only; self-guided players
 //                       use the easier-option swap instead
 //
+// A template's warm-up block comes back separately as `template.warmup`
+// ({ rounds, exercises: [{ name, reps, notes, clip_url, ... }] }, or null)
+// and is left out of `template.blocks`: players watch it, they don't log it
+// (lib/warmup.ts).
+//
 // Templates and generated workouts come back in the same shape
 // (source: 'template'), so the player page, kiosk and session pages show
 // and log them the same way.
@@ -34,6 +39,7 @@ import { canAccessSession, signInAgain } from '@/lib/playerAuth'
 import { asGeneratedWorkout, slotId } from '@/lib/fullBodyWorkout'
 import { familyKey } from '@/lib/exerciseLevels'
 import { clubDateString } from '@/lib/clubTime'
+import { isWarmupLabel } from '@/lib/warmup'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -69,6 +75,48 @@ interface BlockExerciseInput {
   customNotes: string | null
   targetVelocityMin: number | null
   targetVelocityMax: number | null
+}
+
+// The template's warm-up, for the player page: each exercise with its demo
+// clip, reps and notes. Nothing is logged for a warm-up, so there are no set
+// logs or weight suggestions. null when the template has no warm-up.
+async function buildWarmup(db: Db, warmupBlocks: Array<{ id: string; block_label: string; sets: number }>) {
+  if (warmupBlocks.length === 0) return null
+  const rounds = warmupBlocks[0].sets ?? 1
+  const exercises: Array<{
+    id: string; exercise_id: string; name: string; reps: string | null; notes: string | null
+    coaching_notes: string | null; clip_url: string | null; clip_poster_url: string | null
+  }> = []
+
+  for (const block of warmupBlocks) {
+    const { data: rows } = await db
+      .from('template_block_exercises')
+      .select('id, exercise_id, custom_reps, custom_notes, sort_order')
+      .eq('block_id', block.id)
+      .order('sort_order')
+    const ids = (rows ?? []).map(r => r.exercise_id)
+    if (ids.length === 0) continue
+    const { data: lib } = await db
+      .from('exercise_library')
+      .select('id, name, default_reps, coaching_notes, clip_url, clip_poster_url')
+      .in('id', ids)
+    const byId = new Map((lib ?? []).map(e => [e.id, e]))
+    for (const r of rows ?? []) {
+      const ex = byId.get(r.exercise_id)
+      if (!ex) continue
+      exercises.push({
+        id: r.id,
+        exercise_id: ex.id,
+        name: ex.name,
+        reps: r.custom_reps || ex.default_reps || null,
+        notes: r.custom_notes || null,
+        coaching_notes: ex.coaching_notes ?? null,
+        clip_url: ex.clip_url ?? null,
+        clip_poster_url: ex.clip_poster_url ?? null,
+      })
+    }
+  }
+  return exercises.length > 0 ? { rounds, exercises } : null
 }
 
 // One exercise in a block: skips/replacements, today's logs and the weight suggestion
@@ -253,7 +301,13 @@ export async function GET(req: NextRequest) {
         .eq('template_id', template.id)
         .order('sort_order')
 
-      const enrichedBlocks = await Promise.all((blocks ?? []).map(async (block) => {
+      // Warm-up block (label starting with W): sent separately as
+      // `warmup` so nothing asks players to log it (see lib/warmup.ts)
+      const warmupBlocks = (blocks ?? []).filter(b => isWarmupLabel(b.block_label))
+      const liftingBlocks = (blocks ?? []).filter(b => !isWarmupLabel(b.block_label))
+      const warmup = await buildWarmup(db, warmupBlocks)
+
+      const enrichedBlocks = await Promise.all(liftingBlocks.map(async (block) => {
         const { data: blockExercises } = await db
           .from('template_block_exercises')
           .select('id, exercise_id, custom_reps, custom_notes, sort_order, target_velocity_min, target_velocity_max')
@@ -277,7 +331,7 @@ export async function GET(req: NextRequest) {
 
       return NextResponse.json({
         source: 'template',
-        template: { ...template, blocks: enrichedBlocks },
+        template: { ...template, warmup, blocks: enrichedBlocks },
         phase,
         phaseType,
         skippedExerciseIds: [...skippedIds],

@@ -7,6 +7,7 @@
 // Roku can only show a picture.
 'use client'
 import { useState, useEffect, Suspense } from 'react'
+import { isWarmupLabel } from '@/lib/warmup'
 import { useSearchParams } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { BRAND } from '@/lib/brand'
@@ -98,10 +99,11 @@ function DisplayContent() {
 
   const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
   const allBlocks = workout?.blocks ?? []
-  // Warmup block = labeled W, Warmup, or WU (case-insensitive)
-  const isWarmupBlock = (label: string) => /^w/i.test(label.trim())
-  const warmupBlock  = allBlocks.find(b => isWarmupBlock(b.block_label))
-  const blocks       = allBlocks.filter(b => !isWarmupBlock(b.block_label))
+  // Warm-up block (label starting with W, lib/warmup.ts): names only in a
+  // slim strip up top, no clips, so the lifting blocks keep their size.
+  // Players see the warm-up clips on their phones (components/WarmupCard.tsx).
+  const warmupBlock  = allBlocks.find(b => isWarmupLabel(b.block_label))
+  const blocks       = allBlocks.filter(b => !isWarmupLabel(b.block_label))
 
   // Grid layout: 1–2 blocks = side by side, 3–4 = 2×2
   const cols = blocks.length <= 2 ? blocks.length : 2
@@ -158,21 +160,27 @@ function DisplayContent() {
         <a href="/coach/dashboard" style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1.4vh', textDecoration: 'none', flexShrink: 0, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)', borderRadius: '0.4vh', padding: '0.2vh 0.6rem', fontWeight: 600 }}>✕ Exit TV</a>
       </div>
 
-      {/* ── WARMUP BLOCK STRIP — large, it's what players need first ── */}
+      {/* ── WARM-UP STRIP — names only, kept slim so the blocks stay big.
+             Players see each warm-up exercise's clip on their phones. ── */}
       {(warmupBlock || workout?.warmup_notes) && !loading && !noWorkout && workout && (
-        <div style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}`, padding: '1vh 1.5rem', display: 'flex', alignItems: 'center', gap: '0.6vh 2rem', flexShrink: 0, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '3vh', color: CAROLINA, letterSpacing: '0.08em', flexShrink: 0 }}>WARM-UP</span>
+        <div style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}`, padding: '0.8vh 1.5rem', display: 'flex', alignItems: 'center', gap: '0.5vh 1.5rem', flexShrink: 0, flexWrap: 'wrap' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2.6vh', color: CAROLINA, letterSpacing: '0.08em', flexShrink: 0 }}>
+            WARM-UP{warmupBlock && warmupBlock.sets > 1 ? <span style={{ fontSize: '2vh', marginLeft: '0.6rem', color: 'rgba(255,255,255,0.6)' }}>{warmupBlock.sets} ROUNDS</span> : null}
+          </span>
           {warmupBlock && warmupBlock.exercises.filter(e => !e.skipped).map((ex, i) => (
-            <span key={ex.id} style={{ fontSize: '2.8vh', color: 'rgba(255,255,255,0.9)', fontWeight: 700 }}>
+            <span key={ex.id} style={{ fontSize: '2.2vh', color: 'rgba(255,255,255,0.9)', fontWeight: 700 }}>
               {i > 0 && <span style={{ color: 'rgba(255,255,255,0.2)', marginRight: '0.75rem' }}>·</span>}
               {ex.exercise_library?.name}
-              {ex.custom_reps && <span style={{ color: CAROLINA, marginLeft: '0.4rem' }}>{warmupBlock.sets}×{ex.custom_reps}</span>}
+              {ex.custom_reps && <span style={{ color: CAROLINA, marginLeft: '0.4rem' }}>{ex.custom_reps}</span>}
             </span>
           ))}
           {workout.warmup_notes && (
-            <span style={{ fontSize: '2.2vh', color: 'rgba(255,255,255,0.6)', fontStyle: 'italic' }}>
+            <span style={{ fontSize: '2vh', color: 'rgba(255,255,255,0.6)', fontStyle: 'italic' }}>
               {workout.warmup_notes}
             </span>
+          )}
+          {warmupBlock && warmupBlock.exercises.length > 0 && (
+            <span style={{ marginLeft: 'auto', fontSize: '1.8vh', color: 'rgba(255,255,255,0.45)', fontWeight: 600, flexShrink: 0 }}>Videos on your phone</span>
           )}
         </div>
       )}

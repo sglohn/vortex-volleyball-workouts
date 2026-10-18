@@ -18,6 +18,7 @@ import { loadLabel, plateText, setPoundsMoved, type Equipment } from '@/lib/load
 import WeightPicker from '@/components/WeightPicker'
 import { playerFetch } from '@/lib/playerPass'
 import ExerciseClip from '@/components/ExerciseClip'
+import WarmupCard, { type Warmup } from '@/components/WarmupCard'
 import ChangeRequestSheet, { type ChangeRequestInput } from '@/components/ChangeRequestSheet'
 import { BODY_AREAS, CHANGE_REASONS, reasonLabel, wantsLabel } from '@/lib/exerciseLevels'
 
@@ -41,7 +42,7 @@ interface Exercise {
   recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number; sourceLabel?: string; detail?: string; adjustmentMessage?: string }
 }
 interface Block { id: string; block_label: string; title?: string | null; sets: number; exercises: Exercise[] }
-interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[] }
+interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; warmup?: Warmup | null; blocks: Block[] }
 
 type WorkoutView = 'blocks' | 'active_block'
 interface SwapOption { id: string; name: string; equipment?: string | null; imageUrl?: string | null; tag?: string | null }
@@ -803,13 +804,8 @@ export default function PlayerWorkoutPage() {
         </div>
       )}
 
-      {/* Warmup */}
-      {workout.warmup_notes && (
-        <div className="card" style={{ padding: '0.875rem', marginBottom: '1rem', borderLeft: '3px solid var(--volt)' }}>
-          <div style={{ fontSize: '0.7rem', color: 'var(--volt)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: '0.3rem' }}>Warmup</div>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>{workout.warmup_notes}</p>
-        </div>
-      )}
+      {/* Warm-up: demo clips to follow, nothing to log (components/WarmupCard.tsx) */}
+      <WarmupCard key={workout.id} warmup={workout.warmup} notes={workout.warmup_notes} startOpen={completedSets === 0} />
 
       {/* Block cards */}
       <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
