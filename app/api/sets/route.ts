@@ -29,11 +29,15 @@ export async function POST(req: NextRequest) {
   // Upsert set log
   const { data: existing } = await db
     .from('set_logs')
-    .select('id')
+    .select('id, completed')
     .eq('session_id', sessionId)
     .eq('exercise_id', exerciseId)
     .eq('set_number', setNumber)
     .single()
+
+  // A player fixing a set they already logged (components/FixSetsSheet.tsx)
+  // re-sends it here. It updates that set and keeps its original time.
+  const isFix = !!existing?.completed
 
   let logId: string
   const logData = {
@@ -41,7 +45,7 @@ export async function POST(req: NextRequest) {
     reps_completed: repsCompleted ?? null,
     velocity_ms: velocityMs ?? null,
     completed,
-    logged_at: new Date().toISOString(),
+    ...(isFix ? {} : { logged_at: new Date().toISOString() }),
   }
 
   // Save errors are returned so the screens can show them instead of
@@ -60,8 +64,8 @@ export async function POST(req: NextRequest) {
     logId = newLog.id
   }
 
-  // Log OVR velocity if provided
-  if (velocityMs) {
+  // Log OVR velocity if provided (not again when fixing a set)
+  if (velocityMs && !isFix) {
     const { data: session } = await db.from('sessions').select('player_id').eq('id', sessionId).single()
     if (session) {
       await db.from('ovr_logs').insert({

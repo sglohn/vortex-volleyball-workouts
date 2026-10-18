@@ -19,6 +19,7 @@ import WeightPicker from '@/components/WeightPicker'
 import { playerFetch } from '@/lib/playerPass'
 import ExerciseClip from '@/components/ExerciseClip'
 import WarmupCard, { type Warmup } from '@/components/WarmupCard'
+import FixSetsSheet, { type FixSetValues } from '@/components/FixSetsSheet'
 import ChangeRequestSheet, { type ChangeRequestInput } from '@/components/ChangeRequestSheet'
 import { BODY_AREAS, CHANGE_REASONS, reasonLabel, wantsLabel } from '@/lib/exerciseLevels'
 
@@ -81,6 +82,8 @@ export default function PlayerWorkoutPage() {
   const [saving, setSaving] = useState(false)
   const [finished, setFinished] = useState(false)
   const [demoEx, setDemoEx] = useState<Exercise | null>(null)
+  // "Fix a set" sheet: which block, and optionally a set to open straight into
+  const [fixFor, setFixFor] = useState<{ blockIdx: number; start?: { exerciseId: string; setNumber: number } } | null>(null)
   const [showPhaseInfo, setShowPhaseInfo] = useState(false)
   const [sessionRating, setSessionRating] = useState<'easy'|'medium'|'hard'|null>(null)
   const [ratingNote, setRatingNote] = useState('')
@@ -339,6 +342,65 @@ export default function PlayerWorkoutPage() {
 
     setSaving(false)
   }, [workout, session, activeBlockIdx, currentExIdx, currentSet, weightInput, repsInput, velocityInput])
+
+  // Correct a set already logged (components/FixSetsSheet.tsx). /api/sets
+  // updates the existing set, so nothing is added. Returns error text or null.
+  async function saveFix(blockIdx: number, exerciseId: string, setNumber: number, v: FixSetValues): Promise<string | null> {
+    if (!workout || !session) return 'Not signed in'
+    const ex = workout.blocks[blockIdx]?.exercises.find(e => e.id === exerciseId)
+    if (!ex) return 'Exercise not found'
+    if (v.reps === null) return 'Enter the reps'
+    try {
+      const res = await playerFetch('/api/sets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sessionId: session.sessionId,
+          exerciseId,
+          setNumber,
+          weightLbs: ex.logs_weight ? v.weight : null,
+          repsCompleted: Math.round(v.reps),
+          velocityMs: ex.logs_velocity ? v.velocity : null,
+          completed: true,
+          targetReps: ex.customReps ?? ex.default_reps ?? null,
+          targetVelocityMin: ex.targetVelocityMin ?? null,
+          targetVelocityMax: ex.targetVelocityMax ?? null,
+        }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) return data.error ?? 'Not saved. Try again.'
+      setWorkout(prev => prev ? { ...prev, blocks: prev.blocks.map((b, bi) => bi !== blockIdx ? b : {
+        ...b,
+        exercises: b.exercises.map(e => {
+          if (e.id !== exerciseId) return e
+          const logs = [...e.setLogs]
+          logs[setNumber - 1] = {
+            ...logs[setNumber - 1],
+            set_number: setNumber,
+            weight_lbs: ex.logs_weight && v.weight !== null ? v.weight : undefined,
+            reps_completed: Math.round(v.reps!),
+            velocity_ms: ex.logs_velocity && v.velocity !== null ? v.velocity : undefined,
+            completed: true,
+            id: data.id ?? logs[setNumber - 1]?.id,
+          }
+          return { ...e, setLogs: logs, recommendation: data.recommendation ? { ...data.recommendation, best1RM: data.newOneRepMax } : e.recommendation }
+        }),
+      }) } : prev)
+      return null
+    } catch {
+      return 'Not saved. Check your connection and try again.'
+    }
+  }
+
+  const fixSheet = fixFor && workout?.blocks[fixFor.blockIdx] ? (
+    <FixSetsSheet
+      key={`${fixFor.blockIdx}:${fixFor.start?.exerciseId ?? ''}:${fixFor.start?.setNumber ?? ''}`}
+      title={`Block ${workout.blocks[fixFor.blockIdx].block_label}`}
+      exercises={workout.blocks[fixFor.blockIdx].exercises}
+      startEditing={fixFor.start ?? null}
+      onSave={(exerciseId, setNumber, v) => saveFix(fixFor.blockIdx, exerciseId, setNumber, v)}
+      onClose={() => setFixFor(null)} />
+  ) : null
 
   async function handleFinish() {
     if (!session) return
@@ -751,19 +813,31 @@ export default function PlayerWorkoutPage() {
           />
         )}
 
-        {/* Previous sets for this exercise */}
+        {/* Previous sets for this exercise: tap one to fix it */}
         {ex.setLogs.filter(l => l.completed).length > 0 && (
           <div className="card" style={{ padding: '0.875rem' }}>
-            <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.5rem' }}>Previous sets today</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '0.5rem' }}>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Previous sets today</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Tap a set to fix it</span>
+            </div>
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {ex.setLogs.filter(l => l.completed).map((log, i) => (
-                <div key={i} style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 6, padding: '0.3rem 0.625rem', fontSize: '0.8rem', color: 'var(--volt)' }}>
-                  Set {log.set_number}: {log.weight_lbs ? `${loadLabel(log.weight_lbs, ex.equipment)} × ` : ''}{log.reps_completed} reps
-                </div>
+                <button key={i} onClick={() => setFixFor({ blockIdx: activeBlockIdx, start: { exerciseId: ex.id, setNumber: log.set_number } })}
+                  style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 6, padding: '0.3rem 0.625rem', fontSize: '0.8rem', color: 'var(--volt)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  Set {log.set_number}: {log.weight_lbs ? `${loadLabel(log.weight_lbs, ex.equipment)} × ` : ''}{log.reps_completed} reps{ex.logs_velocity && log.velocity_ms ? ` · ${log.velocity_ms} m/s` : ''} ✎
+                </button>
               ))}
             </div>
           </div>
         )}
+        {/* Any set in this block (e.g. the other exercise in the superset) */}
+        {blockCompletedSets(block) > 0 && (
+          <button onClick={() => setFixFor({ blockIdx: activeBlockIdx })}
+            style={{ display: 'block', margin: '0.75rem auto 0', background: 'none', border: 'none', color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.82rem' }}>
+            Logged something wrong? Fix a set in this block
+          </button>
+        )}
+        {fixSheet}
       </div>
     )
   }
@@ -821,7 +895,8 @@ export default function PlayerWorkoutPage() {
           const inProgress = completed > 0 && !done
 
           return (
-            <button key={block.id} onClick={() => !done && startBlock(idx)}
+            <div key={block.id}>
+            <button onClick={() => !done && startBlock(idx)}
               style={{ background: done ? 'rgba(74,222,128,0.06)' : 'var(--court-surface)', border: `1px solid ${done ? 'var(--volt)' : inProgress ? 'rgba(74,222,128,0.4)' : 'var(--court-border)'}`, borderRadius: 12, padding: '1rem', cursor: done ? 'default' : 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <div style={{ background: done ? 'var(--volt)' : 'var(--court-raised)', color: done ? '#0a0f0d' : 'var(--volt)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -840,6 +915,13 @@ export default function PlayerWorkoutPage() {
                 {!done && <div style={{ color: 'var(--volt)', fontSize: '1.2rem', flexShrink: 0 }}>→</div>}
               </div>
             </button>
+            {completed > 0 && (
+              <button onClick={() => setFixFor({ blockIdx: idx })}
+                style={{ display: 'block', marginLeft: 'auto', marginTop: '0.3rem', background: 'none', border: 'none', color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.78rem', padding: '0.15rem 0.25rem' }}>
+                Fix a set
+              </button>
+            )}
+            </div>
           )
         })}
       </div>
@@ -849,6 +931,8 @@ export default function PlayerWorkoutPage() {
           Finish Workout ✓
         </button>
       )}
+
+      {fixSheet}
 
       {/* Demo modal */}
       {demoEx && (

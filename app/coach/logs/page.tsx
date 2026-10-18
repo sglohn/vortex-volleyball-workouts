@@ -71,6 +71,11 @@ function equipmentHint(eq: Equipment | null): string {
   return EQUIPMENT_OPTIONS.find(o => o.value === eq)?.hint ?? ''
 }
 
+// Number boxes in a set row (weight, reps, bar speed) for the phone layout
+function inputCount(ex: LogExercise): number {
+  return 1 + (ex.logsWeight ? 1 : 0) + (ex.logsVelocity ? 1 : 0)
+}
+
 function draftOf(s: LogSet): Draft {
   return {
     weight: s.weightLbs === null ? '' : String(s.weightLbs),
@@ -323,13 +328,13 @@ function WorkoutLogsInner() {
                       </div>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: `52px ${ex.logsWeight ? 'minmax(70px, 110px) ' : ''}minmax(60px, 90px) ${ex.logsVelocity ? 'minmax(70px, 100px) ' : ''}64px 1fr`, gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, paddingBottom: '0.375rem', borderBottom: '1px solid var(--gray-border)' }}>
+                    <div className="log-row log-head" style={{ display: 'grid', gridTemplateColumns: `52px ${ex.logsWeight ? 'minmax(70px, 110px) ' : ''}minmax(60px, 90px) ${ex.logsVelocity ? 'minmax(70px, 100px) ' : ''}64px 1fr`, ['--inputs' as string]: inputCount(ex), gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, paddingBottom: '0.375rem', borderBottom: '1px solid var(--gray-border)' } as React.CSSProperties}>
                       <span>Set</span>
                       {ex.logsWeight && <span>Weight</span>}
                       <span>Reps</span>
                       {ex.logsVelocity && <span>Bar speed</span>}
-                      <span>Done</span>
-                      <span />
+                      <span style={{ textAlign: 'center' }}>Done</span>
+                      <span className="log-actions" />
                     </div>
 
                     {ex.sets.map(s => {
@@ -338,7 +343,7 @@ function WorkoutLogsInner() {
                       const busy = savingId === s.id
                       return (
                         <div key={s.id} style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--gray-light)' }}>
-                          <div style={{ display: 'grid', gridTemplateColumns: `52px ${ex.logsWeight ? 'minmax(70px, 110px) ' : ''}minmax(60px, 90px) ${ex.logsVelocity ? 'minmax(70px, 100px) ' : ''}64px 1fr`, gap: '0.5rem', alignItems: 'center' }}>
+                          <div className="log-row" style={{ display: 'grid', gridTemplateColumns: `52px ${ex.logsWeight ? 'minmax(70px, 110px) ' : ''}minmax(60px, 90px) ${ex.logsVelocity ? 'minmax(70px, 100px) ' : ''}64px 1fr`, ['--inputs' as string]: inputCount(ex), gap: '0.5rem', alignItems: 'center' } as React.CSSProperties}>
                             <span style={{ fontWeight: 700 }}>{s.setNumber}</span>
                             {ex.logsWeight && (
                               <input aria-label={`Set ${s.setNumber} weight`} type="number" inputMode="decimal" value={d.weight}
@@ -355,7 +360,7 @@ function WorkoutLogsInner() {
                               <input type="checkbox" checked={d.completed} onChange={e => edit(s, { completed: e.target.checked })}
                                 aria-label={`Set ${s.setNumber} done`} style={{ width: 18, height: 18 }} />
                             </label>
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.375rem' }}>
+                            <div className="log-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.375rem' }}>
                               {changed && (
                                 <>
                                   <button onClick={() => setDrafts(prev => { const n = { ...prev }; delete n[s.id]; return n })} disabled={busy}
@@ -371,7 +376,7 @@ function WorkoutLogsInner() {
                             </div>
                           </div>
                           {s.flags.length > 0 && !changed && (
-                            <div style={{ marginTop: '0.35rem', marginLeft: 52, fontSize: '0.8rem', color: 'var(--warning)', fontWeight: 600 }}>
+                            <div className="log-flags" style={{ marginTop: '0.35rem', marginLeft: 52, fontSize: '0.8rem', color: 'var(--warning)', fontWeight: 600 }}>
                               {s.flags.map((f, i) => <div key={i}>{f}</div>)}
                             </div>
                           )}
@@ -387,9 +392,19 @@ function WorkoutLogsInner() {
       )}
 
       <style>{`
+        .logs-grid > * { min-width: 0; }
         @media (max-width: 760px) {
           .logs-grid { grid-template-columns: 1fr !important; }
           .logs-grid > .card { position: static !important; }
+        }
+        /* Phones: set number, the number boxes and Done share one line;
+           Save / Undo / Delete drop to their own line underneath. */
+        @media (max-width: 600px) {
+          .log-row { grid-template-columns: 24px repeat(var(--inputs), minmax(0, 1fr)) 40px !important; gap: 0.375rem !important; }
+          .log-row > .log-actions { grid-column: 1 / -1; }
+          .log-row > .log-actions:empty { display: none; }
+          .log-head > .log-actions { display: none; }
+          .log-flags { margin-left: 0 !important; }
         }
       `}</style>
     </div>
