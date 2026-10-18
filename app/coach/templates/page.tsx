@@ -18,6 +18,17 @@ function warmupFirst<T extends { block_label: string }>(blocks: T[]): T[] {
   return [...blocks.filter(b => isWarmupLabel(b.block_label)), ...blocks.filter(b => !isWarmupLabel(b.block_label))]
 }
 
+// After blocks are moved: warm-up stays on top, and lettered blocks (A–F)
+// take the letters in their new order, so the top lifting block is always A.
+// Finisher keeps its name wherever it sits.
+const LETTERS = ['A','B','C','D','E','F']
+function reletter<T extends { block_label: string }>(blocks: T[]): T[] {
+  let n = 0
+  return warmupFirst(blocks).map(b => LETTERS.includes(b.block_label)
+    ? { ...b, block_label: LETTERS[n++] ?? b.block_label }
+    : b)
+}
+
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([])
   const [exercises, setExercises] = useState<ExerciseLib[]>([])
@@ -51,6 +62,34 @@ export default function TemplatesPage() {
     setEditing(p => {
       if (!p || p.blocks.some(b => isWarmupLabel(b.block_label))) return p
       return { ...p, blocks: [{ block_label: WARMUP_LABEL, sets: 1, exercises: [] }, ...p.blocks] }
+    })
+  }
+
+  // Up/down arrows on each block (the warm-up always stays on top)
+  function moveBlock(i: number, dir: -1 | 1) {
+    setEditing(p => {
+      if (!p) return p
+      const j = i + dir
+      if (j < 0 || j >= p.blocks.length) return p
+      if (isWarmupLabel(p.blocks[i].block_label) || isWarmupLabel(p.blocks[j].block_label)) return p
+      const blocks = [...p.blocks]
+      ;[blocks[i], blocks[j]] = [blocks[j], blocks[i]]
+      return { ...p, blocks: reletter(blocks) }
+    })
+  }
+
+  // Block name picker. Picking Warm-Up turns that block into the warm-up
+  // (moved to the top, the blocks below re-lettered); picking a letter on
+  // the warm-up turns it back into a lifting block.
+  function changeLabel(i: number, label: string) {
+    setEditing(p => {
+      if (!p) return p
+      const wasWarmup = isWarmupLabel(p.blocks[i].block_label)
+      const toWarmup = isWarmupLabel(label)
+      if (toWarmup && !wasWarmup && p.blocks.some(b => isWarmupLabel(b.block_label))) return p
+      const blocks = [...p.blocks]
+      blocks[i] = { ...blocks[i], block_label: label, ...(toWarmup && !wasWarmup ? { sets: 1 } : {}) }
+      return { ...p, blocks: toWarmup !== wasWarmup ? reletter(blocks) : blocks }
     })
   }
 
@@ -197,24 +236,32 @@ export default function TemplatesPage() {
           {/* Blocks */}
           {editing.blocks.map((block, bi) => {
             const isWarmup = isWarmupLabel(block.block_label)
+            const hasWarmup = editing.blocks.some(b => isWarmupLabel(b.block_label))
+            const canUp = !isWarmup && bi > 0 && !isWarmupLabel(editing.blocks[bi - 1].block_label)
+            const canDown = !isWarmup && bi < editing.blocks.length - 1
+            const arrow = (on: boolean): React.CSSProperties => ({ background: 'none', border: '1px solid var(--court-border)', borderRadius: 6, width: 30, height: 30, cursor: on ? 'pointer' : 'default', color: on ? 'var(--text-primary)' : 'var(--text-muted)', opacity: on ? 1 : 0.35, fontSize: '0.8rem', lineHeight: 1, flexShrink: 0 })
             return (
             <div key={bi} className="card-raised" style={{ padding: '1rem', marginBottom: '0.75rem', borderLeft: isWarmup ? '3px solid var(--carolina)' : undefined }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: isWarmup ? '0.4rem' : '0.75rem' }}>
                 <div style={{ background: isWarmup ? 'var(--carolina)' : 'var(--volt)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 32, height: 32, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {block.block_label.charAt(0)}
                 </div>
-                {isWarmup ? (
-                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 140 }}>Warm-Up</div>
-                ) : (
-                <select className="input" value={block.block_label} onChange={e => updateBlock(bi, 'block_label', e.target.value)} style={{ width: 140 }}>
+                <select className="input" value={isWarmup ? WARMUP_LABEL : block.block_label} onChange={e => changeLabel(bi, e.target.value)} style={{ width: 140 }}>
+                  {(isWarmup || !hasWarmup) && <option value={WARMUP_LABEL}>Warm-Up</option>}
+                  {!isWarmup && !BLOCK_LABELS.includes(block.block_label) && <option value={block.block_label}>{block.block_label}</option>}
                   {BLOCK_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
-                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                   <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{isWarmup ? 'Rounds:' : 'Sets:'}</label>
                   <input type="number" className="input" min={1} max={10} value={block.sets} onChange={e => updateBlock(bi, 'sets', parseInt(e.target.value))} style={{ width: 60, textAlign: 'center' }} />
                 </div>
                 <div style={{ flex: 1 }} />
+                {!isWarmup && (
+                  <div style={{ display: 'flex', gap: '0.3rem' }}>
+                    <button onClick={() => moveBlock(bi, -1)} disabled={!canUp} title="Move block up" aria-label="Move block up" style={arrow(canUp)}>▲</button>
+                    <button onClick={() => moveBlock(bi, 1)} disabled={!canDown} title="Move block down" aria-label="Move block down" style={arrow(canDown)}>▼</button>
+                  </div>
+                )}
                 <button onClick={() => removeBlock(bi)} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
               </div>
               {isWarmup && (
