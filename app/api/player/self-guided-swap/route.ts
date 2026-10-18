@@ -1,4 +1,4 @@
-// FILE: app/api/player/self-guided-swap/route.ts   (new file)
+// FILE: app/api/player/self-guided-swap/route.ts
 //
 // Easier-option swaps for self-guided full-body workouts (lib/fullBodyWorkout.ts).
 // A sore player can swap one exercise for another that hits the same area
@@ -85,12 +85,12 @@ export async function GET(req: NextRequest) {
   const entry = result.workout.blocks[result.blockIndex].exercises[result.exerciseIndex]
   const byId = new Map(result.library.map(ex => [ex.id, ex]))
 
-  // Photos for the option list
+  // Pictures for the option list: the still picture from each demo clip
   const ids = result.options.map(o => o.id)
   const { data: media } = ids.length
-    ? await db.from('exercise_library').select('id, start_image_url, demo_image_url').in('id', ids)
+    ? await db.from('exercise_library').select('id, clip_poster_url').in('id', ids)
     : { data: [] }
-  const imageById = new Map((media ?? []).map(m => [m.id as string, (m.start_image_url || m.demo_image_url || null) as string | null]))
+  const imageById = new Map((media ?? []).map(m => [m.id as string, (m.clip_poster_url || null) as string | null]))
 
   return NextResponse.json({
     current: brief(byId.get(entry.exerciseId)),

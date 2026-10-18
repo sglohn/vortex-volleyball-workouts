@@ -1,7 +1,8 @@
 // FILE: app/coach/display/page.tsx
 //
-// Exercises with a demo clip show one looping clip where the start/finish
-// photos would go. ?still=1 shows each clip's still picture instead; the
+// Exercises with a demo clip show one looping clip beside the name. The old
+// start/finish photos are no longer shown; an exercise without a clip shows
+// its demo link if it has one, otherwise an empty box. ?still=1 shows each clip's still picture instead; the
 // Roku snapshot (app/api/display-snapshot/route.ts) uses that, since the
 // Roku can only show a picture.
 'use client'
@@ -21,12 +22,7 @@ interface Exercise {
   exercise_library?: {
     id: string
     name: string
-    demo_image_url?: string
     demo_url?: string
-    start_image_url?: string
-    end_image_url?: string
-    start_image_position?: string
-    end_image_position?: string
     clip_url?: string | null
     clip_poster_url?: string | null
     coaching_notes?: string
@@ -255,51 +251,21 @@ function DisplayContent() {
                           )}
                         </div>
 
-                        {/* Right — demo clip, or start + end images side by side */}
-                        {lib.clip_url && (
+                        {/* Right — demo clip, or the demo link, or an empty box */}
+                        {lib.clip_url ? (
                           <div style={{ flexShrink: 0, height: '100%', aspectRatio: '16/9', overflow: 'hidden', background: '#0d1117' }}>
                             <ExerciseClip src={lib.clip_url} poster={lib.clip_poster_url} alt={`${lib.name} demo`} still={still} />
                           </div>
+                        ) : lib.demo_url ? (
+                          <a href={lib.demo_url} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0, aspectRatio: '1/1', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0d1117', textDecoration: 'none', color: CAROLINA, gap: '0.5vh' }}>
+                            <svg width="5vh" height="5vh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
+                            <span style={{ fontSize: '1.5vh', fontWeight: 600 }}>Demo</span>
+                          </a>
+                        ) : (
+                          <div style={{ flexShrink: 0, aspectRatio: '1/1', height: '100%', background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '6vh', color: 'rgba(255,255,255,0.05)' }}>{ei + 1}</span>
+                          </div>
                         )}
-                        {!lib.clip_url && (() => {
-                          const startUrl = lib.start_image_url || lib.demo_image_url
-                          const endUrl   = lib.end_image_url
-                          const hasTwo   = !!(startUrl && endUrl)
-                          const hasOne   = !!(startUrl || endUrl)
-                          if (!hasOne && !lib.demo_url) return (
-                            <div style={{ flexShrink: 0, aspectRatio: '1/1', height: '100%', background: '#0d1117', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '6vh', color: 'rgba(255,255,255,0.05)' }}>{ei + 1}</span>
-                            </div>
-                          )
-                          if (!hasOne && lib.demo_url) return (
-                            <a href={lib.demo_url} target="_blank" rel="noopener noreferrer" style={{ flexShrink: 0, aspectRatio: '1/1', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0d1117', textDecoration: 'none', color: CAROLINA, gap: '0.5vh' }}>
-                              <svg width="5vh" height="5vh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
-                              <span style={{ fontSize: '1.5vh', fontWeight: 600 }}>Demo</span>
-                            </a>
-                          )
-                          return (
-                            <div style={{ flexShrink: 0, height: '100%', display: 'flex', gap: '2px' }}>
-                              {startUrl && (
-                                <div style={{ position: 'relative', height: '100%', aspectRatio: '1/1', overflow: 'hidden' }}>
-                                  <img src={startUrl} alt="start" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: lib.start_image_position ?? '50% 50%', display: 'block' }} />
-                                  <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.2vh 0.6vh', fontSize: '1.4vh', color: 'rgba(255,255,255,0.9)', fontWeight: 700, whiteSpace: 'nowrap' }}>Start</div>
-                                </div>
-                              )}
-                              {endUrl && (
-                                <div style={{ position: 'relative', height: '100%', aspectRatio: '1/1', overflow: 'hidden' }}>
-                                  <img src={endUrl} alt="end" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: lib.end_image_position ?? '50% 50%', display: 'block' }} />
-                                  <div style={{ position: 'absolute', bottom: '0.5vh', left: '50%', transform: 'translateX(-50%)', background: 'rgba(0,0,0,0.65)', borderRadius: '0.3vh', padding: '0.2vh 0.6vh', fontSize: '1.4vh', color: 'rgba(255,255,255,0.9)', fontWeight: 700, whiteSpace: 'nowrap' }}>Finish</div>
-                                </div>
-                              )}
-                              {!startUrl && !endUrl && lib.demo_url && (
-                                <a href={lib.demo_url} target="_blank" rel="noopener noreferrer" style={{ height: '100%', aspectRatio: '1/1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#0d1117', textDecoration: 'none', color: CAROLINA, gap: '0.5vh' }}>
-                                  <svg width="6vh" height="6vh" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8" fill="currentColor"/></svg>
-                                  <span style={{ fontSize: '1.6vh', fontWeight: 600 }}>Demo</span>
-                                </a>
-                              )}
-                            </div>
-                          )
-                        })()}
                       </div>
                     )
                   })}

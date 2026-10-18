@@ -1,4 +1,4 @@
-// lib/types.ts
+// FILE: lib/types.ts
 // ============================================================
 // VORTEX STRENGTH & CONDITIONING — V2 TYPES
 // ============================================================
@@ -68,9 +68,6 @@ export interface ExerciseLibrary {
   logs_velocity: boolean
   coaching_notes?: string
   demo_url?: string
-  demo_image_url?: string
-  start_image_url?: string
-  end_image_url?: string
   clip_url?: string | null          // short looping demo clip (MP4)
   clip_poster_url?: string | null   // still picture from the clip
   is_active: boolean

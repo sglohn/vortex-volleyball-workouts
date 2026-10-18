@@ -12,7 +12,9 @@ function asRoles(value: unknown): string[] {
   return [...new Set(value.filter((v): v is string => typeof v === 'string' && ROLE_RE.test(v)))]
 }
 
-const BASE_COLUMNS = 'id, name, category, default_sets, default_reps, coaching_notes, demo_url, demo_image_url, start_image_url, end_image_url, logs_weight, logs_velocity, equipment, is_active'
+// The old start/finish photo columns are no longer read or written: demo
+// clips (clip_url, clip_poster_url) replaced them.
+const BASE_COLUMNS = 'id, name, category, default_sets, default_reps, coaching_notes, demo_url, logs_weight, logs_velocity, equipment, is_active'
 const LEVEL_COLUMNS = 'variation_family, variation_level, backup_exercise_id'
 
 // Easier/harder levels and the backup (lib/exerciseLevels.ts).
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
   const {
     name, category, default_sets, default_reps,
     logs_weight, logs_velocity, coaching_notes,
-    demo_url, demo_image_url, equipment, self_guided_roles,
+    demo_url, equipment, self_guided_roles,
     variation_family, variation_level, backup_exercise_id,
   } = body
 
@@ -87,7 +89,6 @@ export async function POST(req: NextRequest) {
       equipment: asEquipment(equipment),
       coaching_notes: coaching_notes ?? null,
       demo_url: demo_url ?? null,
-      demo_image_url: demo_image_url ?? null,
       ...(Array.isArray(self_guided_roles) && self_guided_roles.length ? { self_guided_roles: asRoles(self_guided_roles) } : {}),
       ...levels,
     })
@@ -127,11 +128,11 @@ export async function DELETE(req: NextRequest) {
 
   const db = createServerClient()
 
-  // Fetch image URLs before deleting so we can clean up storage
-  // (photos, the demo clip and its still picture all live in exercises/{id}/)
+  // Make sure it exists before cleaning up storage
+  // (the demo clip, its still picture and any old photos all live in exercises/{id}/)
   const { data: exercise } = await db
     .from('exercise_library')
-    .select('start_image_url, end_image_url, demo_image_url')
+    .select('id')
     .eq('id', id)
     .single()
 
