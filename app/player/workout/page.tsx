@@ -24,7 +24,7 @@ import { BODY_AREAS, CHANGE_REASONS, reasonLabel, wantsLabel } from '@/lib/exerc
 interface SetLog { id?: string; set_number: number; reps_completed?: number; weight_lbs?: number; velocity_ms?: number; completed: boolean }
 interface Exercise {
   id: string; name: string; default_reps?: string; coaching_notes?: string
-  demo_url?: string; demo_image_url?: string; start_image_url?: string; end_image_url?: string
+  demo_url?: string
   clip_url?: string | null; clip_poster_url?: string | null
   logs_weight: boolean; logs_velocity: boolean
   equipment?: Equipment | null
@@ -546,37 +546,12 @@ export default function PlayerWorkoutPage() {
             )}
           </div>
 
-          {/* ── DEMO CLIP (shows the whole motion) — or START / FINISH IMAGES ── */}
+          {/* ── DEMO CLIP (shows the whole motion) ── */}
           {ex.clip_url && (
             <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--court-raised)', height: 200, margin: '0 0 1rem 0' }}>
               <ExerciseClip src={ex.clip_url} poster={ex.clip_poster_url} alt={`${ex.name} demo`} />
             </div>
           )}
-          {!ex.clip_url && (() => {
-            const startUrl = ex.start_image_url ?? ex.demo_image_url
-            const endUrl = ex.end_image_url
-            if (!startUrl && !endUrl) return null
-            return (
-              <div style={{ display: 'grid', gridTemplateColumns: startUrl && endUrl ? '1fr 1fr' : '1fr', gap: '0.5rem', margin: '0 0 1rem 0' }}>
-                {startUrl && (
-                  <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--court-raised)', position: 'relative' }}>
-                    <img src={startUrl} alt={`${ex.name} start position`} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', padding: '0.5rem 0.5rem 0.4rem', textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Start</span>
-                    </div>
-                  </div>
-                )}
-                {endUrl && (
-                  <div style={{ borderRadius: 8, overflow: 'hidden', background: 'var(--court-raised)', position: 'relative' }}>
-                    <img src={endUrl} alt={`${ex.name} finish position`} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.65))', padding: '0.5rem 0.5rem 0.4rem', textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Finish</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )
-          })()}
 
           {/* Coaching notes */}
           {(ex.customNotes || ex.coaching_notes) && (
@@ -893,31 +868,6 @@ export default function PlayerWorkoutPage() {
                 <ExerciseClip src={demoEx.clip_url} poster={demoEx.clip_poster_url} alt={`${demoEx.name} demo`} />
               </div>
             )}
-            {!demoEx.clip_url && (() => {
-              const startUrl = demoEx.start_image_url ?? demoEx.demo_image_url
-              const endUrl = demoEx.end_image_url
-              if (!startUrl && !endUrl) return null
-              return (
-                <div style={{ display: 'grid', gridTemplateColumns: startUrl && endUrl ? '1fr 1fr' : '1fr', gap: '0.5rem', marginBottom: '1rem' }}>
-                  {startUrl && (
-                    <div style={{ borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
-                      <img src={startUrl} alt={`${demoEx.name} start`} style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
-                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', padding: '0.4rem', textAlign: 'center' }}>
-                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Start</span>
-                      </div>
-                    </div>
-                  )}
-                  {endUrl && (
-                    <div style={{ borderRadius: 8, overflow: 'hidden', position: 'relative' }}>
-                      <img src={endUrl} alt={`${demoEx.name} finish`} style={{ width: '100%', height: 160, objectFit: 'cover', display: 'block' }} />
-                      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.6))', padding: '0.4rem', textAlign: 'center' }}>
-                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Finish</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
             {demoEx.demo_url && (
               <a href={demoEx.demo_url} target="_blank" rel="noopener noreferrer" className="btn-volt" style={{ display: 'block', padding: '0.75rem', textAlign: 'center', textDecoration: 'none', marginBottom: demoEx.coaching_notes ? '1rem' : 0, fontSize: '0.9rem' }}>
                 ▶ Watch Demo Video

@@ -1,10 +1,13 @@
 // FILE: app/coach/exercises/page.tsx
 //
-// Demo clips: an exercise can have a short looping clip (components/ClipPicker.tsx
-// on this form). Players and the TV see the clip instead of the start/finish
-// photos; the photos are kept. The clip goes straight from the browser to
-// Supabase with a one-time upload link (app/api/coach/exercise-clip/route.ts),
-// and its still picture goes through app/api/coach/exercise-media/route.ts.
+// Demo clips: each exercise can have a short looping clip (components/ClipPicker.tsx
+// on this form). Clips replaced the old start/finish photos, which are no
+// longer shown or uploaded anywhere. The library shows each clip's still
+// picture so exercises are easy to recognize, and a "No video yet" box for
+// the ones still needing a clip (the button under the title lists just those).
+// The clip goes straight from the browser to Supabase with a one-time upload
+// link (app/api/coach/exercise-clip/route.ts), and its still picture goes
+// through app/api/coach/exercise-media/route.ts.
 //
 // Easier & harder versions (lib/exerciseLevels.ts): exercises that are
 // versions of one movement share a family name and a level (1 = easiest),
@@ -13,7 +16,7 @@
 // These are what the coach picks from when approving a player's change
 // request, and what self-guided players are offered first when sore.
 'use client'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { EQUIPMENT_OPTIONS, asEquipment } from '@/lib/loads'
 import { FEATURES } from '@/lib/features'
 import ExerciseImport from '@/components/ExerciseImport'
@@ -49,11 +52,6 @@ interface Exercise {
   default_reps?: string
   coaching_notes?: string
   demo_url?: string
-  demo_image_url?: string
-  start_image_url?: string
-  end_image_url?: string
-  start_image_position?: string
-  end_image_position?: string
   clip_url?: string | null
   clip_poster_url?: string | null
   logs_weight: boolean
@@ -87,6 +85,33 @@ function equipmentLabel(value: string | null | undefined): string {
   return EQUIPMENT_OPTIONS.find(o => o.value === value)?.label ?? ''
 }
 
+// The exercise's look in the library: the still picture from its demo clip,
+// or a "No video yet" box. Module scope so it isn't remade on every render.
+function ClipThumb({ ex, width }: { ex: Pick<Exercise, 'name' | 'clip_url' | 'clip_poster_url'>; width: number }) {
+  const height = Math.round(width * 9 / 16)
+  const box: React.CSSProperties = { width, height, borderRadius: 6, overflow: 'hidden', flexShrink: 0, position: 'relative', display: 'block' }
+  if (!ex.clip_url) {
+    return (
+      <span style={{ ...box, border: '1.5px dashed var(--gray-border)', background: 'var(--white)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', gap: 2 }}>
+        <svg width={width > 70 ? 18 : 14} height={width > 70 ? 18 : 14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="2" y="6" width="14" height="12" rx="2" /><path d="M16 10l6-3v10l-6-3" /><line x1="2" y1="2" x2="22" y2="22" />
+        </svg>
+        <span style={{ fontSize: width > 70 ? '0.6rem' : '0.52rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap' }}>No video yet</span>
+      </span>
+    )
+  }
+  return (
+    <span style={{ ...box, background: '#0d1117' }}>
+      {ex.clip_poster_url
+        ? <img src={ex.clip_poster_url} alt={`${ex.name} video`} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+        : null}
+      <span aria-hidden style={{ position: 'absolute', right: 4, bottom: 4, width: 16, height: 16, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <svg width="8" height="8" viewBox="0 0 24 24" fill="#fff"><polygon points="6 3 21 12 6 21 6 3" /></svg>
+      </span>
+    </span>
+  )
+}
+
 export default function ExercisesPage() {
   const [exercises, setExercises] = useState<Exercise[]>([])
   const [loading, setLoading]     = useState(true)
@@ -100,18 +125,7 @@ export default function ExercisesPage() {
   const [deleteConfirm, setDeleteConfirm] = useState<Exercise | null>(null)
   const [onlyMissingEquipment, setOnlyMissingEquipment] = useState(false)
   const [showFamilies, setShowFamilies] = useState(false)
-
-  // Photo upload state
-  const [startImg, setStartImg]           = useState<File | null>(null)
-  const [endImg, setEndImg]               = useState<File | null>(null)
-  const [startPreview, setStartPreview]   = useState('')
-  const [endPreview, setEndPreview]       = useState('')
-  const [startPos, setStartPos]           = useState('50% 50%')
-  const [endPos, setEndPos]               = useState('50% 50%')
-  const [uploadingStart, setUploadingStart] = useState(false)
-  const [uploadingEnd, setUploadingEnd]     = useState(false)
-  const startRef = useRef<HTMLInputElement>(null)
-  const endRef   = useRef<HTMLInputElement>(null)
+  const [onlyMissingClip, setOnlyMissingClip] = useState(false)
 
   // Demo clip state
   const [newClip, setNewClip]             = useState<PickedClip | null>(null)
@@ -128,8 +142,6 @@ export default function ExercisesPage() {
 
   function openAdd() {
     setForm(BLANK); setEditTarget(null)
-    setStartImg(null); setEndImg(null); setStartPreview(''); setEndPreview('')
-    setStartPos('50% 50%'); setEndPos('50% 50%')
     setNewClip(null); setClipRemoved(false)
     setModal('add'); setMsg('')
   }
@@ -146,11 +158,6 @@ export default function ExercisesPage() {
       variation_level: ex.variation_level ? String(ex.variation_level) : '',
       backup_exercise_id: ex.backup_exercise_id ?? '',
     })
-    setStartImg(null); setEndImg(null)
-    setStartPreview(ex.start_image_url ?? ex.demo_image_url ?? '')
-    setEndPreview(ex.end_image_url ?? '')
-    setStartPos(ex.start_image_position ?? '50% 50%')
-    setEndPos(ex.end_image_position ?? '50% 50%')
     setNewClip(null); setClipRemoved(false)
     setEditTarget(ex); setModal('edit'); setMsg('')
   }
@@ -200,50 +207,6 @@ export default function ExercisesPage() {
     }
   }
 
-  function pickFile(e: React.ChangeEvent<HTMLInputElement>, which: 'start' | 'end') {
-    const file = e.target.files?.[0]
-    if (!file) return
-    const url = URL.createObjectURL(file)
-    if (which === 'start') { setStartImg(file); setStartPreview(url) }
-    else { setEndImg(file); setEndPreview(url) }
-  }
-
-  async function resizeImage(file: File, maxSize = 1800): Promise<Blob> {
-    return new Promise((resolve) => {
-      const img = new Image()
-      const url = URL.createObjectURL(file)
-      img.onload = () => {
-        URL.revokeObjectURL(url)
-        const { width, height } = img
-        const scale = Math.min(1, maxSize / Math.max(width, height))
-        const w = Math.round(width * scale)
-        const h = Math.round(height * scale)
-        const canvas = document.createElement('canvas')
-        canvas.width = w; canvas.height = h
-        const ctx = canvas.getContext('2d')!
-        ctx.imageSmoothingEnabled = true
-        ctx.imageSmoothingQuality = 'high'
-        ctx.drawImage(img, 0, 0, w, h)
-        canvas.toBlob(blob => resolve(blob!), 'image/jpeg', 0.92)
-      }
-      img.src = url
-    })
-  }
-
-  // Photos go through the server (app/api/coach/exercise-media/route.ts),
-  // so the browser never needs a Supabase key.
-  async function uploadPhoto(file: File, exerciseId: string, which: 'start' | 'end'): Promise<string | null> {
-    const blob = await resizeImage(file, 1800)
-    const body = new FormData()
-    body.append('file', blob, `${which}.jpg`)
-    body.append('exerciseId', exerciseId)
-    body.append('which', which)
-    const res = await fetch('/api/coach/exercise-media', { method: 'POST', body })
-    const data = await res.json().catch(() => ({}))
-    if (!res.ok || !data.url) { console.error('Upload error:', data.error ?? res.status); return null }
-    return data.url as string
-  }
-
   async function save() {
     if (!form.name) { setMsg('Name is required'); return }
     setSaving(true); setMsg('')
@@ -263,32 +226,6 @@ export default function ExercisesPage() {
       if (!res.ok) { setMsg(data.error || 'Error saving'); setSaving(false); return }
 
       const exerciseId = data.exercise?.id ?? editTarget?.id
-      let startUrl = editTarget?.start_image_url ?? editTarget?.demo_image_url ?? ''
-      let endUrl   = editTarget?.end_image_url ?? ''
-
-      if (startImg && exerciseId) {
-        setUploadingStart(true)
-        const url = await uploadPhoto(startImg, exerciseId, 'start')
-        if (url) startUrl = url
-        else alert('Start photo upload failed. Try again, or use a smaller photo.')
-        setUploadingStart(false)
-      }
-      if (endImg && exerciseId) {
-        setUploadingEnd(true)
-        const url = await uploadPhoto(endImg, exerciseId, 'end')
-        if (url) endUrl = url
-        else alert('End photo upload failed. Try again, or use a smaller photo.')
-        setUploadingEnd(false)
-      }
-
-      if ((startImg || endImg) && exerciseId) {
-        await fetch('/api/coach/exercises', {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: exerciseId, start_image_url: startUrl, end_image_url: endUrl, demo_image_url: startUrl || '', start_image_position: startPos, end_image_position: endPos }),
-        })
-      }
-
       // Demo clip: upload a new one, or clear a removed one
       let clipUrl: string | null = editTarget?.clip_url ?? null
       let clipPosterUrl: string | null = editTarget?.clip_poster_url ?? null
@@ -320,9 +257,6 @@ export default function ExercisesPage() {
 
       const updated: Exercise = {
         ...data.exercise,
-        start_image_url: startUrl,
-        end_image_url:   endUrl,
-        demo_image_url:  startUrl || data.exercise?.demo_image_url || '',
         clip_url:        clipUrl,
         clip_poster_url: clipPosterUrl,
       }
@@ -348,6 +282,7 @@ export default function ExercisesPage() {
   const filtered = exercises.filter(e => {
     const matchCat    = filterCat === 'all' || e.category === filterCat
     if (onlyMissingEquipment && !(e.logs_weight && !e.equipment)) return false
+    if (onlyMissingClip && e.clip_url) return false
     const matchSearch = e.name.toLowerCase().includes(search.toLowerCase())
     return matchCat && matchSearch
   })
@@ -380,50 +315,6 @@ export default function ExercisesPage() {
     <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.35rem', fontWeight: 600 }}>{children}</label>
   )
 
-  const PhotoUpload = ({ which, preview, uploading, inputRef, pos, onPosChange }: {
-    which: 'start' | 'end'; preview: string; uploading: boolean
-    inputRef: React.RefObject<HTMLInputElement | null>; pos: string; onPosChange: (p: string) => void
-  }) => {
-    function handleClick(e: React.MouseEvent<HTMLDivElement>) {
-      if (!preview) { inputRef.current?.click(); return }
-      const rect = e.currentTarget.getBoundingClientRect()
-      const x = Math.round(((e.clientX - rect.left) / rect.width) * 100)
-      const y = Math.round(((e.clientY - rect.top) / rect.height) * 100)
-      onPosChange(`${x}% ${y}%`)
-    }
-    return (
-      <div>
-        <Label>{which === 'start' ? 'Start Position Photo' : 'End Position Photo'}</Label>
-        <div onClick={handleClick}
-          style={{ width: '100%', aspectRatio: '1/1', borderRadius: 10, overflow: 'hidden', border: `2px dashed ${preview ? 'var(--carolina)' : 'var(--gray-border)'}`, cursor: preview ? 'crosshair' : 'pointer', position: 'relative', background: 'var(--carolina-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'border-color 0.15s' }}>
-          {preview ? (
-            <img src={preview} alt={which} style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: pos, display: 'block', pointerEvents: 'none' }} />
-          ) : (
-            <div style={{ textAlign: 'center', color: 'var(--text-muted)' }}>
-              <div style={{ fontSize: '2rem', marginBottom: '0.25rem' }}>📷</div>
-              <div style={{ fontSize: '0.75rem', fontWeight: 500 }}>Tap to add photo</div>
-              <div style={{ fontSize: '0.65rem', marginTop: '0.2rem' }}>from camera or files</div>
-            </div>
-          )}
-          {preview && (() => {
-            const [px, py] = pos.split(' ').map(p => parseFloat(p))
-            return <div style={{ position: 'absolute', width: 18, height: 18, borderRadius: '50%', border: '2.5px solid white', boxShadow: '0 0 0 1.5px var(--carolina)', pointerEvents: 'none', left: `${px}%`, top: `${py}%`, transform: 'translate(-50%,-50%)', transition: 'left 0.1s, top 0.1s' }} />
-          })()}
-          {uploading && (
-            <div style={{ position: 'absolute', inset: 0, background: 'rgba(86,160,211,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 600, fontSize: '0.85rem' }}>Uploading…</div>
-          )}
-          {preview && !uploading && (
-            <div style={{ position: 'absolute', bottom: 6, right: 6, display: 'flex', gap: 4 }}>
-              <div style={{ background: 'rgba(0,0,0,0.55)', borderRadius: 5, padding: '0.15rem 0.4rem', fontSize: '0.6rem', color: 'rgba(255,255,255,0.7)' }}>Tap to reframe</div>
-              <button onClick={e => { e.stopPropagation(); inputRef.current?.click() }} style={{ background: 'var(--carolina)', border: 'none', borderRadius: 5, padding: '0.15rem 0.4rem', fontSize: '0.6rem', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>Change</button>
-            </div>
-          )}
-        </div>
-        <input ref={inputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={e => pickFile(e, which)} />
-      </div>
-    )
-  }
-
   // Quick equipment setting straight from the list
   async function setEquipmentInline(ex: Exercise, value: string) {
     const equipment = asEquipment(value)
@@ -439,6 +330,7 @@ export default function ExercisesPage() {
   }
 
   const missingEquipmentCount = exercises.filter(e => e.logs_weight && !e.equipment).length
+  const missingClipCount = exercises.filter(e => !e.clip_url).length
 
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading…</div>
 
@@ -452,6 +344,12 @@ export default function ExercisesPage() {
             <button onClick={() => setOnlyMissingEquipment(v => !v)}
               style={{ marginTop: '0.375rem', padding: '0.25rem 0.75rem', borderRadius: 20, border: '1.5px solid #f59e0b', background: onlyMissingEquipment ? '#f59e0b' : 'rgba(245,158,11,0.1)', color: onlyMissingEquipment ? '#111827' : '#b45309', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
               {onlyMissingEquipment ? 'Showing' : 'Show'} {missingEquipmentCount} weighted exercise{missingEquipmentCount === 1 ? '' : 's'} with no equipment set
+            </button>
+          )}
+          {missingClipCount > 0 && (
+            <button onClick={() => setOnlyMissingClip(v => !v)}
+              style={{ marginTop: '0.375rem', marginLeft: missingEquipmentCount > 0 ? '0.5rem' : 0, padding: '0.25rem 0.75rem', borderRadius: 20, border: '1.5px solid var(--carolina)', background: onlyMissingClip ? 'var(--carolina)' : 'var(--carolina-light)', color: onlyMissingClip ? '#fff' : 'var(--carolina-dark)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
+              {onlyMissingClip ? 'Showing' : 'Show'} {missingClipCount} exercise{missingClipCount === 1 ? '' : 's'} with no video yet
             </button>
           )}
         </div>
@@ -503,9 +401,7 @@ export default function ExercisesPage() {
                     <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', flexShrink: 0 }}>
                       {i > 0 && <span aria-hidden style={{ color: 'var(--carolina)', fontWeight: 800 }}>→</span>}
                       <button onClick={() => openEdit(m)} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.375rem 0.625rem 0.375rem 0.375rem', borderRadius: 8, border: '1.5px solid var(--carolina-border)', background: 'var(--carolina-light)', cursor: 'pointer', textAlign: 'left' }}>
-                        {(m.clip_poster_url || m.start_image_url || m.demo_image_url)
-                          ? <img src={m.clip_poster_url || m.start_image_url || m.demo_image_url || ''} alt="" style={{ width: 40, height: 40, objectFit: 'cover', borderRadius: 5 }} />
-                          : <div style={{ width: 40, height: 40, borderRadius: 5, background: 'var(--white)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>💪</div>}
+                        <ClipThumb ex={m} width={64} />
                         <span>
                           <span style={{ display: 'block', fontSize: '0.62rem', fontWeight: 800, color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             {m.variation_level ? `Level ${m.variation_level}` : 'No level'}{i === 0 ? ' · easiest' : i === f.members.length - 1 ? ' · hardest' : ''}
@@ -529,23 +425,16 @@ export default function ExercisesPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '0.625rem' }}>
             {exs.map(ex => (
               <div key={ex.id} className="card" style={{ padding: '0.875rem', display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', gap: '0.25rem', flexShrink: 0 }}>
-                  {(ex.start_image_url || ex.demo_image_url) ? (
-                    <img src={ex.start_image_url || ex.demo_image_url} alt="start" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6 }} />
-                  ) : (
-                    <div style={{ width: 52, height: 52, borderRadius: 6, background: 'var(--carolina-light)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', fontSize: '1.3rem' }}>💪</div>
-                  )}
-                  {ex.end_image_url && (
-                    <img src={ex.end_image_url} alt="end" style={{ width: 52, height: 52, objectFit: 'cover', borderRadius: 6 }} />
-                  )}
-                </div>
+                <button onClick={() => openEdit(ex)} title={ex.clip_url ? `Edit ${ex.name}` : `Add a video for ${ex.name}`}
+                  style={{ flexShrink: 0, padding: 0, border: 'none', background: 'none', cursor: 'pointer' }}>
+                  <ClipThumb ex={ex} width={96} />
+                </button>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: '0.9rem', marginBottom: '0.2rem' }}>{ex.name}</div>
                   <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.375rem' }}>
                     {ex.default_sets}×{ex.default_reps}
                     {ex.logs_weight && (ex.equipment ? ` · ${equipmentLabel(ex.equipment)}` : ' · weight')}
                     {FEATURES.vbt && ex.logs_velocity && <span style={{ color: 'var(--carolina)', fontWeight: 600 }}> · ⚡ bar speed</span>}
-                    {ex.clip_url && <span style={{ color: 'var(--carolina-dark)', fontWeight: 600 }}> · 🎬 clip</span>}
                   </div>
                   {ex.logs_weight && !ex.equipment && (
                     <select value="" onChange={e => setEquipmentInline(ex, e.target.value)}
@@ -761,15 +650,10 @@ export default function ExercisesPage() {
               </div>
             </div>
 
-            {/* Photos */}
+            {/* Demo clip */}
             <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1rem', marginBottom: '1rem' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.75rem' }}>Exercise Photos</div>
-              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.875rem' }}>Add a start and end position photo. Tap a square to take a photo or choose from your camera roll.</p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.875rem' }}>
-                <PhotoUpload which="start" preview={startPreview} uploading={uploadingStart} inputRef={startRef} pos={startPos} onPosChange={setStartPos} />
-                <PhotoUpload which="end" preview={endPreview} uploading={uploadingEnd} inputRef={endRef} pos={endPos} onPosChange={setEndPos} />
-              </div>
-              <div style={{ marginTop: '1rem' }}>
+              <div style={{ fontSize: '0.75rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.07em', fontWeight: 700, marginBottom: '0.75rem' }}>Exercise Video</div>
+              <div>
                 <ClipPicker
                   previewUrl={clipPreview}
                   posterUrl={clipPosterPreview}
@@ -778,15 +662,15 @@ export default function ExercisesPage() {
                   onRemove={() => { setNewClip(null); setClipRemoved(true) }}
                 />
                 <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.4rem 0 0', lineHeight: 1.45 }}>
-                  A short silent loop of one rep. When an exercise has a clip, players and the TV see the clip instead of the photos (the photos are kept). Film sideways (landscape), then run the video through the clip converter.
+                  A short silent loop of one rep, shown to players and on the TV. A still from the middle of the clip is used as its picture in this library. Film sideways (landscape), then run the video through the clip converter.
                 </p>
               </div>
             </div>
 
             <div style={{ display: 'flex', gap: '0.75rem' }}>
               <button className="btn-ghost" onClick={closeModal} style={{ flex: 1, padding: '0.75rem' }}>Cancel</button>
-              <button className="btn-volt" onClick={save} disabled={saving || uploadingStart || uploadingEnd || uploadingClip || !form.name} style={{ flex: 2, padding: '0.75rem' }}>
-                {saving || uploadingStart || uploadingEnd || uploadingClip ? 'Saving…' : modal === 'add' ? 'Add Exercise' : 'Save Changes'}
+              <button className="btn-volt" onClick={save} disabled={saving || uploadingClip || !form.name} style={{ flex: 2, padding: '0.75rem' }}>
+                {saving || uploadingClip ? 'Saving…' : modal === 'add' ? 'Add Exercise' : 'Save Changes'}
               </button>
             </div>
           </div>

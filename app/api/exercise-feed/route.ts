@@ -6,7 +6,7 @@
 //
 //   GET  (Authorization: Bearer <EXERCISE_FEED_SECRET>)
 //   → { exercises: [{ id, name, category, sets/reps, notes, equipment,
-//                     photo and clip links, photo framing }] }
+//                     demo clip links }] }
 //
 // Active exercises only. Nothing about players, teams or workouts, and no
 // bar speed settings.
@@ -19,7 +19,6 @@ export const dynamic = 'force-dynamic'
 
 const FEED_COLUMNS =
   'id, name, category, default_sets, default_reps, logs_weight, coaching_notes, demo_url, ' +
-  'demo_image_url, start_image_url, end_image_url, start_image_position, end_image_position, ' +
   'equipment, clip_url, clip_poster_url'
 
 export async function GET(req: NextRequest) {

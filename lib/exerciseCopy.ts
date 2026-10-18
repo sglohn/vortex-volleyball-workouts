@@ -6,12 +6,15 @@
 //   Sync    (app/api/coach/exercises/sync/route.ts)    - from the live feed
 //
 // Rules (same for both):
-//   - photos and demo clips are downloaded from the other project's Supabase
-//     storage and re-uploaded into this site's own "exercise-media" bucket,
-//     so this site never loads images or clips from the other project
+//   - demo clips (and their still pictures) are downloaded from the other
+//     project's Supabase storage and re-uploaded into this site's own
+//     "exercise-media" bucket, so this site never loads clips from the
+//     other project
+//   - the old start/finish photos are not copied (clips replaced them); an
+//     older export file that still has them is fine, they're just ignored
 //   - when updating, only details the source actually has are copied, so a
 //     blank there never wipes out something set here
-//   - photos and the clip are only copied again when the source's file is
+//   - the clip is only copied again when the source's file is
 //     different from the one copied last time (the copied file's name
 //     carries a short fingerprint of where it came from)
 //   - settings this site keeps for itself (level family, backup exercise,
@@ -41,17 +44,17 @@ export interface SourceExercise {
   logs_velocity?: boolean | null
   coaching_notes?: string | null
   demo_url?: string | null
-  demo_image_url?: string | null
-  start_image_url?: string | null
-  end_image_url?: string | null
-  start_image_position?: string | null
-  end_image_position?: string | null
   equipment?: string | null
   clip_url?: string | null
   clip_poster_url?: string | null
 }
 
-/** The columns of this site's exercise_library that copying reads/writes. */
+/**
+ * The columns of this site's exercise_library that copying reads. The photo
+ * columns are no longer written, but are still read because Sync's
+ * fingerprint (rowHash in lib/exerciseFeed.ts) includes them; taking them
+ * out would make every synced exercise look edited here.
+ */
 export type LibraryRow = {
   id: string; name: string; category: string | null; default_sets: number | null; default_reps: string | null
   logs_weight: boolean | null; equipment: string | null; coaching_notes: string | null; demo_url: string | null
@@ -76,7 +79,7 @@ function isSupabasePublicFile(url: string): boolean {
   } catch { return false }
 }
 
-/** Short fingerprint of where a photo or clip came from (goes into the copied file's name). */
+/** Short fingerprint of where a clip or picture came from (goes into the copied file's name). */
 function sourceTag(url: string): string {
   return createHash('sha1').update(url).digest('hex').slice(0, 10)
 }
@@ -89,14 +92,14 @@ export function copiedFrom(current: string | null | undefined, source: string): 
 async function copyImage(db: Db, url: string, exerciseId: string, which: string): Promise<string | null> {
   if (!isSupabasePublicFile(url)) return null
   const res = await fetch(url)
-  if (!res.ok) throw new Error(`photo download failed (${res.status})`)
+  if (!res.ok) throw new Error(`picture download failed (${res.status})`)
   const buf = Buffer.from(await res.arrayBuffer())
-  if (buf.length > MAX_IMAGE_BYTES) throw new Error('photo too large')
+  if (buf.length > MAX_IMAGE_BYTES) throw new Error('picture too large')
   const type = res.headers.get('content-type') ?? 'image/jpeg'
   const ext = type.includes('png') ? 'png' : type.includes('webp') ? 'webp' : 'jpg'
   const path = `exercises/${exerciseId}/${which}_${Date.now()}_${sourceTag(url)}.${ext}`
   const { error } = await db.storage.from('exercise-media').upload(path, buf, { upsert: true, contentType: type })
-  if (error) throw new Error(`photo upload failed: ${error.message}`)
+  if (error) throw new Error(`picture upload failed: ${error.message}`)
   return db.storage.from('exercise-media').getPublicUrl(path).data.publicUrl
 }
 
@@ -131,22 +134,15 @@ function detailChanges(ex: SourceExercise, row: LibraryRow): { details: Record<s
   set('equipment', asEquipment(ex.equipment ?? null), 'equipment')
   set('coaching_notes', ex.coaching_notes, 'notes')
   set('demo_url', ex.demo_url, 'demo link')
-  set('start_image_position', ex.start_image_position, 'photo framing')
-  set('end_image_position', ex.end_image_position, 'photo framing')
   return { details, labels }
 }
 
 /**
  * What bringing `row` up to date from `ex` would change, as short labels
- * ("notes", "photos"...). Empty = already matches. Doesn't change anything.
+ * ("notes", "demo clip"...). Empty = already matches. Doesn't change anything.
  */
 export function exerciseDiff(ex: SourceExercise, row: LibraryRow): string[] {
   const labels = [...detailChanges(ex, row).labels]
-  const newPhoto =
-    (ex.start_image_url && !copiedFrom(row.start_image_url, ex.start_image_url)) ||
-    (ex.end_image_url && !copiedFrom(row.end_image_url, ex.end_image_url)) ||
-    (ex.demo_image_url && !copiedFrom(row.demo_image_url, ex.demo_image_url))
-  if (newPhoto) labels.push('photos')
   if (ex.clip_url && !copiedFrom(row.clip_url, ex.clip_url)) labels.push('demo clip')
   return labels
 }
@@ -157,32 +153,6 @@ export async function updateExisting(db: Db, ex: SourceExercise, row: LibraryRow
   if (Object.keys(details).length) {
     const { error } = await db.from('exercise_library').update(details).eq('id', row.id)
     if (error) return { name, status: 'error', detail: error.message, id: row.id }
-  }
-
-  // ── Photos (only ones that are different from what was copied before) ──
-  try {
-    const photos: Record<string, string | null> = {}
-    const copied = new Map<string, string | null>()
-    const copy = async (url: string, which: string) => {
-      if (!copied.has(url)) copied.set(url, await copyImage(db, url, row.id, which))
-      return copied.get(url) ?? null
-    }
-    if (ex.start_image_url && !copiedFrom(row.start_image_url, ex.start_image_url)) {
-      const u = await copy(ex.start_image_url, 'start'); if (u) photos.start_image_url = u
-    }
-    if (ex.end_image_url && !copiedFrom(row.end_image_url, ex.end_image_url)) {
-      const u = await copy(ex.end_image_url, 'end'); if (u) photos.end_image_url = u
-    }
-    if (ex.demo_image_url && !copiedFrom(row.demo_image_url, ex.demo_image_url)) {
-      const u = await copy(ex.demo_image_url, 'start'); if (u) photos.demo_image_url = u
-    }
-    if (Object.keys(photos).length) {
-      const { error } = await db.from('exercise_library').update(photos).eq('id', row.id)
-      if (error) throw new Error(error.message)
-      changed.push('photos')
-    }
-  } catch (e) {
-    return { name, status: 'updated', detail: `updated without new photos (${(e as Error).message})`, id: row.id }
   }
 
   // ── Demo clip ──
@@ -205,7 +175,7 @@ export async function updateExisting(db: Db, ex: SourceExercise, row: LibraryRow
     : { name, status: 'unchanged', id: row.id }
 }
 
-/** Adds a new exercise to this library, with copies of its photos and clip. */
+/** Adds a new exercise to this library, with a copy of its demo clip. */
 export async function addExercise(db: Db, ex: SourceExercise, name: string): Promise<CopyResult> {
   const { data: created, error } = await db.from('exercise_library').insert({
     name,
@@ -217,30 +187,8 @@ export async function addExercise(db: Db, ex: SourceExercise, name: string): Pro
     equipment: asEquipment(ex.equipment ?? null),
     coaching_notes: ex.coaching_notes ?? null,
     demo_url: ex.demo_url ?? null,
-    start_image_position: ex.start_image_position ?? '50% 50%',
-    end_image_position: ex.end_image_position ?? '50% 50%',
   }).select('id').single()
   if (error || !created) return { name, status: 'error', detail: error?.message ?? 'insert failed' }
-
-  // Photos: copy each distinct one once
-  try {
-    const copied = new Map<string, string | null>()
-    const copy = async (url: string | null | undefined, which: string) => {
-      if (!url) return null
-      if (!copied.has(url)) copied.set(url, await copyImage(db, url, created.id, which))
-      return copied.get(url) ?? null
-    }
-    const start = await copy(ex.start_image_url, 'start')
-    const end = await copy(ex.end_image_url, 'end')
-    const demo = await copy(ex.demo_image_url, 'start')
-    if (start || end || demo) {
-      await db.from('exercise_library').update({
-        start_image_url: start, end_image_url: end, demo_image_url: demo ?? start,
-      }).eq('id', created.id)
-    }
-  } catch (e) {
-    return { name, status: 'added', detail: `added without photos (${(e as Error).message})`, id: created.id }
-  }
 
   // Demo clip and its still picture
   if (ex.clip_url) {
