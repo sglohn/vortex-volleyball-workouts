@@ -2,6 +2,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
+import { isWarmupLabel, WARMUP_LABEL } from '@/lib/warmup'
 
 interface ExerciseLib { id: string; name: string; category?: string; default_sets: number; default_reps?: string; logs_weight: boolean; logs_velocity?: boolean }
 interface BlockExercise { exercise_id: string; custom_reps: string; custom_notes: string; target_velocity_min: string; target_velocity_max: string; exercise?: ExerciseLib }
@@ -9,7 +10,13 @@ interface Block { block_label: string; sets: number; exercises: BlockExercise[] 
 interface Template { id?: string; name: string; description: string; phase_type: string; warmup_notes: string; blocks: Block[] }
 
 const PHASE_TYPES = Object.entries(PHASE_CONFIG).map(([k, v]) => ({ value: k, label: v.label, color: v.color }))
-const BLOCK_LABELS = ['A','B','C','D','E','F','Finisher','Warmup Circuit']
+// Lifting block labels. The warm-up has its own section (lib/warmup.ts).
+const BLOCK_LABELS = ['A','B','C','D','E','F','Finisher']
+
+// Warm-up block first, then the lifting blocks in their order
+function warmupFirst<T extends { block_label: string }>(blocks: T[]): T[] {
+  return [...blocks.filter(b => isWarmupLabel(b.block_label)), ...blocks.filter(b => !isWarmupLabel(b.block_label))]
+}
 
 export default function TemplatesPage() {
   const [templates, setTemplates] = useState<Template[]>([])
@@ -37,6 +44,13 @@ export default function TemplatesPage() {
       const used = new Set(p.blocks.map(b => b.block_label))
       const next = BLOCK_LABELS.find(l => !used.has(l)) ?? `Block ${p.blocks.length + 1}`
       return { ...p, blocks: [...p.blocks, { block_label: next, sets: 3, exercises: [] }] }
+    })
+  }
+
+  function addWarmup() {
+    setEditing(p => {
+      if (!p || p.blocks.some(b => isWarmupLabel(b.block_label))) return p
+      return { ...p, blocks: [{ block_label: WARMUP_LABEL, sets: 1, exercises: [] }, ...p.blocks] }
     })
   }
 
@@ -96,7 +110,7 @@ export default function TemplatesPage() {
     if (badSpeed) { setMsg('Fix the target bar speed: max must be higher than min.'); return }
     setSaving(true)
     const method = editing.id ? 'PUT' : 'POST'
-    const res = await fetch('/api/coach/templates', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(editing) })
+    const res = await fetch('/api/coach/templates', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editing, blocks: warmupFirst(editing.blocks) }) })
     const data = await res.json()
     if (res.ok) {
       setTemplates(prev => editing.id ? prev.map(t => t.id === data.template.id ? data.template : t) : [...prev, data.template])
@@ -171,27 +185,43 @@ export default function TemplatesPage() {
           </div>
 
           <div style={{ marginBottom: '1.25rem' }}>
-            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Warmup Notes</label>
+            <label style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Warm-Up Notes (optional)</label>
             <textarea className="input" rows={2} placeholder="e.g. 5 min row / bike, dynamic mobility…" value={editing.warmup_notes} onChange={e => setEditing(p => p ? { ...p, warmup_notes: e.target.value } : p)} style={{ resize: 'vertical' }} />
           </div>
 
+          {/* Warm-up section (players see the clips on their phones; TV shows names only) */}
+          {!editing.blocks.some(b => isWarmupLabel(b.block_label)) && (
+            <button className="btn-ghost" onClick={addWarmup} style={{ width: '100%', padding: '0.625rem', marginBottom: '0.75rem', fontSize: '0.9rem' }}>+ Add Warm-Up</button>
+          )}
+
           {/* Blocks */}
-          {editing.blocks.map((block, bi) => (
-            <div key={bi} className="card-raised" style={{ padding: '1rem', marginBottom: '0.75rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
-                <div style={{ background: 'var(--volt)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 32, height: 32, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {editing.blocks.map((block, bi) => {
+            const isWarmup = isWarmupLabel(block.block_label)
+            return (
+            <div key={bi} className="card-raised" style={{ padding: '1rem', marginBottom: '0.75rem', borderLeft: isWarmup ? '3px solid var(--carolina)' : undefined }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: isWarmup ? '0.4rem' : '0.75rem' }}>
+                <div style={{ background: isWarmup ? 'var(--carolina)' : 'var(--volt)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 32, height: 32, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {block.block_label.charAt(0)}
                 </div>
+                {isWarmup ? (
+                  <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 140 }}>Warm-Up</div>
+                ) : (
                 <select className="input" value={block.block_label} onChange={e => updateBlock(bi, 'block_label', e.target.value)} style={{ width: 140 }}>
                   {BLOCK_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
+                )}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>Sets:</label>
+                  <label style={{ fontSize: '0.8rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{isWarmup ? 'Rounds:' : 'Sets:'}</label>
                   <input type="number" className="input" min={1} max={10} value={block.sets} onChange={e => updateBlock(bi, 'sets', parseInt(e.target.value))} style={{ width: 60, textAlign: 'center' }} />
                 </div>
                 <div style={{ flex: 1 }} />
                 <button onClick={() => removeBlock(bi)} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1.1rem' }}>✕</button>
               </div>
+              {isWarmup && (
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                  Players see each exercise's video on their phones, with nothing to log. The TV shows the names only.
+                </p>
+              )}
 
               {/* Block exercises */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginBottom: '0.5rem' }}>
@@ -203,11 +233,11 @@ export default function TemplatesPage() {
                   <div key={ei}>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 1fr auto', gap: '0.5rem', alignItems: 'center' }}>
                       <div style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-primary)' }}>{be.exercise?.name ?? 'Exercise'}</div>
-                      <input className="input" placeholder="Reps" value={be.custom_reps} onChange={e => updateExercise(bi, ei, 'custom_reps', e.target.value)} style={{ fontSize: '0.8rem', padding: '0.4rem 0.5rem', textAlign: 'center' }} />
+                      <input className="input" placeholder={isWarmup ? 'Reps / time' : 'Reps'} value={be.custom_reps} onChange={e => updateExercise(bi, ei, 'custom_reps', e.target.value)} style={{ fontSize: '0.8rem', padding: '0.4rem 0.5rem', textAlign: 'center' }} />
                       <input className="input" placeholder="Custom note (optional)" value={be.custom_notes} onChange={e => updateExercise(bi, ei, 'custom_notes', e.target.value)} style={{ fontSize: '0.8rem', padding: '0.4rem 0.5rem' }} />
                       <button onClick={() => removeExercise(bi, ei)} style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
                     </div>
-                    {be.exercise?.logs_velocity && (
+                    {be.exercise?.logs_velocity && !isWarmup && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem', paddingLeft: '0.75rem', flexWrap: 'wrap' }}>
                         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Target bar speed (m/s):</span>
                         <input className="input" type="number" step="0.01" min="0" placeholder="Min" value={be.target_velocity_min} onChange={e => updateExercise(bi, ei, 'target_velocity_min', e.target.value)} style={{ width: 80, fontSize: '0.8rem', padding: '0.35rem 0.5rem', textAlign: 'center' }} />
@@ -242,7 +272,8 @@ export default function TemplatesPage() {
                 <button className="btn-ghost" onClick={() => { setAddingTo(bi); setExSearch('') }} style={{ fontSize: '0.8rem', padding: '0.4rem 0.75rem', width: '100%' }}>+ Add Exercise</button>
               )}
             </div>
-          ))}
+            )
+          })}
 
           <button className="btn-ghost" onClick={addBlock} style={{ width: '100%', padding: '0.625rem', marginBottom: '1.25rem', fontSize: '0.9rem' }}>+ Add Block</button>
 
@@ -277,7 +308,7 @@ export default function TemplatesPage() {
                   if (!tmpl) { alert('Could not load template — try again'); return }
                   const mapped = {
                     ...tmpl,
-                    blocks: (tmpl.blocks ?? []).map((b: { block_label: string; sets: number; exercises: Array<{ exercise_id: string; custom_reps?: string; custom_notes?: string; target_velocity_min?: number | null; target_velocity_max?: number | null; exercise?: ExerciseLib; exercise_library?: ExerciseLib }> }) => ({
+                    blocks: warmupFirst((tmpl.blocks ?? []).map((b: { block_label: string; sets: number; exercises: Array<{ exercise_id: string; custom_reps?: string; custom_notes?: string; target_velocity_min?: number | null; target_velocity_max?: number | null; exercise?: ExerciseLib; exercise_library?: ExerciseLib }> }) => ({
                       ...b,
                       exercises: (b.exercises ?? []).map(e => ({
                         exercise_id: e.exercise_id,
@@ -287,7 +318,7 @@ export default function TemplatesPage() {
                         target_velocity_max: e.target_velocity_max != null ? String(e.target_velocity_max) : '',
                         exercise: e.exercise_library ?? e.exercise,
                       }))
-                    }))
+                    })))
                   }
                   setEditing(mapped)
                   // Scroll to editor
