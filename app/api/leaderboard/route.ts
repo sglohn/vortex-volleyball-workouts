@@ -21,6 +21,9 @@
 //   ?key=...           required only if LEADERBOARD_DISPLAY_KEY is set in Vercel
 //
 // Pounds moved counts both dumbbells on 2-dumbbell exercises (lib/loads.ts).
+// Med ball exercises count in pounds moved but not in PRs, Most Improved or
+// Exercise of the Day (switching to the 14 lb ball isn't a PR). Band sets
+// have no weight, so they only count as sets.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
@@ -374,6 +377,8 @@ export async function GET(req: NextRequest) {
   ]
   const exercises = await exerciseInfo(db, exerciseIds)
   const eq = (id: string) => exercises[id]?.equipment ?? null
+  // Lifts ranked by how heavy they were (PRs, Most Improved, Exercise of the Day)
+  const ranksByWeight = (id: string) => eq(id) !== 'medball'
   const exName = (id: string) => exercises[id]?.name ?? 'Lift'
 
   // ── Per-athlete totals for today ──
@@ -428,7 +433,7 @@ export async function GET(req: NextRequest) {
   // ── Page: Exercise of the Day (top set on each block's main lift) ──
   {
     const boards: Board[] = []
-    const lifts = mainLiftIds.filter(id => exercises[id]?.logsWeight).slice(0, 4)
+    const lifts = mainLiftIds.filter(id => exercises[id]?.logsWeight && ranksByWeight(id)).slice(0, 4)
     for (const exerciseId of lifts) {
       const best = new Map<string, { load: number; entered: number }>()
       for (const l of completedToday) {
@@ -568,12 +573,12 @@ export async function GET(req: NextRequest) {
   {
     const sets: LiftSet[] = []
     for (const l of history.logs) {
-      if (!l.weight_lbs || l.weight_lbs <= 0) continue
+      if (!l.weight_lbs || l.weight_lbs <= 0 || !ranksByWeight(l.exercise_id)) continue
       sets.push({ playerId: l.player_id, exerciseId: l.exercise_id, date: l.date, at: l.logged_at ?? l.date,
         entered: Number(l.weight_lbs), load: setLoad(l.weight_lbs, eq(l.exercise_id)), reps: l.reps_completed })
     }
     for (const l of completedToday) {
-      if (!l.weight_lbs || l.weight_lbs <= 0) continue
+      if (!l.weight_lbs || l.weight_lbs <= 0 || !ranksByWeight(l.exercise_id)) continue
       sets.push({ playerId: l.player_id, exerciseId: l.exercise_id, date, at: l.logged_at ?? date,
         entered: Number(l.weight_lbs), load: setLoad(l.weight_lbs, eq(l.exercise_id)), reps: l.reps_completed })
     }
@@ -596,12 +601,13 @@ export async function GET(req: NextRequest) {
   const allLifts: LiftSet[] = []
   for (const p of players) {
     for (const r of prior.get(p.id) ?? []) {
+      if (!ranksByWeight(r.exerciseId)) continue
       allLifts.push({ playerId: p.id, exerciseId: r.exerciseId, date: r.date, at: r.at, entered: r.entered,
         load: setLoad(r.entered, eq(r.exerciseId)), reps: r.reps })
     }
   }
   for (const l of completedToday) {
-    if (!l.weight_lbs || l.weight_lbs <= 0) continue
+    if (!l.weight_lbs || l.weight_lbs <= 0 || !ranksByWeight(l.exercise_id)) continue
     allLifts.push({ playerId: l.player_id, exerciseId: l.exercise_id, date, at: l.logged_at ?? new Date().toISOString(),
       entered: Number(l.weight_lbs), load: setLoad(l.weight_lbs, eq(l.exercise_id)), reps: l.reps_completed })
   }

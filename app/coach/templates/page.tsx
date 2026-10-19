@@ -1,11 +1,16 @@
 // FILE: app/coach/templates/page.tsx
+//
+// Workout templates. Band exercises (Large band / Hip band in Coach →
+// Exercises) get a "Recommended band" pick; players see it as the coach
+// pick when they log the set (components/WeightPicker.tsx).
 'use client'
 import { useState, useEffect } from 'react'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { isWarmupLabel, WARMUP_LABEL } from '@/lib/warmup'
+import { asEquipment, bandInfo, bandsFor, isBandEquipment } from '@/lib/loads'
 
-interface ExerciseLib { id: string; name: string; category?: string; default_sets: number; default_reps?: string; logs_weight: boolean; logs_velocity?: boolean }
-interface BlockExercise { exercise_id: string; custom_reps: string; custom_notes: string; target_velocity_min: string; target_velocity_max: string; exercise?: ExerciseLib }
+interface ExerciseLib { id: string; name: string; category?: string; default_sets: number; default_reps?: string; logs_weight: boolean; logs_velocity?: boolean; equipment?: string | null }
+interface BlockExercise { exercise_id: string; custom_reps: string; custom_notes: string; target_velocity_min: string; target_velocity_max: string; recommended_band: string; exercise?: ExerciseLib }
 interface Block { block_label: string; sets: number; exercises: BlockExercise[] }
 interface Template { id?: string; name: string; description: string; phase_type: string; warmup_notes: string; blocks: Block[] }
 
@@ -109,7 +114,7 @@ export default function TemplatesPage() {
       if (!p) return p
       const blocks = [...p.blocks]
       const block = { ...blocks[blockIdx] }
-      block.exercises = [...block.exercises, { exercise_id: ex.id, custom_reps: ex.default_reps ?? '', custom_notes: '', target_velocity_min: '', target_velocity_max: '', exercise: ex }]
+      block.exercises = [...block.exercises, { exercise_id: ex.id, custom_reps: ex.default_reps ?? '', custom_notes: '', target_velocity_min: '', target_velocity_max: '', recommended_band: '', exercise: ex }]
       blocks[blockIdx] = block
       return { ...p, blocks }
     })
@@ -127,7 +132,7 @@ export default function TemplatesPage() {
     })
   }
 
-  function updateExercise(blockIdx: number, exIdx: number, field: 'custom_reps' | 'custom_notes' | 'target_velocity_min' | 'target_velocity_max', val: string) {
+  function updateExercise(blockIdx: number, exIdx: number, field: 'custom_reps' | 'custom_notes' | 'target_velocity_min' | 'target_velocity_max' | 'recommended_band', val: string) {
     setEditing(p => {
       if (!p) return p
       const blocks = [...p.blocks]
@@ -295,6 +300,21 @@ export default function TemplatesPage() {
                         </span>
                       </div>
                     )}
+                    {!isWarmup && be.exercise?.logs_weight && isBandEquipment(asEquipment(be.exercise?.equipment)) && (() => {
+                      const choices = bandsFor(asEquipment(be.exercise?.equipment))
+                      const picked = bandInfo(be.recommended_band)
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.35rem', paddingLeft: '0.75rem', flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Recommended band:</span>
+                          <span aria-hidden style={{ width: 14, height: 14, borderRadius: '50%', background: picked?.swatch ?? 'transparent', border: picked ? '1px solid rgba(0,0,0,0.25)' : '1.5px dashed var(--gray-border)', flexShrink: 0 }} />
+                          <select className="input" value={choices.some(c => c.key === be.recommended_band) ? be.recommended_band : ''} onChange={e => updateExercise(bi, ei, 'recommended_band', e.target.value)}
+                            style={{ width: 'auto', minWidth: 170, fontSize: '0.8rem', padding: '0.35rem 0.5rem' }}>
+                            <option value="">No pick (player chooses)</option>
+                            {choices.map(c => <option key={c.key} value={c.key}>{c.color} ({c.level.toLowerCase()})</option>)}
+                          </select>
+                        </div>
+                      )
+                    })()}
                   </div>
                   )
                 })}
@@ -355,7 +375,7 @@ export default function TemplatesPage() {
                   if (!tmpl) { alert('Could not load template — try again'); return }
                   const mapped = {
                     ...tmpl,
-                    blocks: warmupFirst((tmpl.blocks ?? []).map((b: { block_label: string; sets: number; exercises: Array<{ exercise_id: string; custom_reps?: string; custom_notes?: string; target_velocity_min?: number | null; target_velocity_max?: number | null; exercise?: ExerciseLib; exercise_library?: ExerciseLib }> }) => ({
+                    blocks: warmupFirst((tmpl.blocks ?? []).map((b: { block_label: string; sets: number; exercises: Array<{ exercise_id: string; custom_reps?: string; custom_notes?: string; target_velocity_min?: number | null; target_velocity_max?: number | null; recommended_band?: string | null; exercise?: ExerciseLib; exercise_library?: ExerciseLib }> }) => ({
                       ...b,
                       exercises: (b.exercises ?? []).map(e => ({
                         exercise_id: e.exercise_id,
@@ -363,6 +383,7 @@ export default function TemplatesPage() {
                         custom_notes: e.custom_notes ?? '',
                         target_velocity_min: e.target_velocity_min != null ? String(e.target_velocity_min) : '',
                         target_velocity_max: e.target_velocity_max != null ? String(e.target_velocity_max) : '',
+                        recommended_band: e.recommended_band ?? '',
                         exercise: e.exercise_library ?? e.exercise,
                       }))
                     })))

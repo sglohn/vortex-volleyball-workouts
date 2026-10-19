@@ -4,7 +4,8 @@
 // possible mistakes flagged (lib/outliers.ts), and corrections.
 //
 //   GET    ?date=YYYY-MM-DD   all sessions that club-local day (default today)
-//   PATCH  { id, weight_lbs, reps_completed, velocity_ms, completed }   fix a set
+//   PATCH  { id, weight_lbs, reps_completed, velocity_ms, completed, band? }   fix a set
+//          (band: band exercises only, e.g. 'hip_blue' — lib/loads.ts BANDS)
 //   DELETE { id }                                                       remove a set
 //
 // Leaderboards, totals and suggestions all read set_logs, so a fix here
@@ -13,7 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { clubDateString, clubDayBounds, isDateString } from '@/lib/clubTime'
-import { asEquipment, setPoundsMoved, type Equipment } from '@/lib/loads'
+import { asBand, asEquipment, isBandEquipment, setPoundsMoved, type Equipment } from '@/lib/loads'
 import { flagExerciseSets } from '@/lib/outliers'
 
 export const dynamic = 'force-dynamic'
@@ -24,6 +25,7 @@ type LogRow = {
   id: string; session_id: string; exercise_id: string; set_number: number
   weight_lbs: number | null; reps_completed: number | null; velocity_ms: number | null
   completed: boolean; logged_at: string | null
+  band?: string | null   // after the bands migration
 }
 type PlayerJoin = { id: string; name: string; jersey_number?: string | null }
 type TeamJoin = { id: string; name: string; color?: string | null; age_group?: string | null }
@@ -56,7 +58,7 @@ async function logsForSessions(db: Db, sessionIds: string[], exerciseIds?: strin
     const rows = await fetchAll<LogRow>((from, to) => {
       let q = db
         .from('set_logs')
-        .select('id, session_id, exercise_id, set_number, weight_lbs, reps_completed, velocity_ms, completed, logged_at')
+        .select('*')   // '*' so band comes along once the bands migration has been run
         .in('session_id', ids)
       if (exerciseIds) q = q.in('exercise_id', exerciseIds)
       return q.order('id').range(from, to)
@@ -189,6 +191,7 @@ export async function GET(req: NextRequest) {
           reps: l.reps_completed,
           velocity: l.velocity_ms === null ? null : Number(l.velocity_ms),
           completed: l.completed,
+          band: asBand(l.band),
         })),
         { equipment: info.equipment, logsWeight: info.logsWeight, history: historyWeights[key] ?? [], previousBest: historyBest[key] ?? 0 },
       )
@@ -215,6 +218,7 @@ export async function GET(req: NextRequest) {
             weightLbs: l.weight_lbs === null ? null : Number(l.weight_lbs),
             repsCompleted: l.reps_completed,
             velocityMs: l.velocity_ms === null ? null : Number(l.velocity_ms),
+            band: isBandEquipment(info.equipment) ? asBand(l.band) : null,
             completed: l.completed,
             loggedAt: l.logged_at,
             flags: notes,
@@ -262,6 +266,7 @@ export async function PATCH(req: NextRequest) {
   }
   if ('velocity_ms' in body) update.velocity_ms = numOrNull(body.velocity_ms)
   if ('completed' in body) update.completed = !!body.completed
+  if ('band' in body) update.band = asBand(body.band)
   if (!Object.keys(update).length) return NextResponse.json({ error: 'Nothing to change' }, { status: 400 })
 
   const db = createServerClient()

@@ -11,18 +11,30 @@
 //                 (the bar's felt weight is added in pounds-moved math).
 //   1 dumbbell  - Tap the number printed on the dumbbell.
 //   2 dumbbells - Tap the number on ONE dumbbell; shows "2 × 30 = 60 lbs".
-//   Other/unset - A plain number box (machine, med ball, etc.).
+//   Med ball    - Two buttons: 10 lb ball (picked to start) or the 14 lb ball.
+//   Large band /
+//   Hip band    - Tap the band color. value is the band key ('hip_blue'),
+//                 which the pages save as set_logs.band (lib/loads.ts
+//                 entryPayload). Shows the coach's recommended band and the
+//                 band used last time.
+//   Other/unset - A plain number box (machine, sled, etc.).
 //
-// Every mode keeps a small "Type a number instead" link as a fallback.
-// `value` / `onChange` are the same string the pages already keep in
-// weightInput, so saving works exactly as before.
+// Plates and dumbbells keep a small "Type a number instead" link as a
+// fallback. `value` / `onChange` are the same string the pages already keep
+// in weightInput.
+//
+// Starting value: med ball starts on the ball used on the last set today,
+// or 10 lbs; a band exercise starts on the band used on the last set today
+// (nothing picked on the first set). This happens when the picker first
+// shows, so pages give it a `key` per exercise and set to start fresh.
 
 'use client'
 
 import { useEffect, useState } from 'react'
 import {
-  BAR_LBS, DUMBBELLS_LBS, PLATES_LBS, LANDMINE_BAR_LBS,
-  loadLabel, platesPerSide, type Equipment,
+  BAR_LBS, DUMBBELLS_LBS, PLATES_LBS, LANDMINE_BAR_LBS, MEDBALLS_LBS, MEDBALL_DEFAULT_LBS,
+  asBand, bandInfo, bandLabel, bandLongLabel, bandsFor, isBandEquipment,
+  loadLabel, platesPerSide, type BandInfo, type Equipment,
 } from '@/lib/loads'
 
 interface Props {
@@ -33,6 +45,12 @@ interface Props {
   suggested?: number | null
   /** Larger buttons for the shared kiosk screen. */
   big?: boolean
+  /** What they used on their last set of this exercise today (lib/loads.ts previousEntry). */
+  previous?: string
+  /** Band exercises: the band the coach recommends in this workout. */
+  recommendedBand?: string | null
+  /** Band exercises: the band they used the last time they did this exercise. */
+  lastBand?: string | null
 }
 
 const labelStyle: React.CSSProperties = {
@@ -164,13 +182,53 @@ function SwitchLink({ text, onClick }: { text: string; onClick: () => void }) {
   )
 }
 
+function BandButton({ band, on, coachPick, big, onTap }: { band: BandInfo; on: boolean; coachPick: boolean; big?: boolean; onTap: () => void }) {
+  return (
+    <button type="button" onClick={onTap} aria-pressed={on}
+      style={{ position: 'relative', padding: big ? '0.9rem 0.25rem 0.7rem' : '0.75rem 0.25rem 0.6rem', borderRadius: 12, cursor: 'pointer',
+        background: band.swatch, color: band.ink,
+        border: on ? '3px solid var(--carolina)' : '3px solid transparent',
+        boxShadow: on ? '0 0 0 3px var(--carolina-light)' : '0 1px 3px rgba(0,0,0,0.15)',
+        opacity: on ? 1 : 0.92, textAlign: 'center' }}>
+      {coachPick && (
+        <span style={{ position: 'absolute', top: -9, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', background: 'var(--volt)', color: '#0a0f0d', borderRadius: 4, padding: '0.05rem 0.35rem' }}>Coach pick</span>
+      )}
+      <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: big ? '1.25rem' : '1.1rem', lineHeight: 1.1 }}>{on ? '✓ ' : ''}{band.color}</span>
+      <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 700, opacity: 0.9, marginTop: '0.15rem' }}>{band.level}</span>
+    </button>
+  )
+}
+
+function MedballButton({ lbs, on, big, onTap }: { lbs: number; on: boolean; big?: boolean; onTap: () => void }) {
+  return (
+    <button type="button" onClick={onTap} aria-pressed={on}
+      style={{ padding: big ? '1rem 0' : '0.8rem 0', borderRadius: 12, cursor: 'pointer',
+        border: `2px solid ${on ? 'var(--carolina)' : 'var(--gray-border)'}`, background: on ? 'var(--carolina)' : 'var(--white)', color: on ? '#fff' : 'var(--text-primary)' }}>
+      <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: big ? '1.6rem' : '1.4rem', lineHeight: 1 }}>{on ? '✓ ' : ''}{lbs} lb</span>
+      <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, opacity: 0.8, marginTop: '0.2rem' }}>
+        {lbs === MEDBALL_DEFAULT_LBS ? 'med ball' : 'the one heavy ball'}
+      </span>
+    </button>
+  )
+}
+
 // ── The picker ────────────────────────────────────────────────────────────
 
-export default function WeightPicker({ equipment, value, onChange, suggested, big }: Props) {
+export default function WeightPicker({ equipment, value, onChange, suggested, big, previous, recommendedBand, lastBand }: Props) {
   const isBar = equipment === 'barbell'
   const isLandmine = equipment === 'landmine'
   const isDb = equipment === 'dumbbell_1' || equipment === 'dumbbell_2'
+  const isMedball = equipment === 'medball'
+  const isBand = isBandEquipment(equipment)
   const tapMode = isBar || isLandmine || isDb
+
+  // Starting value when the picker first shows (see top of file)
+  useEffect(() => {
+    if (value !== '') return
+    if (isMedball) onChange(previous && MEDBALLS_LBS.includes(Number(previous)) ? previous : String(MEDBALL_DEFAULT_LBS))
+    else if (isBand && asBand(previous) && bandsFor(equipment).some(b => b.key === previous)) onChange(previous!)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const [typing, setTyping] = useState(false)
   // Plates on ONE side (barbell) or on the end (landmine), in the order tapped.
@@ -207,6 +265,14 @@ export default function WeightPicker({ equipment, value, onChange, suggested, bi
   if (isLandmine) { title = 'Landmine'; help = 'Tap the plates on the end of the bar. Nothing on it? Tap "Empty bar".' }
   if (equipment === 'dumbbell_1') { title = '1 dumbbell'; help = 'Tap the number printed on the dumbbell.' }
   if (equipment === 'dumbbell_2') { title = '2 dumbbells'; help = 'Holding two? Tap the number on ONE of them. We add both up for you.' }
+  if (isMedball) { title = 'Med ball'; help = 'The 10 lb ball is picked for you. Using the 14 lb ball? Tap it.' }
+  if (equipment === 'large_band') { title = 'Large band'; help = 'Tap the color of the band you used.' }
+  if (equipment === 'hip_band') { title = 'Hip band'; help = 'Tap the color of the band you used.' }
+
+  // Band exercises: only show bands that belong to this kind of band
+  const bandChoices = bandsFor(equipment)
+  const coachBand = bandChoices.some(b => b.key === recommendedBand) ? recommendedBand! : null
+  const lastTimeBand = bandChoices.some(b => b.key === lastBand) ? lastBand! : null
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
@@ -265,8 +331,53 @@ export default function WeightPicker({ equipment, value, onChange, suggested, bi
         </>
       )}
 
+      {/* ── Med ball: 10 or 14 ── */}
+      {isMedball && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+          {MEDBALLS_LBS.map(w => (
+            <MedballButton key={w} lbs={w} big={big} on={num === w} onTap={() => onChange(String(w))} />
+          ))}
+        </div>
+      )}
+
+      {/* ── Bands: tap the color ── */}
+      {isBand && (
+        <>
+          {(coachBand || lastTimeBand) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+              {coachBand && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.45rem 0.625rem', borderRadius: 8, background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)' }}>
+                  <span aria-hidden style={{ width: 14, height: 14, borderRadius: '50%', background: bandInfo(coachBand)?.swatch, border: '1px solid rgba(0,0,0,0.2)', flexShrink: 0 }} />
+                  <span style={{ flex: 1, fontSize: '0.82rem', color: 'var(--carolina-deep)', fontWeight: 700 }}>Coach recommends: {bandLongLabel(coachBand)}</span>
+                  {value !== coachBand && (
+                    <button type="button" onClick={() => onChange(coachBand)}
+                      style={{ fontSize: '0.72rem', color: 'var(--carolina)', fontWeight: 700, background: 'var(--white)', border: '1px solid var(--carolina-border)', borderRadius: 5, padding: '0.2rem 0.55rem', cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                      Use it →
+                    </button>
+                  )}
+                </div>
+              )}
+              {lastTimeBand && (
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                  Last time you used the <strong>{bandLabel(lastTimeBand).toLowerCase()}</strong>.
+                </div>
+              )}
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(bandChoices.length, big ? 5 : 3)}, 1fr)`, gap: '0.5rem', paddingTop: coachBand ? '0.4rem' : 0 }}>
+            {bandChoices.map(b => (
+              <BandButton key={b.key} band={b} big={big} on={value === b.key} coachPick={b.key === coachBand}
+                onTap={() => onChange(value === b.key ? '' : b.key)} />
+            ))}
+          </div>
+          {value && bandInfo(value) && (
+            <TotalBox main={bandLabel(value)} sub={bandInfo(value)!.level} />
+          )}
+        </>
+      )}
+
       {/* ── Typed number: "other" equipment, or the fallback ── */}
-      {(!tapMode || typing) && (
+      {((!tapMode && !isMedball && !isBand) || typing) && (
         <>
           <TypedInput value={value} onChange={onChange}
             placeholder={suggested ? String(suggested) : '0'} />

@@ -10,14 +10,18 @@
 //   - tapping one of the "Previous sets today" chips while lifting
 //     (opens straight into editing that set)
 //
+// Band exercises show the band colors to tap and med ball exercises show
+// the 10 / 14 lb balls (components/WeightPicker.tsx) instead of a number box.
+//
 // Saving re-sends the set to /api/sets (same as logging it), which updates
 // the existing set instead of adding a new one. Coaches can still fix or
 // delete any set from Coach → Workout Logs.
 'use client'
 import { useState } from 'react'
-import { loadLabel, weightInputLabel, type Equipment } from '@/lib/loads'
+import { entryText, entryValue, isBandEquipment, asBand, weightInputLabel, type Equipment } from '@/lib/loads'
+import WeightPicker from '@/components/WeightPicker'
 
-export interface FixSetLog { set_number: number; weight_lbs?: number; reps_completed?: number; velocity_ms?: number; completed: boolean }
+export interface FixSetLog { set_number: number; weight_lbs?: number; reps_completed?: number; velocity_ms?: number; band?: string | null; completed: boolean }
 export interface FixSetExercise {
   id: string
   name: string
@@ -27,7 +31,8 @@ export interface FixSetExercise {
   skipped?: boolean
   setLogs: FixSetLog[]
 }
-export interface FixSetValues { weight: number | null; reps: number | null; velocity: number | null }
+/** band: band exercises only (the band key, or null) */
+export interface FixSetValues { weight: number | null; reps: number | null; velocity: number | null; band?: string | null }
 
 interface Props {
   title: string
@@ -38,6 +43,7 @@ interface Props {
   onClose: () => void
 }
 
+// weight holds the band key on band exercises (same as the logging pages)
 type Draft = { weight: string; reps: string; velocity: string }
 
 const str = (n: number | undefined | null) => (n === undefined || n === null ? '' : String(n))
@@ -45,10 +51,16 @@ const num = (s: string) => { const n = parseFloat(s); return Number.isFinite(n) 
 
 function setText(ex: FixSetExercise, log: FixSetLog): string {
   const parts: string[] = []
-  if (ex.logs_weight && log.weight_lbs) parts.push(loadLabel(log.weight_lbs, ex.equipment ?? null))
+  const load = ex.logs_weight ? entryText(log, ex.equipment ?? null) : ''
+  if (load) parts.push(load)
   if (log.reps_completed !== undefined && log.reps_completed !== null) parts.push(`${log.reps_completed} reps`)
   if (ex.logs_velocity && log.velocity_ms) parts.push(`${log.velocity_ms} m/s`)
   return parts.join(' · ') || 'Done'
+}
+
+/** Bands and med balls are tapped (no number box). */
+function tapsToPick(ex: FixSetExercise): boolean {
+  return isBandEquipment(ex.equipment) || ex.equipment === 'medball'
 }
 
 export default function FixSetsSheet({ title, exercises, startEditing, onSave, onClose }: Props) {
@@ -58,7 +70,7 @@ export default function FixSetsSheet({ title, exercises, startEditing, onSave, o
     if (!startEditing) return { weight: '', reps: '', velocity: '' }
     const ex = exercises.find(e => e.id === startEditing.exerciseId)
     const log = ex?.setLogs.find(l => l.set_number === startEditing.setNumber)
-    return { weight: str(log?.weight_lbs), reps: str(log?.reps_completed), velocity: str(log?.velocity_ms) }
+    return { weight: entryValue(log, ex?.equipment ?? null), reps: str(log?.reps_completed), velocity: str(log?.velocity_ms) }
   })
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
@@ -68,7 +80,7 @@ export default function FixSetsSheet({ title, exercises, startEditing, onSave, o
 
   function startEdit(ex: FixSetExercise, log: FixSetLog) {
     setEditing(`${ex.id}:${log.set_number}`)
-    setDraft({ weight: str(log.weight_lbs), reps: str(log.reps_completed), velocity: str(log.velocity_ms) })
+    setDraft({ weight: entryValue(log, ex.equipment ?? null), reps: str(log.reps_completed), velocity: str(log.velocity_ms) })
     setError('')
     setSavedKey(null)
   }
@@ -76,7 +88,10 @@ export default function FixSetsSheet({ title, exercises, startEditing, onSave, o
   async function save(ex: FixSetExercise, setNumber: number) {
     setSaving(true)
     setError('')
-    const err = await onSave(ex.id, setNumber, { weight: num(draft.weight), reps: num(draft.reps), velocity: num(draft.velocity) })
+    const isBand = isBandEquipment(ex.equipment)
+    const err = await onSave(ex.id, setNumber, isBand
+      ? { weight: null, band: asBand(draft.weight), reps: num(draft.reps), velocity: num(draft.velocity) }
+      : { weight: num(draft.weight), reps: num(draft.reps), velocity: num(draft.velocity) })
     setSaving(false)
     if (err) { setError(err); return }
     setSavedKey(`${ex.id}:${setNumber}`)
@@ -125,8 +140,13 @@ export default function FixSetsSheet({ title, exercises, startEditing, onSave, o
 
                     {isEditing && (
                       <div style={{ marginTop: '0.6rem' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${1 + (ex.logs_weight ? 1 : 0) + (ex.logs_velocity ? 1 : 0)}, minmax(0, 1fr))`, gap: '0.5rem' }}>
-                          {ex.logs_weight && (
+                        {ex.logs_weight && tapsToPick(ex) && (
+                          <div style={{ marginBottom: '0.5rem' }}>
+                            <WeightPicker equipment={ex.equipment} value={draft.weight} onChange={v => setDraft(d => ({ ...d, weight: v }))} />
+                          </div>
+                        )}
+                        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${1 + (ex.logs_weight && !tapsToPick(ex) ? 1 : 0) + (ex.logs_velocity ? 1 : 0)}, minmax(0, 1fr))`, gap: '0.5rem' }}>
+                          {ex.logs_weight && !tapsToPick(ex) && (
                             <div>
                               <label style={label}>{weightInputLabel(ex.equipment ?? null)}</label>
                               <input className="input" type="number" inputMode="decimal" value={draft.weight} onChange={e => setDraft(d => ({ ...d, weight: e.target.value }))} style={box} />

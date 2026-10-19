@@ -1,12 +1,21 @@
 // FILE: app/api/coach/templates/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { asBand } from '@/lib/loads'
 
 // Target bar speed from the builder: blank → null, otherwise a number in m/s
 function toSpeed(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null
   const n = parseFloat(String(v))
   return isFinite(n) && n > 0 ? n : null
+}
+
+// Coach's recommended band for a band exercise ('hip_blue', lib/loads.ts).
+// Only sent when one is picked, so saving still works for workouts with no
+// band picks before the bands migration has been run.
+function bandField(v: unknown): { recommended_band?: string } {
+  const band = asBand(v)
+  return band ? { recommended_band: band } : {}
 }
 
 export async function GET(req: NextRequest) {
@@ -83,9 +92,11 @@ export async function POST(req: NextRequest) {
           custom_notes: ex.custom_notes ?? null,
           target_velocity_min: toSpeed(ex.target_velocity_min),
           target_velocity_max: toSpeed(ex.target_velocity_max),
+          ...bandField(ex.recommended_band),
           sort_order: ei,
         }))
-        await db.from('template_block_exercises').insert(exerciseRows)
+        const { error: exErr } = await db.from('template_block_exercises').insert(exerciseRows)
+        if (exErr) return NextResponse.json({ error: `Exercises in block ${block.block_label} not saved: ${exErr.message}` }, { status: 500 })
       }
     }
   }
@@ -132,9 +143,11 @@ export async function PUT(req: NextRequest) {
           custom_notes: ex.custom_notes ?? null,
           target_velocity_min: toSpeed(ex.target_velocity_min),
           target_velocity_max: toSpeed(ex.target_velocity_max),
+          ...bandField(ex.recommended_band),
           sort_order: ei,
         }))
-        await db.from('template_block_exercises').insert(exerciseRows)
+        const { error: exErr } = await db.from('template_block_exercises').insert(exerciseRows)
+        if (exErr) return NextResponse.json({ error: `Exercises in block ${block.block_label} not saved: ${exErr.message}` }, { status: 500 })
       }
     }
   }

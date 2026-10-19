@@ -528,7 +528,7 @@ export default function ExercisesPage() {
               <div style={{ display: 'flex', gap: '1rem', gridColumn: '1/-1' }}>
                 <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>
                   <input type="checkbox" checked={form.logs_weight} onChange={e => setForm(p => ({ ...p, logs_weight: e.target.checked }))} />
-                  Log weight
+                  Log weight or band
                 </label>
                 {FEATURES.vbt && (
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 500 }}>
@@ -547,6 +547,16 @@ export default function ExercisesPage() {
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.35rem 0 0' }}>
                     Dumbbell exercises: players enter the number on the dumbbell and suggestions are given the same way (5–50 by 5s). With 2 dumbbells, pounds moved count both. Barbell suggestions are always loadable on a 45 lb bar.
                   </p>
+                  {(form.equipment === 'large_band' || form.equipment === 'hip_band') && (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.35rem 0 0' }}>
+                      Players tap the band color they used instead of a weight. Pick a recommended band for this exercise when you add it to a workout in Templates.
+                    </p>
+                  )}
+                  {form.equipment === 'medball' && (
+                    <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.35rem 0 0' }}>
+                      Players start on the 10 lb ball and can switch to the 14 lb ball. No weight is suggested.
+                    </p>
+                  )}
                 </div>
               )}
               {FEATURES.vbt && form.logs_velocity && (

@@ -1,8 +1,12 @@
 // FILE: app/session/[date]/page.tsx
+//
+// Session board + shared logging. Band exercises show the band colors with
+// the coach's pick and save the band; med ball exercises start on the 10 lb
+// ball (components/WeightPicker.tsx, lib/loads.ts).
 'use client'
 import { useState, useEffect, useCallback, use, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { loadLabel, plateText, type Equipment } from '@/lib/loads'
+import { entryPayload, entryText, loadLabel, plateText, previousEntry, type Equipment } from '@/lib/loads'
 import WeightPicker from '@/components/WeightPicker'
 import BrandMark from '@/components/BrandMark'
 import { withPass } from '@/lib/playerPass'
@@ -40,7 +44,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
   const [checkingIn, setCheckingIn] = useState(false)
 
   // Player workout state
-  const [workout, setWorkout] = useState<{ blocks: Array<{ id: string; block_label: string; sets: number; exercises: Array<{ id: string; name: string; logs_weight: boolean; logs_velocity?: boolean; equipment?: Equipment | null; default_reps?: string; customReps?: string; targetVelocityMin?: number | null; targetVelocityMax?: number | null; recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number; sourceLabel?: string; detail?: string; adjustmentMessage?: string } | null; setLogs: Array<{ set_number: number; weight_lbs?: number; reps_completed?: number; velocity_ms?: number; completed: boolean }> }> }> } | null>(null)
+  const [workout, setWorkout] = useState<{ blocks: Array<{ id: string; block_label: string; sets: number; exercises: Array<{ id: string; name: string; logs_weight: boolean; logs_velocity?: boolean; equipment?: Equipment | null; default_reps?: string; customReps?: string; targetVelocityMin?: number | null; targetVelocityMax?: number | null; recommendedBand?: string | null; lastBand?: string | null; recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number; sourceLabel?: string; detail?: string; adjustmentMessage?: string } | null; setLogs: Array<{ set_number: number; weight_lbs?: number; band?: string | null; reps_completed?: number; velocity_ms?: number; completed: boolean }> }> }> } | null>(null)
   const [sessionInfo, setSessionInfo] = useState<{ sessionId: string; playerId: string; playerName: string; templateId?: string } | null>(null)
   const [activeBlock, setActiveBlock] = useState<string | null>(null)
   const [activeExIdx, setActiveExIdx] = useState(0)
@@ -117,7 +121,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
     if (d.source === 'template' && d.template) {
       const logsRes = await fetch(`/api/sets?sessionId=${player.sessionId}`, withPass(pass))
       const logsData = logsRes.ok ? await logsRes.json() : { logs: [] }
-      const existingLogs: Array<{exercise_id: string; set_number: number; weight_lbs?: number; reps_completed?: number; completed: boolean}> = logsData.logs ?? []
+      const existingLogs: Array<{exercise_id: string; set_number: number; weight_lbs?: number; band?: string | null; reps_completed?: number; completed: boolean}> = logsData.logs ?? []
 
       const templateWithLogs = {
         ...d.template,
@@ -209,7 +213,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sessionId: sessionInfo.sessionId, exerciseId: ex.id, setNumber: activeSetNum,
-        weightLbs: weightInput ? parseFloat(weightInput) : null,
+        ...entryPayload(ex.equipment, weightInput),   // weightLbs, or band for band exercises
         repsCompleted: repsInput ? parseInt(repsInput) : null, completed,
         velocityMs: velocityInput ? parseFloat(velocityInput) : null,
         targetReps: ex.customReps ?? ex.default_reps ?? null,
@@ -392,6 +396,11 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                   {ex.logs_weight && (
                     <div style={{ marginBottom: '0.875rem' }}>
                       <WeightPicker big
+                        // fresh picker per player, exercise and set, so bands / med balls start from the last set
+                        key={`${sessionInfo.sessionId}:${ex.id}:${activeSetNum}`}
+                        previous={previousEntry(ex.setLogs, ex.equipment)}
+                        recommendedBand={ex.recommendedBand ?? null}
+                        lastBand={ex.lastBand ?? null}
                         equipment={ex.equipment}
                         value={weightInput}
                         onChange={setWeightInput}
@@ -422,7 +431,7 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
                     <div style={{ marginTop: '0.875rem', display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
                       {ex.setLogs.filter(l => l.completed).map((log, i) => (
                         <div key={i} style={{ background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 6, padding: '0.25rem 0.625rem', fontSize: '0.78rem', color: 'var(--carolina-deep)', fontWeight: 600 }}>
-                          Set {log.set_number}: {log.weight_lbs ? `${loadLabel(log.weight_lbs, ex.equipment)} × ` : ''}{log.reps_completed}{log.velocity_ms ? ` @ ${Number(log.velocity_ms).toFixed(2)} m/s` : ''}
+                          Set {log.set_number}: {entryText(log, ex.equipment) ? `${entryText(log, ex.equipment)} × ` : ''}{log.reps_completed}{log.velocity_ms ? ` @ ${Number(log.velocity_ms).toFixed(2)} m/s` : ''}
                         </div>
                       ))}
                     </div>

@@ -5,9 +5,11 @@
 // just notes.
 //
 // Weights are compared in the units players enter (lib/loads.ts): barbell
-// total, the number on one dumbbell, or landmine plates.
+// total, the number on one dumbbell, or landmine plates. Med balls only
+// check that the weight is a ball we have (10 or 14); band sets have no
+// weight to check.
 
-import { DUMBBELLS_LBS, type Equipment } from '@/lib/loads'
+import { DUMBBELLS_LBS, MEDBALLS_LBS, type Equipment } from '@/lib/loads'
 
 export type FlagSet = {
   id: string
@@ -15,6 +17,8 @@ export type FlagSet = {
   reps: number | null
   velocity: number | null
   completed: boolean
+  /** band exercises: the band key logged, if any */
+  band?: string | null
 }
 
 export type FlagContext = {
@@ -62,58 +66,68 @@ export function flagExerciseSets(sets: FlagSet[], ctx: FlagContext): Record<stri
 
     // ── Weight that can't be right for the equipment ──
     if (ctx.logsWeight && (w === null || w === undefined)) {
-      if (ctx.equipment === 'barbell' || ctx.equipment === 'dumbbell_1' || ctx.equipment === 'dumbbell_2') {
+      if (ctx.equipment === 'barbell' || ctx.equipment === 'dumbbell_1' || ctx.equipment === 'dumbbell_2' || ctx.equipment === 'medball') {
         notes.push('No weight entered')
       }
     }
-    if (w !== null && w !== undefined && w > 0) {
-      if (ctx.equipment === 'barbell') {
-        if (w < 45) notes.push('Under 45 lbs, but the empty bar is 45. Plates only?')
-        else if ((w - 45) % 5 !== 0) notes.push(`${fmt(w)} can't be loaded with your plates`)
+    if ((ctx.equipment === 'large_band' || ctx.equipment === 'hip_band') && !set.band) {
+      notes.push('No band picked')
+    }
+    if (ctx.equipment === 'medball') {
+      if (w !== null && w !== undefined && w > 0 && !MEDBALLS_LBS.includes(w)) {
+        notes.push(`${fmt(w)} isn't a med ball we have (${MEDBALLS_LBS.join(' or ')} lbs)`)
       }
-      if (ctx.equipment === 'dumbbell_1' || ctx.equipment === 'dumbbell_2') {
-        const max = DUMBBELLS_LBS[DUMBBELLS_LBS.length - 1]
-        if (w > max) {
-          if (ctx.equipment === 'dumbbell_2' && DUMBBELLS_LBS.includes(w / 2)) {
-            notes.push(`No ${fmt(w)}# dumbbell. Total of both? Each DB would be ${fmt(w / 2)}`)
-          } else {
-            notes.push(`No ${fmt(w)}# dumbbell (heaviest is ${max})`)
+    } else if (ctx.equipment !== 'large_band' && ctx.equipment !== 'hip_band') {
+      // Plates and dumbbells: sizes, and compared with usual
+      if (w !== null && w !== undefined && w > 0) {
+        if (ctx.equipment === 'barbell') {
+          if (w < 45) notes.push('Under 45 lbs, but the empty bar is 45. Plates only?')
+          else if ((w - 45) % 5 !== 0) notes.push(`${fmt(w)} can't be loaded with your plates`)
+        }
+        if (ctx.equipment === 'dumbbell_1' || ctx.equipment === 'dumbbell_2') {
+          const max = DUMBBELLS_LBS[DUMBBELLS_LBS.length - 1]
+          if (w > max) {
+            if (ctx.equipment === 'dumbbell_2' && DUMBBELLS_LBS.includes(w / 2)) {
+              notes.push(`No ${fmt(w)}# dumbbell. Total of both? Each DB would be ${fmt(w / 2)}`)
+            } else {
+              notes.push(`No ${fmt(w)}# dumbbell (heaviest is ${max})`)
+            }
+          } else if (!DUMBBELLS_LBS.includes(w)) {
+            notes.push(`${fmt(w)} isn't a dumbbell size`)
           }
-        } else if (!DUMBBELLS_LBS.includes(w)) {
-          notes.push(`${fmt(w)} isn't a dumbbell size`)
+        }
+        if (ctx.equipment === 'landmine' && (w * 2) % 5 !== 0) {
+          notes.push(`${fmt(w)} can't be loaded with your plates`)
         }
       }
-      if (ctx.equipment === 'landmine' && (w * 2) % 5 !== 0) {
-        notes.push(`${fmt(w)} can't be loaded with your plates`)
-      }
-    }
 
-    // ── Compared with this player's earlier sessions ──
-    if (w !== null && w !== undefined && w > 0 && usual && usual > 0) {
-      let historyNote = ''
-      if (ctx.equipment === 'dumbbell_2' && Math.abs(w - 2 * usual) / (2 * usual) <= 0.1 && w >= 1.6 * usual) {
-        historyNote = `About double their usual ${fmt(usual)}#. May be the total of both DBs`
-      } else if (ctx.equipment === 'landmine' && Math.abs(w - (usual + 45)) <= 5) {
-        historyNote = `About 45 over their usual ${fmt(usual)}. May include the bar`
-      } else if (ctx.previousBest > 0 && w > ctx.previousBest * R.overBestRatio && w - ctx.previousBest >= R.minGapLbs) {
-        historyNote = `${Math.round((w / ctx.previousBest - 1) * 100)}% over their previous best (${fmt(ctx.previousBest)})`
-      } else if (w >= usual * R.heavierRatio && w - usual >= R.minGapLbs) {
-        historyNote = `Much heavier than usual (usually about ${fmt(usual)})`
-      } else if (w <= usual * R.lighterRatio && usual - w >= R.minGapLbs) {
-        historyNote = `Much lighter than usual (usually about ${fmt(usual)})`
+      // ── Compared with this player's earlier sessions ──
+      if (w !== null && w !== undefined && w > 0 && usual && usual > 0) {
+        let historyNote = ''
+        if (ctx.equipment === 'dumbbell_2' && Math.abs(w - 2 * usual) / (2 * usual) <= 0.1 && w >= 1.6 * usual) {
+          historyNote = `About double their usual ${fmt(usual)}#. May be the total of both DBs`
+        } else if (ctx.equipment === 'landmine' && Math.abs(w - (usual + 45)) <= 5) {
+          historyNote = `About 45 over their usual ${fmt(usual)}. May include the bar`
+        } else if (ctx.previousBest > 0 && w > ctx.previousBest * R.overBestRatio && w - ctx.previousBest >= R.minGapLbs) {
+          historyNote = `${Math.round((w / ctx.previousBest - 1) * 100)}% over their previous best (${fmt(ctx.previousBest)})`
+        } else if (w >= usual * R.heavierRatio && w - usual >= R.minGapLbs) {
+          historyNote = `Much heavier than usual (usually about ${fmt(usual)})`
+        } else if (w <= usual * R.lighterRatio && usual - w >= R.minGapLbs) {
+          historyNote = `Much lighter than usual (usually about ${fmt(usual)})`
+        }
+        if (historyNote) notes.push(historyNote)
       }
-      if (historyNote) notes.push(historyNote)
-    }
 
-    // ── Compared with their other sets today (only when there's no history) ──
-    if (w !== null && w !== undefined && w > 0 && !usual) {
-      const others = sets
-        .filter(s => s.id !== set.id && s.completed && s.weight && s.weight > 0)
-        .map(s => s.weight as number)
-      if (others.length >= 2) {
-        const typical = median(others)
-        if ((w >= typical * R.sameSessionHigh || w <= typical * R.sameSessionLow) && Math.abs(w - typical) >= R.minGapLbs) {
-          notes.push(`Very different from their other sets today (about ${fmt(typical)})`)
+      // ── Compared with their other sets today (only when there's no history) ──
+      if (w !== null && w !== undefined && w > 0 && !usual) {
+        const others = sets
+          .filter(s => s.id !== set.id && s.completed && s.weight && s.weight > 0)
+          .map(s => s.weight as number)
+        if (others.length >= 2) {
+          const typical = median(others)
+          if ((w >= typical * R.sameSessionHigh || w <= typical * R.sameSessionLow) && Math.abs(w - typical) >= R.minGapLbs) {
+            notes.push(`Very different from their other sets today (about ${fmt(typical)})`)
+          }
         }
       }
     }
