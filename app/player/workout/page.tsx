@@ -10,11 +10,19 @@
 // (components/ChangeRequestSheet.tsx → app/api/player/change-request). The
 // card shows "Waiting for Coach" and checks back every 20 seconds; once the
 // coach approves, the new exercise shows in that spot.
+//
+// Bands and med balls (lib/loads.ts): band exercises show the band colors
+// to tap, with the coach's recommended band; the band is saved instead of a
+// weight. Med ball exercises start on the 10 lb ball with a switch to the
+// 14 lb ball. Neither gets a weight suggestion.
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
-import { loadLabel, plateText, setPoundsMoved, type Equipment } from '@/lib/loads'
+import {
+  bandInfo, entryLogFields, entryPayload, entryText, entryValue, isBandEquipment,
+  loadLabel, plateText, previousEntry, setPoundsMoved, skipsWeightSuggestion, type Equipment,
+} from '@/lib/loads'
 import WeightPicker from '@/components/WeightPicker'
 import { playerFetch } from '@/lib/playerPass'
 import ExerciseClip from '@/components/ExerciseClip'
@@ -23,7 +31,7 @@ import FixSetsSheet, { type FixSetValues } from '@/components/FixSetsSheet'
 import ChangeRequestSheet, { type ChangeRequestInput } from '@/components/ChangeRequestSheet'
 import { BODY_AREAS, CHANGE_REASONS, reasonLabel, wantsLabel } from '@/lib/exerciseLevels'
 
-interface SetLog { id?: string; set_number: number; reps_completed?: number; weight_lbs?: number; velocity_ms?: number; completed: boolean }
+interface SetLog { id?: string; set_number: number; reps_completed?: number; weight_lbs?: number; band?: string | null; velocity_ms?: number; completed: boolean }
 interface Exercise {
   id: string; name: string; default_reps?: string; coaching_notes?: string
   demo_url?: string
@@ -39,6 +47,8 @@ interface Exercise {
   canRequestChange?: boolean
   changeRequest?: { id: string; status: 'pending' | 'approved' | 'declined' | string; wants: string | null; reason: string | null; coachNote: string | null; applies: string | null; createdAt: string } | null
   targetVelocityMin?: number | null; targetVelocityMax?: number | null
+  recommendedBand?: string | null   // band exercises: the coach's pick for this workout
+  lastBand?: string | null          // band exercises: what they used last time
   setLogs: SetLog[]
   recommendation?: { weight: number; percent: number; label: string; phaseNote: string; best1RM: number; sourceLabel?: string; detail?: string; adjustmentMessage?: string }
 }
@@ -252,7 +262,7 @@ export default function PlayerWorkoutPage() {
     const ex = block.exercises[exIdx]
     if (!ex) return
     const log = ex.setLogs[setNum - 1]
-    setWeightInput(log?.weight_lbs?.toString() ?? '')
+    setWeightInput(entryValue(log, ex.equipment))
     setRepsInput(log?.reps_completed?.toString() ?? ex.customReps ?? ex.default_reps ?? '')
     setVelocityInput(log?.velocity_ms?.toString() ?? '')
     setEditingSet(true)
@@ -260,12 +270,13 @@ export default function PlayerWorkoutPage() {
 
   const saveSet = useCallback(async (completed: boolean) => {
     if (!workout || !session) return
-    // Track last weight for "same as last" button
-    if (weightInput) setLastWeight(parseFloat(weightInput))
-    if (repsInput) setLastReps(repsInput)
-    setSaving(true)
     const block = workout.blocks[activeBlockIdx]
     const ex = block.exercises[currentExIdx]
+    // Track last weight for "same as last" button (not bands or med balls,
+    // which start from their own last set — components/WeightPicker.tsx)
+    if (weightInput && !skipsWeightSuggestion(ex.equipment)) setLastWeight(parseFloat(weightInput))
+    if (repsInput) setLastReps(repsInput)
+    setSaving(true)
 
     const res = await playerFetch('/api/sets', {
       method: 'POST',
@@ -274,7 +285,7 @@ export default function PlayerWorkoutPage() {
         sessionId: session.sessionId,
         exerciseId: ex.id,
         setNumber: currentSet,
-        weightLbs: weightInput ? parseFloat(weightInput) : null,
+        ...entryPayload(ex.equipment, weightInput),   // weightLbs, or band for band exercises
         repsCompleted: repsInput ? parseInt(repsInput) : null,
         velocityMs: velocityInput ? parseFloat(velocityInput) : null,
         completed,
@@ -296,7 +307,9 @@ export default function PlayerWorkoutPage() {
           logs[currentSet - 1] = {
             ...logs[currentSet - 1],
             set_number: currentSet,
-            weight_lbs: weightInput ? parseFloat(weightInput) : undefined,
+            weight_lbs: undefined,
+            band: undefined,
+            ...entryLogFields(e.equipment, weightInput),
             reps_completed: repsInput ? parseInt(repsInput) : undefined,
             velocity_ms: velocityInput ? parseFloat(velocityInput) : undefined,
             completed,
@@ -359,6 +372,7 @@ export default function PlayerWorkoutPage() {
           exerciseId,
           setNumber,
           weightLbs: ex.logs_weight ? v.weight : null,
+          ...(ex.logs_weight && isBandEquipment(ex.equipment) ? { band: v.band ?? null } : {}),
           repsCompleted: Math.round(v.reps),
           velocityMs: ex.logs_velocity ? v.velocity : null,
           completed: true,
@@ -378,6 +392,7 @@ export default function PlayerWorkoutPage() {
             ...logs[setNumber - 1],
             set_number: setNumber,
             weight_lbs: ex.logs_weight && v.weight !== null ? v.weight : undefined,
+            band: ex.logs_weight && isBandEquipment(ex.equipment) ? v.band ?? null : undefined,
             reps_completed: Math.round(v.reps!),
             velocity_ms: ex.logs_velocity && v.velocity !== null ? v.velocity : undefined,
             completed: true,
@@ -602,6 +617,15 @@ export default function PlayerWorkoutPage() {
                 )}
               </div>
             )}
+            {ex.logs_weight && isBandEquipment(ex.equipment) && bandInfo(ex.recommendedBand) && (
+              <div style={{ textAlign: 'right', flexShrink: 0, maxWidth: 150 }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--carolina)', fontSize: '1.1rem' }}>
+                  <span aria-hidden style={{ width: 14, height: 14, borderRadius: '50%', background: bandInfo(ex.recommendedBand)!.swatch, border: '1px solid rgba(0,0,0,0.2)' }} />
+                  {bandInfo(ex.recommendedBand)!.color} band
+                </div>
+                <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)' }}>{bandInfo(ex.recommendedBand)!.level} · coach pick</div>
+              </div>
+            )}
             {ex.recommendation && !(ex.recommendation.weight > 0) && ex.logs_weight && !ex.recommendation.adjustmentMessage && (
               <div style={{ textAlign: 'right', flexShrink: 0, fontSize: '0.72rem', color: 'var(--text-muted)', fontStyle: 'italic', maxWidth: 160 }}>
                 {ex.recommendation.phaseNote || 'Choose your own weight for now.'}
@@ -678,11 +702,16 @@ export default function PlayerWorkoutPage() {
             </div>
           )}
 
-          {/* Weight: tap plates / dumbbells (components/WeightPicker.tsx) */}
+          {/* Weight: tap plates / dumbbells / med ball, or the band (components/WeightPicker.tsx) */}
           {ex.logs_weight && (
             <div style={{ marginBottom: '0.75rem' }}>
               <WeightPicker
+                // fresh picker per exercise and set, so bands / med balls start from the last set
+                key={`${ex.id}:${currentSet}`}
                 equipment={ex.equipment}
+                previous={previousEntry(ex.setLogs, ex.equipment)}
+                recommendedBand={ex.recommendedBand ?? null}
+                lastBand={ex.lastBand ?? null}
                 value={weightInput}
                 onChange={setWeightInput}
                 // Suggestions arrive already rounded to a loadable weight (lib/loads.ts)
@@ -707,7 +736,7 @@ export default function PlayerWorkoutPage() {
           </div>
 
           {/* Same as last set */}
-          {ex.logs_weight && lastWeight && currentSet > 1 && !weightInput && (
+          {ex.logs_weight && !skipsWeightSuggestion(ex.equipment) && lastWeight && currentSet > 1 && !weightInput && (
             <button onClick={() => { setWeightInput(String(lastWeight)); if (lastReps) setRepsInput(lastReps) }}
               style={{ width: '100%', padding: '0.5rem', marginBottom: '0.5rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
               Same as last set ({loadLabel(lastWeight, ex.equipment)}{lastReps ? ` × ${lastReps}` : ''}) →
@@ -824,7 +853,7 @@ export default function PlayerWorkoutPage() {
               {ex.setLogs.filter(l => l.completed).map((log, i) => (
                 <button key={i} onClick={() => setFixFor({ blockIdx: activeBlockIdx, start: { exerciseId: ex.id, setNumber: log.set_number } })}
                   style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 6, padding: '0.3rem 0.625rem', fontSize: '0.8rem', color: 'var(--volt)', cursor: 'pointer', fontFamily: 'inherit' }}>
-                  Set {log.set_number}: {log.weight_lbs ? `${loadLabel(log.weight_lbs, ex.equipment)} × ` : ''}{log.reps_completed} reps{ex.logs_velocity && log.velocity_ms ? ` · ${log.velocity_ms} m/s` : ''} ✎
+                  Set {log.set_number}: {entryText(log, ex.equipment) ? `${entryText(log, ex.equipment)} × ` : ''}{log.reps_completed} reps{ex.logs_velocity && log.velocity_ms ? ` · ${log.velocity_ms} m/s` : ''} ✎
                 </button>
               ))}
             </div>

@@ -22,6 +22,12 @@
 //   canRequestChange    team/template workouts only; self-guided players
 //                       use the easier-option swap instead
 //
+// Band exercises (lib/loads.ts) also get:
+//   recommendedBand     the band the coach picked for it in this workout
+//                       (template_block_exercises.recommended_band), or null
+//   lastBand            the band the player used last time, or null
+// Bands and med balls never get a weight suggestion (recommendation: null).
+//
 // A template's warm-up block comes back separately as `template.warmup`
 // ({ rounds, exercises: [{ name, reps, notes, clip_url, ... }] }, or null)
 // and is left out of `template.blocks`: players watch it, they don't log it
@@ -40,6 +46,8 @@ import { asGeneratedWorkout, slotId } from '@/lib/fullBodyWorkout'
 import { familyKey } from '@/lib/exerciseLevels'
 import { clubDateString } from '@/lib/clubTime'
 import { isWarmupLabel } from '@/lib/warmup'
+import { asBand, asEquipment, isBandEquipment, skipsWeightSuggestion } from '@/lib/loads'
+import { lastBandUsed } from '@/lib/bandHistory'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -75,6 +83,7 @@ interface BlockExerciseInput {
   customNotes: string | null
   targetVelocityMin: number | null
   targetVelocityMax: number | null
+  recommendedBand: string | null
 }
 
 // The template's warm-up, for the player page: each exercise with its demo
@@ -156,8 +165,9 @@ async function buildExercise(ctx: ExerciseContext, be: BlockExerciseInput, block
   // Suggested weight — see lib/suggestions.ts for the rules.
   // Uses today's session so speed-target exercises can adjust
   // from the player's last set.
+  const equipment = asEquipment(activeEx.equipment)
   let recommendation = null
-  if (activeEx.logs_weight) {
+  if (activeEx.logs_weight && !skipsWeightSuggestion(equipment)) {
     recommendation = await getPlayerRecommendation(db, {
       playerId: ctx.playerId,
       exerciseId: activeEx.id,
@@ -173,6 +183,14 @@ async function buildExercise(ctx: ExerciseContext, be: BlockExerciseInput, block
     const found = todayLogs?.find(l => l.set_number === i + 1)
     return found ?? { set_number: i + 1, completed: false }
   })
+
+  // Band exercises: the coach's band for this workout, and last time's band
+  const isBand = activeEx.logs_weight && isBandEquipment(equipment)
+  const lastBand = isBand ? await lastBandUsed(db, ctx.playerId, activeEx.id, sessionId) : null
+  // A recommendation only counts if it's the same kind of band (a
+  // replacement exercise may use a different kind, or no band at all)
+  const recBand = asBand(be.recommendedBand)
+  const recommendedBand = isBand && recBand && recBand.startsWith(equipment === 'hip_band' ? 'hip_' : 'large_') ? recBand : null
 
   const fKey = familyKey(activeEx.variation_family)
   const familySize = fKey ? ctx.familySizes.get(fKey) ?? 0 : 0
@@ -197,6 +215,8 @@ async function buildExercise(ctx: ExerciseContext, be: BlockExerciseInput, block
     originalExerciseName: isReplaced ? ex.name : undefined,
     setLogs,
     recommendation,
+    recommendedBand,
+    lastBand,
   }
 }
 
@@ -310,7 +330,8 @@ export async function GET(req: NextRequest) {
       const enrichedBlocks = await Promise.all(liftingBlocks.map(async (block) => {
         const { data: blockExercises } = await db
           .from('template_block_exercises')
-          .select('id, exercise_id, custom_reps, custom_notes, sort_order, target_velocity_min, target_velocity_max')
+          // '*' so this still works before recommended_band exists (bands migration)
+          .select('*')
           .eq('block_id', block.id)
           .order('sort_order')
 
@@ -321,6 +342,7 @@ export async function GET(req: NextRequest) {
           customNotes: be.custom_notes,
           targetVelocityMin: be.target_velocity_min,
           targetVelocityMax: be.target_velocity_max,
+          recommendedBand: (be as { recommended_band?: string | null }).recommended_band ?? null,
         }, block.sets)))
 
         return {
@@ -353,6 +375,7 @@ export async function GET(req: NextRequest) {
             : null,
           targetVelocityMin: null,
           targetVelocityMax: null,
+          recommendedBand: null,
         }, block.sets)
         if (!built) return null
         const anyLogged = built.setLogs.some((l: { completed?: boolean }) => l.completed)

@@ -85,6 +85,7 @@ export function weightText(entered: number, equipment: Equipment | null | undefi
   if (equipment === 'dumbbell_2') return `${n}# DBs`
   if (equipment === 'dumbbell_1') return `${n}# DB`
   if (equipment === 'landmine') return `${Math.round(setLoad(entered, equipment))} lbs`
+  if (equipment === 'medball') return `${n} lb ball`
   return `${n} lbs`
 }
 

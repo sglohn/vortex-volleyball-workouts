@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { clubDateString } from '@/lib/clubTime'
-import { EQUIPMENT_OPTIONS, loadLabel, type Equipment } from '@/lib/loads'
+import { EQUIPMENT_OPTIONS, bandInfo, bandsFor, isBandEquipment, loadLabel, type Equipment } from '@/lib/loads'
 
 interface LogSet {
   id: string
@@ -18,6 +18,7 @@ interface LogSet {
   weightLbs: number | null
   repsCompleted: number | null
   velocityMs: number | null
+  band: string | null     // band exercises only
   completed: boolean
   loggedAt: string | null
   flags: string[]
@@ -48,7 +49,7 @@ interface LogSession {
   exercises: LogExercise[]
 }
 
-type Draft = { weight: string; reps: string; velocity: string; completed: boolean }
+type Draft = { weight: string; reps: string; velocity: string; band: string; completed: boolean }
 
 function shiftDate(date: string, days: number): string {
   const [y, m, d] = date.split('-').map(Number)
@@ -81,12 +82,13 @@ function draftOf(s: LogSet): Draft {
     weight: s.weightLbs === null ? '' : String(s.weightLbs),
     reps: s.repsCompleted === null ? '' : String(s.repsCompleted),
     velocity: s.velocityMs === null ? '' : String(s.velocityMs),
+    band: s.band ?? '',
     completed: s.completed,
   }
 }
 
 function sameDraft(a: Draft, b: Draft): boolean {
-  return a.weight === b.weight && a.reps === b.reps && a.velocity === b.velocity && a.completed === b.completed
+  return a.weight === b.weight && a.reps === b.reps && a.velocity === b.velocity && a.band === b.band && a.completed === b.completed
 }
 
 function WorkoutLogsInner() {
@@ -166,16 +168,18 @@ function WorkoutLogsInner() {
     setDrafts(prev => ({ ...prev, [s.id]: { ...(prev[s.id] ?? draftOf(s)), ...patch } }))
   }
 
-  async function save(s: LogSet) {
+  async function save(s: LogSet, ex: LogExercise) {
     const d = draftFor(s)
+    const isBand = isBandEquipment(ex.equipment)
     setSavingId(s.id)
     setNotice('')
     const res = await fetch('/api/coach/logs', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
+      // Band exercises save the band and no weight
       body: JSON.stringify({
         id: s.id,
-        weight_lbs: d.weight,
+        ...(isBand ? { band: d.band || null } : { weight_lbs: d.weight }),
         reps_completed: d.reps,
         velocity_ms: d.velocity,
         completed: d.completed,
@@ -330,7 +334,7 @@ function WorkoutLogsInner() {
 
                     <div className="log-row log-head" style={{ display: 'grid', gridTemplateColumns: `52px ${ex.logsWeight ? 'minmax(70px, 110px) ' : ''}minmax(60px, 90px) ${ex.logsVelocity ? 'minmax(70px, 100px) ' : ''}64px 1fr`, ['--inputs' as string]: inputCount(ex), gap: '0.5rem', alignItems: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600, paddingBottom: '0.375rem', borderBottom: '1px solid var(--gray-border)' } as React.CSSProperties}>
                       <span>Set</span>
-                      {ex.logsWeight && <span>Weight</span>}
+                      {ex.logsWeight && <span>{isBandEquipment(ex.equipment) ? 'Band' : 'Weight'}</span>}
                       <span>Reps</span>
                       {ex.logsVelocity && <span>Bar speed</span>}
                       <span style={{ textAlign: 'center' }}>Done</span>
@@ -345,10 +349,20 @@ function WorkoutLogsInner() {
                         <div key={s.id} style={{ padding: '0.5rem 0', borderBottom: '1px solid var(--gray-light)' }}>
                           <div className="log-row" style={{ display: 'grid', gridTemplateColumns: `52px ${ex.logsWeight ? 'minmax(70px, 110px) ' : ''}minmax(60px, 90px) ${ex.logsVelocity ? 'minmax(70px, 100px) ' : ''}64px 1fr`, ['--inputs' as string]: inputCount(ex), gap: '0.5rem', alignItems: 'center' } as React.CSSProperties}>
                             <span style={{ fontWeight: 700 }}>{s.setNumber}</span>
-                            {ex.logsWeight && (
+                            {ex.logsWeight && !isBandEquipment(ex.equipment) && (
                               <input aria-label={`Set ${s.setNumber} weight`} type="number" inputMode="decimal" value={d.weight}
                                 onChange={e => edit(s, { weight: e.target.value })}
                                 style={{ ...cellInput, borderColor: s.flags.length ? 'var(--warning)' : cellInput.borderColor as string }} />
+                            )}
+                            {ex.logsWeight && isBandEquipment(ex.equipment) && (
+                              <select aria-label={`Set ${s.setNumber} band`} value={d.band}
+                                onChange={e => edit(s, { band: e.target.value })}
+                                style={{ ...cellInput, padding: '0.4rem 0.25rem', fontSize: '0.85rem',
+                                  borderColor: s.flags.length ? 'var(--warning)' : cellInput.borderColor as string,
+                                  boxShadow: bandInfo(d.band) ? `inset 6px 0 0 ${bandInfo(d.band)!.swatch}` : 'none' }}>
+                                <option value="">No band</option>
+                                {bandsFor(ex.equipment).map(b => <option key={b.key} value={b.key}>{b.color}</option>)}
+                              </select>
                             )}
                             <input aria-label={`Set ${s.setNumber} reps`} type="number" inputMode="numeric" value={d.reps}
                               onChange={e => edit(s, { reps: e.target.value })} style={cellInput} />
@@ -365,7 +379,7 @@ function WorkoutLogsInner() {
                                 <>
                                   <button onClick={() => setDrafts(prev => { const n = { ...prev }; delete n[s.id]; return n })} disabled={busy}
                                     style={{ padding: '0.35rem 0.7rem', borderRadius: 6, border: '1.5px solid var(--gray-border)', background: 'var(--white)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>Undo</button>
-                                  <button onClick={() => save(s)} disabled={busy} className="btn-volt"
+                                  <button onClick={() => save(s, ex)} disabled={busy} className="btn-volt"
                                     style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem' }}>{busy ? 'Saving…' : 'Save'}</button>
                                 </>
                               )}

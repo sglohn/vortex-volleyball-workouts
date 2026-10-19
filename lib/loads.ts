@@ -9,7 +9,11 @@
 //   Landmine       - the plates on the bar's free end, e.g. 25 (0 = empty bar)
 //                    Used for Landmine and Viking Press exercises. Pounds
 //                    moved adds the bar's felt weight (LANDMINE_BAR_LBS).
-//   Other          - whatever the weight is (machine, med ball, etc.)
+//   Med ball       - 10 or 14 (we have 10 lb balls and one 14 lb ball;
+//                    the picker starts on 10)
+//   Large band /   - the band's color (no weight). Saved in set_logs.band,
+//   Hip band         e.g. 'hip_blue' (BANDS below)
+//   Other          - whatever the weight is (machine, sled, etc.)
 //
 // set_logs.weight_lbs stores exactly what the player typed. Anything that
 // counts pounds moved (leaderboards, session totals) multiplies by the
@@ -22,15 +26,22 @@
 //   Landmine  - plates on one end in 2.5 lb steps (lightest suggestion is
 //               2.5; players can still enter 0 for the empty bar)
 //   Other / not set - nearest 5 lbs
+//   Bands and med balls get no weight suggestion. For bands the coach picks
+//   a band per exercise in the workout (template_block_exercises.recommended_band).
 
-export type Equipment = 'barbell' | 'dumbbell_1' | 'dumbbell_2' | 'landmine' | 'other'
+export type Equipment =
+  | 'barbell' | 'dumbbell_1' | 'dumbbell_2' | 'landmine'
+  | 'medball' | 'large_band' | 'hip_band' | 'other'
 
 export const EQUIPMENT_OPTIONS: { value: Equipment; label: string; hint: string }[] = [
   { value: 'barbell',    label: 'Barbell',      hint: 'Player enters bar + plates total' },
   { value: 'dumbbell_1', label: '1 dumbbell',   hint: 'Player enters the number on the dumbbell' },
   { value: 'dumbbell_2', label: '2 dumbbells',  hint: 'Player enters the number on one dumbbell; counts double' },
   { value: 'landmine',   label: 'Landmine',     hint: 'Bar against the wall; player enters plates on the end' },
-  { value: 'other',      label: 'Other',        hint: 'Machine, med ball, sled, etc.' },
+  { value: 'medball',    label: 'Med ball',     hint: 'Player picks the 10 lb (default) or 14 lb ball' },
+  { value: 'large_band', label: 'Large band',   hint: 'Player taps the band color: Yellow, Red, Black, Purple' },
+  { value: 'hip_band',   label: 'Hip band',     hint: 'Player taps the band color: Green, Yellow, Blue, Red, Black' },
+  { value: 'other',      label: 'Other',        hint: 'Machine, sled, etc.' },
 ]
 
 export const BAR_LBS = 45
@@ -42,10 +53,79 @@ export const DUMBBELLS_LBS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 // covers grip position and a little friction. Change here if needed.
 export const LANDMINE_BAR_LBS = 25
 
+// Med balls in the weight room: 10 lb balls and one 14 lb ball.
+export const MEDBALLS_LBS = [10, 14]
+export const MEDBALL_DEFAULT_LBS = 10
+
+// ── Bands ─────────────────────────────────────────────────────────────────
+// Lightest to heaviest. The key is what's saved (set_logs.band and
+// template_block_exercises.recommended_band); the SQL migration
+// 2026-10-19_bands_and_medballs.sql lists the same keys.
+
+export type BandKind = 'large' | 'hip'
+
+export interface BandInfo {
+  key: string
+  kind: BandKind
+  color: string        // 'Yellow'
+  level: string        // 'Extra light'
+  swatch: string       // button color
+  ink: string          // text color on the swatch
+}
+
+export const BANDS: BandInfo[] = [
+  { key: 'large_yellow', kind: 'large', color: 'Yellow', level: 'Extra light', swatch: '#facc15', ink: '#111827' },
+  { key: 'large_red',    kind: 'large', color: 'Red',    level: 'Light',       swatch: '#dc2626', ink: '#ffffff' },
+  { key: 'large_black',  kind: 'large', color: 'Black',  level: 'Medium',      swatch: '#111827', ink: '#ffffff' },
+  { key: 'large_purple', kind: 'large', color: 'Purple', level: 'Heavy',       swatch: '#7c3aed', ink: '#ffffff' },
+  { key: 'hip_green',    kind: 'hip',   color: 'Green',  level: 'Extra light', swatch: '#16a34a', ink: '#ffffff' },
+  { key: 'hip_yellow',   kind: 'hip',   color: 'Yellow', level: 'Light',       swatch: '#facc15', ink: '#111827' },
+  { key: 'hip_blue',     kind: 'hip',   color: 'Blue',   level: 'Medium',      swatch: '#2563eb', ink: '#ffffff' },
+  { key: 'hip_red',      kind: 'hip',   color: 'Red',    level: 'Heavy',       swatch: '#dc2626', ink: '#ffffff' },
+  { key: 'hip_black',    kind: 'hip',   color: 'Black',  level: 'Extra heavy', swatch: '#111827', ink: '#ffffff' },
+]
+
 export function asEquipment(value: unknown): Equipment | null {
-  return value === 'barbell' || value === 'dumbbell_1' || value === 'dumbbell_2' || value === 'landmine' || value === 'other'
+  return value === 'barbell' || value === 'dumbbell_1' || value === 'dumbbell_2' || value === 'landmine'
+    || value === 'medball' || value === 'large_band' || value === 'hip_band' || value === 'other'
     ? value
     : null
+}
+
+export function isBandEquipment(equipment: Equipment | null | undefined): equipment is 'large_band' | 'hip_band' {
+  return equipment === 'large_band' || equipment === 'hip_band'
+}
+
+/** Bands and med balls: the app never suggests a weight for these. */
+export function skipsWeightSuggestion(equipment: Equipment | null | undefined): boolean {
+  return isBandEquipment(equipment) || equipment === 'medball'
+}
+
+/** The bands a band exercise uses, lightest first ([] for anything else). */
+export function bandsFor(equipment: Equipment | null | undefined): BandInfo[] {
+  if (equipment === 'large_band') return BANDS.filter(b => b.kind === 'large')
+  if (equipment === 'hip_band') return BANDS.filter(b => b.kind === 'hip')
+  return []
+}
+
+export function asBand(value: unknown): string | null {
+  return typeof value === 'string' && BANDS.some(b => b.key === value) ? value : null
+}
+
+export function bandInfo(key: string | null | undefined): BandInfo | null {
+  return BANDS.find(b => b.key === key) ?? null
+}
+
+/** "Blue band" */
+export function bandLabel(key: string | null | undefined): string {
+  const b = bandInfo(key)
+  return b ? `${b.color} band` : ''
+}
+
+/** "Blue band (medium)" */
+export function bandLongLabel(key: string | null | undefined): string {
+  const b = bandInfo(key)
+  return b ? `${b.color} band (${b.level.toLowerCase()})` : ''
 }
 
 /** How many implements the entered number is multiplied by for pounds moved. */
@@ -110,6 +190,8 @@ export function roundToLoadable(weight: number, equipment: Equipment | null | un
     case 'dumbbell_1':
     case 'dumbbell_2':
       return nearest(DUMBBELLS_LBS, weight)
+    case 'medball':
+      return nearest(MEDBALLS_LBS, weight)
     case 'landmine': {
       // plates on one end: 2.5 lb steps, lightest suggestion 2.5
       const steps = weight / 2.5
@@ -149,6 +231,7 @@ export function loadLabel(weight: number, equipment: Equipment | null | undefine
   if (equipment === 'landmine') return weight > 0 ? `${weight} lbs of plates` : 'Empty bar'
   if (equipment === 'dumbbell_2') return `${weight}# DBs`
   if (equipment === 'dumbbell_1') return `${weight}# DB`
+  if (equipment === 'medball') return `${weight} lb ball`
   return `${weight} lbs`
 }
 
@@ -157,6 +240,8 @@ export function weightInputLabel(equipment: Equipment | null | undefined): strin
   if (equipment === 'dumbbell_2') return 'Weight per DB'
   if (equipment === 'dumbbell_1') return 'DB weight'
   if (equipment === 'landmine') return 'Plates on end (lbs)'
+  if (equipment === 'medball') return 'Med ball (lbs)'
+  if (isBandEquipment(equipment)) return 'Band'
   return 'Weight (lbs)'
 }
 
@@ -173,4 +258,59 @@ export function plateText(total: number, equipment: Equipment | null | undefined
   const plates = platesPerSide(total)
   if (!plates.length) return 'Empty bar'
   return `${plates.join(' + ')} each side`
+}
+
+// ── One logged set: weight or band ──────────────────────────────────────
+// The logging pages keep what the player picked in one string (the weight
+// box's value): a number for weights, or a band key for band exercises.
+// These turn that string into what's saved, and a saved set back into
+// that string or a short label.
+
+export interface LoggedEntry {
+  weight_lbs?: number | null
+  band?: string | null
+  completed?: boolean
+  set_number?: number
+}
+
+/** What /api/sets gets: band exercises send `band` and no weight. */
+export function entryPayload(equipment: Equipment | null | undefined, input: string): { weightLbs: number | null; band?: string | null } {
+  if (isBandEquipment(equipment)) {
+    // only a band of this exercise's kind (large vs hip)
+    return { weightLbs: null, band: bandsFor(equipment).some(b => b.key === input) ? input : null }
+  }
+  const n = input ? parseFloat(input) : NaN
+  return { weightLbs: Number.isFinite(n) ? n : null }
+}
+
+/** The same thing for the page's own copy of the set after saving. */
+export function entryLogFields(equipment: Equipment | null | undefined, input: string): { weight_lbs?: number; band?: string } {
+  const p = entryPayload(equipment, input)
+  if (isBandEquipment(equipment)) return p.band ? { band: p.band } : {}
+  return p.weightLbs !== null ? { weight_lbs: p.weightLbs } : {}
+}
+
+/** A saved set back into the picker's string ('' when nothing). */
+export function entryValue(log: LoggedEntry | null | undefined, equipment: Equipment | null | undefined): string {
+  if (!log) return ''
+  if (isBandEquipment(equipment)) return asBand(log.band) ?? ''
+  return log.weight_lbs === null || log.weight_lbs === undefined ? '' : String(log.weight_lbs)
+}
+
+/** Short label for a saved set's load: "Blue band", "30# DBs", "10 lb ball"; '' when none. */
+export function entryText(log: LoggedEntry | null | undefined, equipment: Equipment | null | undefined): string {
+  if (!log) return ''
+  if (isBandEquipment(equipment)) return bandLabel(log.band)
+  return log.weight_lbs ? loadLabel(Number(log.weight_lbs), equipment) : ''
+}
+
+/**
+ * What the player used on their latest completed set of this exercise
+ * today ('' if none), so the next set can start from it.
+ */
+export function previousEntry(setLogs: LoggedEntry[] | null | undefined, equipment: Equipment | null | undefined): string {
+  const done = (setLogs ?? []).filter(l => l.completed && entryValue(l, equipment) !== '')
+  if (!done.length) return ''
+  const last = done.reduce((a, b) => ((b.set_number ?? 0) >= (a.set_number ?? 0) ? b : a))
+  return entryValue(last, equipment)
 }

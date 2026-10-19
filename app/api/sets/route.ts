@@ -1,9 +1,17 @@
 // FILE: app/api/sets/route.ts
+//
+// POST  log (or fix) one set: { sessionId, exerciseId, setNumber, weightLbs,
+//       repsCompleted, velocityMs, completed, band?, targetReps?, ... }
+//       band is sent only for band exercises ('hip_blue', lib/loads.ts BANDS);
+//       those sets save no weight. Bands and med balls get no weight
+//       suggestion back (recommendation: null).
+// GET   ?sessionId=   every set logged in a session
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getPlayerRecommendation } from '@/lib/suggestions'
 import { PhaseType } from '@/lib/types'
 import { canAccessSession, signInAgain } from '@/lib/playerAuth'
+import { asBand, asEquipment, skipsWeightSuggestion } from '@/lib/loads'
 
 export async function POST(req: NextRequest) {
   const {
@@ -14,6 +22,7 @@ export async function POST(req: NextRequest) {
     repsCompleted,
     velocityMs,
     completed,
+    band,                // band exercises only: the band key, or null
     targetReps,          // optional: the rep target shown for this exercise in today's workout
     targetVelocityMin,   // optional: speed target for this exercise in today's workout
     targetVelocityMax,
@@ -45,6 +54,9 @@ export async function POST(req: NextRequest) {
     reps_completed: repsCompleted ?? null,
     velocity_ms: velocityMs ?? null,
     completed,
+    // Only band exercises send `band`, so other sets still save before the
+    // bands migration has been run
+    ...(band !== undefined ? { band: asBand(band) } : {}),
     ...(isFix ? {} : { logged_at: new Date().toISOString() }),
   }
 
@@ -98,9 +110,10 @@ export async function POST(req: NextRequest) {
 
   // Use the workout's rep target when the page sends it, so the suggestion
   // doesn't switch to the exercise's default reps after the first set.
-  const { data: ex } = await db.from('exercise_library').select('default_reps').eq('id', exerciseId).single()
+  const { data: ex } = await db.from('exercise_library').select('default_reps, equipment').eq('id', exerciseId).single()
+  const noSuggestion = skipsWeightSuggestion(asEquipment((ex as { equipment?: unknown } | null)?.equipment))
 
-  const recommendation = session?.player_id
+  const recommendation = session?.player_id && !noSuggestion
     ? await getPlayerRecommendation(db, {
         playerId: session.player_id,
         exerciseId,
@@ -123,7 +136,7 @@ export async function GET(req: NextRequest) {
   const db = createServerClient()
   const { data: logs } = await db
     .from('set_logs')
-    .select('exercise_id, set_number, weight_lbs, reps_completed, velocity_ms, completed')
+    .select('*')   // includes band once the bands migration has been run
     .eq('session_id', sessionId)
   return NextResponse.json({ logs: logs ?? [] })
 }
