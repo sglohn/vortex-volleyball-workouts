@@ -2,14 +2,16 @@
 //
 // Health / soreness reports.
 //   Players:  GET ?playerId=  (their own reports)   POST (new report)
-//   Coach only (needs the coach cookie, see lib/coachAuth.ts):
-//             GET ?all=1   PATCH   DELETE
+//   Coaches and admins (coach cookie, see lib/coachAuth.ts):
+//             GET ?all=1   PATCH   (team coaches: their own players only)
+//   Admins only:  DELETE
 //   A report only counts as coach-entered (reportedBy: 'coach') when the
 //   coach cookie is present.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { isCoachRequest } from '@/lib/coachAuth'
+import { getCoach, isCoachRequest } from '@/lib/coachAuth'
+import { adminsOnly, canSeePlayer, inList, notYourTeam, visiblePlayerIds } from '@/lib/coachScope'
 import { canAccessPlayer, signInAgain } from '@/lib/playerAuth'
 
 const coachOnly = () => NextResponse.json({ error: 'Coach sign-in required' }, { status: 401 })
@@ -20,12 +22,16 @@ export async function GET(req: NextRequest) {
   const db = createServerClient()
 
   if (all) {
-    if (!(await isCoachRequest(req))) return coachOnly()
-    const { data: reports } = await db
+    const coach = await getCoach(req)
+    if (!coach) return coachOnly()
+    const visible = await visiblePlayerIds(db, coach)
+    let query = db
       .from('health_reports')
       .select('*, players(name, jersey_number)')
       .in('status', ['active', 'monitoring'])
       .order('reported_at', { ascending: false })
+    if (visible) query = query.in('player_id', inList(visible))
+    const { data: reports } = await query
     return NextResponse.json({ reports: reports ?? [] })
   }
 
@@ -77,12 +83,18 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PATCH(req: NextRequest) {
-  if (!(await isCoachRequest(req))) return coachOnly()
+  const coach = await getCoach(req)
+  if (!coach) return coachOnly()
   const { id, confirmedByCoach, coachNotes, status, expectedReturn, severity, injuryType } = await req.json()
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const db = createServerClient()
+  if (!coach.isAdmin) {
+    const { data: existing } = await db.from('health_reports').select('player_id').eq('id', id).maybeSingle()
+    if (!existing) return NextResponse.json({ error: 'Report not found' }, { status: 404 })
+    if (!(await canSeePlayer(db, coach, existing.player_id))) return notYourTeam()
+  }
   const updates: Record<string, unknown> = {}
   if (confirmedByCoach !== undefined) updates.confirmed_by_coach = confirmedByCoach
   if (coachNotes !== undefined) updates.coach_notes = coachNotes
@@ -106,7 +118,9 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  if (!(await isCoachRequest(req))) return coachOnly()
+  const coach = await getCoach(req)
+  if (!coach) return coachOnly()
+  if (!coach.isAdmin) return adminsOnly()
   const { id } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 

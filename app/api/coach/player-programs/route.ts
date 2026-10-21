@@ -1,11 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
+import { getCoach } from '@/lib/coachAuth'
+import { adminsOnly, canSeePlayer, notYourTeam, signInRequired } from '@/lib/coachScope'
 
 export async function GET(req: NextRequest) {
   const playerId  = req.nextUrl.searchParams.get('playerId')
   const programId = req.nextUrl.searchParams.get('programId')
   const db = createServerClient()
+  // Team coaches: only their own players' programs, by player (lib/coachScope.ts)
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
+  if (!coach.isAdmin) {
+    if (!playerId) return adminsOnly()
+    if (!(await canSeePlayer(db, coach, playerId))) return notYourTeam()
+  }
 
   if (programId) {
     const { data } = await db.from('player_programs').select('*').eq('id', programId).single()

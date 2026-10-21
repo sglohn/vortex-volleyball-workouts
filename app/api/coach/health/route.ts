@@ -1,21 +1,30 @@
-// app/api/coach/health/route.ts
+// FILE: app/api/coach/health/route.ts
+//
+// Coach Health Board. Admins see the whole club; a team coach sees, and can
+// add reports for, only the players on their teams (lib/coachScope.ts).
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { getCoach } from '@/lib/coachAuth'
+import { canSeePlayer, canSeeTeam, inList, notYourTeam, onlyAllowed, signInRequired, visiblePlayerIds } from '@/lib/coachScope'
 
 export async function GET(req: NextRequest) {
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
   const db = createServerClient()
   const teamId  = req.nextUrl.searchParams.get('teamId')
   const mode    = req.nextUrl.searchParams.get('mode') // 'active' | 'history' | 'trends'
+  if (teamId && !canSeeTeam(coach, teamId)) return notYourTeam()
 
-  // Build player ID filter if team is selected
-  let playerIds: string[] | null = null
+  // Build player ID filter if team is selected (team coaches: always their teams)
+  let playerIds: string[] | null = await visiblePlayerIds(db, coach)
   if (teamId) {
     const { data: teamPlayers } = await db
       .from('player_teams')
       .select('player_id')
       .eq('team_id', teamId)
-    playerIds = teamPlayers?.map(p => p.player_id) ?? []
+    playerIds = onlyAllowed(teamPlayers?.map(p => p.player_id) ?? [], playerIds)
   }
+  if (playerIds) playerIds = inList(playerIds)
 
   if (mode === 'trends') {
     // Return all resolved + active for trend analysis.
@@ -89,7 +98,7 @@ export async function GET(req: NextRequest) {
     .in('status', ['active', 'monitoring'])
     .order('last_reported_at', { ascending: false, nullsFirst: false })
     .order('reported_at', { ascending: false })
-  if (playerIds?.length) query = query.in('player_id', playerIds)
+  if (playerIds) query = query.in('player_id', playerIds)
 
   const { data: reports, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -107,7 +116,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
   }
 
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
   const db = createServerClient()
+  if (!(await canSeePlayer(db, coach, playerId))) return notYourTeam()
   const { data: report, error } = await db
     .from('health_reports')
     .insert({

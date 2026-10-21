@@ -61,7 +61,7 @@ function DisplayContent() {
   // A team picked in the address (?team=) always keeps its pill.
   useEffect(() => {
     Promise.all([
-      fetch('/api/coach/teams').then(r => r.json()),
+      fetch('/api/coach/teams?all=1').then(r => r.json()),
       fetch('/api/display-teams').then(r => r.json()).catch(() => null),
     ]).then(([teamData, todayData]) => {
       const all: Team[] = teamData.teams ?? []

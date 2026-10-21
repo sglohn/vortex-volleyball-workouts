@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { clubDateString } from '@/lib/clubTime'
+import { useIsAdmin } from '@/components/CoachContext'
 import { EQUIPMENT_OPTIONS, bandInfo, bandsFor, isBandEquipment, loadLabel, type Equipment } from '@/lib/loads'
 
 interface LogSet {
@@ -92,6 +93,8 @@ function sameDraft(a: Draft, b: Draft): boolean {
 }
 
 function WorkoutLogsInner() {
+  // Team coaches can look; fixing and deleting sets is admins only
+  const isAdmin = useIsAdmin()
   const router = useRouter()
   const params = useSearchParams()
   const today = clubDateString()
@@ -350,12 +353,12 @@ function WorkoutLogsInner() {
                           <div className="log-row" style={{ display: 'grid', gridTemplateColumns: `52px ${ex.logsWeight ? 'minmax(70px, 110px) ' : ''}minmax(60px, 90px) ${ex.logsVelocity ? 'minmax(70px, 100px) ' : ''}64px 1fr`, ['--inputs' as string]: inputCount(ex), gap: '0.5rem', alignItems: 'center' } as React.CSSProperties}>
                             <span style={{ fontWeight: 700 }}>{s.setNumber}</span>
                             {ex.logsWeight && !isBandEquipment(ex.equipment) && (
-                              <input aria-label={`Set ${s.setNumber} weight`} type="number" inputMode="decimal" value={d.weight}
+                              <input disabled={!isAdmin} aria-label={`Set ${s.setNumber} weight`} type="number" inputMode="decimal" value={d.weight}
                                 onChange={e => edit(s, { weight: e.target.value })}
                                 style={{ ...cellInput, borderColor: s.flags.length ? 'var(--warning)' : cellInput.borderColor as string }} />
                             )}
                             {ex.logsWeight && isBandEquipment(ex.equipment) && (
-                              <select aria-label={`Set ${s.setNumber} band`} value={d.band}
+                              <select disabled={!isAdmin} aria-label={`Set ${s.setNumber} band`} value={d.band}
                                 onChange={e => edit(s, { band: e.target.value })}
                                 style={{ ...cellInput, padding: '0.4rem 0.25rem', fontSize: '0.85rem',
                                   borderColor: s.flags.length ? 'var(--warning)' : cellInput.borderColor as string,
@@ -364,18 +367,18 @@ function WorkoutLogsInner() {
                                 {bandsFor(ex.equipment).map(b => <option key={b.key} value={b.key}>{b.color}</option>)}
                               </select>
                             )}
-                            <input aria-label={`Set ${s.setNumber} reps`} type="number" inputMode="numeric" value={d.reps}
+                            <input disabled={!isAdmin} aria-label={`Set ${s.setNumber} reps`} type="number" inputMode="numeric" value={d.reps}
                               onChange={e => edit(s, { reps: e.target.value })} style={cellInput} />
                             {ex.logsVelocity && (
-                              <input aria-label={`Set ${s.setNumber} bar speed`} type="number" inputMode="decimal" step="0.01" value={d.velocity}
+                              <input disabled={!isAdmin} aria-label={`Set ${s.setNumber} bar speed`} type="number" inputMode="decimal" step="0.01" value={d.velocity}
                                 onChange={e => edit(s, { velocity: e.target.value })} style={cellInput} />
                             )}
                             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                              <input type="checkbox" checked={d.completed} onChange={e => edit(s, { completed: e.target.checked })}
+                              <input type="checkbox" disabled={!isAdmin} checked={d.completed} onChange={e => edit(s, { completed: e.target.checked })}
                                 aria-label={`Set ${s.setNumber} done`} style={{ width: 18, height: 18 }} />
                             </label>
                             <div className="log-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.375rem' }}>
-                              {changed && (
+                              {isAdmin && changed && (
                                 <>
                                   <button onClick={() => setDrafts(prev => { const n = { ...prev }; delete n[s.id]; return n })} disabled={busy}
                                     style={{ padding: '0.35rem 0.7rem', borderRadius: 6, border: '1.5px solid var(--gray-border)', background: 'var(--white)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>Undo</button>
@@ -383,7 +386,7 @@ function WorkoutLogsInner() {
                                     style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem' }}>{busy ? 'Saving…' : 'Save'}</button>
                                 </>
                               )}
-                              {!changed && (
+                              {isAdmin && !changed && (
                                 <button onClick={() => remove(s, ex.name)} disabled={busy} aria-label={`Delete set ${s.setNumber}`}
                                   style={{ padding: '0.35rem 0.6rem', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
                               )}

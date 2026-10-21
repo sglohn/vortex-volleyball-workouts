@@ -11,6 +11,7 @@ import MeasurementHistoryModal from '@/components/MeasurementHistoryModal'
 import PlayerHealthCard from '@/components/PlayerHealthCard'
 import VbtPanel from '@/components/VbtPanel'
 import { FEATURES } from '@/lib/features'
+import { useIsAdmin } from '@/components/CoachContext'
 
 const MEASUREMENT_FIELDS: { key: string; label: string; unit: 'ft-in' | 'sec' | 'mph' }[] = [
   { key: 'height_in', label: 'Height', unit: 'ft-in' },
@@ -34,6 +35,9 @@ function fmtMeasVal(val: number | string | undefined, unit: 'ft-in' | 'sec' | 'm
 
 export default function CoachPlayerDetailPage() {
   const { id } = useParams<{ id: string }>()
+  // Team coaches: health, measurements and this player's exercise skips.
+  // Team, birthday, self-guided, date overrides and programs are admins only.
+  const isAdmin = useIsAdmin()
   const [data, setData] = useState<Record<string, unknown> | null>(null)
   const [loading, setLoading] = useState(true)
   const [measForm, setMeasForm] = useState<Record<string, string>>({})
@@ -168,7 +172,7 @@ export default function CoachPlayerDetailPage() {
             {player.position ? `${player.position}` : ''}
             {player.position && ' · '}
             {(player as unknown as { age?: number | null }).age != null ? `Age ${(player as unknown as { age?: number | null }).age}` : 'Age not set'}
-            {!showDobForm && (
+            {isAdmin && !showDobForm && (
               <button
                 onClick={() => { setDobForm((player as unknown as { date_of_birth?: string }).date_of_birth ?? ''); setShowDobForm(true) }}
                 style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, padding: 0 }}>
@@ -188,14 +192,14 @@ export default function CoachPlayerDetailPage() {
         {/* Team assignment */}
         <div style={{ position: 'relative', flexShrink: 0 }}>
           <button
-            onClick={() => setTeamSelectOpen(o => !o)}
-            disabled={savingTeam}
+            onClick={() => { if (isAdmin) setTeamSelectOpen(o => !o) }}
+            disabled={savingTeam || !isAdmin}
             style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.4rem 0.875rem', border: `2px solid ${team?.color ?? 'var(--gray-border)'}`, borderRadius: 8, background: team?.color ? `${team.color}12` : 'var(--court-raised)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, color: team?.color ?? 'var(--text-muted)' }}>
             <span style={{ width: 10, height: 10, borderRadius: '50%', background: team?.color ?? '#ccc', flexShrink: 0 }} />
             {savingTeam ? 'Saving…' : (team?.name ?? 'No team')}
-            <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▼</span>
+            {isAdmin && <span style={{ fontSize: '0.7rem', opacity: 0.6 }}>▼</span>}
           </button>
-          {teamSelectOpen && (
+          {isAdmin && teamSelectOpen && (
             <div style={{ position: 'absolute', top: '110%', right: 0, zIndex: 20, background: 'var(--white)', border: '1.5px solid var(--gray-border)', borderRadius: 10, boxShadow: '0 4px 20px rgba(0,0,0,0.12)', minWidth: 200, overflow: 'hidden' }}>
               <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, borderBottom: '1px solid var(--gray-border)' }}>Move to team</div>
               {allTeams.filter(t => !t.is_open_gym).map(t => (
@@ -368,7 +372,7 @@ export default function CoachPlayerDetailPage() {
       )}
 
       {/* ── SELF-GUIDED WORKOUTS ── */}
-      {(() => {
+      {isAdmin && (() => {
         const selfGuided = (player as unknown as { self_guided?: boolean }).self_guided === true
         const hasProgram = programs.some(p => p.is_active)
         return (
@@ -489,7 +493,7 @@ export default function CoachPlayerDetailPage() {
             </div>
 
             {/* Date Overrides */}
-            <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1.25rem' }}>
+            {isAdmin && <div style={{ borderTop: '1.5px solid var(--gray-border)', paddingTop: '1.25rem' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--carolina-deep)', marginBottom: '0.625rem' }}>
                 Date Overrides (Different Workout)
               </div>
@@ -532,13 +536,13 @@ export default function CoachPlayerDetailPage() {
                   }} style={{ padding: '0.5rem 1.25rem', flexShrink: 0 }}>Add Override</button>
                 </div>
               </div>
-            </div>
+            </div>}
           </div>
         )}
       </div>
 
       {/* ── INDIVIDUAL PROGRAMS ── */}
-      <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
+      {isAdmin && <div className="card" style={{ padding: '1.25rem', marginTop: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showPrograms ? '1.25rem' : 0 }}>
           <div>
             <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem' }}>Individual Program</h3>
@@ -684,7 +688,7 @@ export default function CoachPlayerDetailPage() {
             </div>
           </div>
         )}
-      </div>
+      </div>}
     </div>
 
       {FEATURES.measurements && historyModal && (

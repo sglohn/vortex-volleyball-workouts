@@ -6,6 +6,7 @@ import FeetInchesInput from '@/components/FeetInchesInput'
 import { inchesToFeetInches, calcVertical, painLevelColor, painLevelLabel } from '@/lib/fitness'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { FEATURES, POSITIONS } from '@/lib/features'
+import { useIsAdmin } from '@/components/CoachContext'
 
 interface Measurement { height_in?: number; wingspan_in?: number; standing_reach_in?: number; standing_vertical_in?: number; approach_vertical_in?: number; measured_at?: string }
 interface HealthReport { id: string; report_type: string; body_part: string; pain_level?: number; status: string; confirmed_by_coach: boolean; description?: string; reported_at: string; coach_notes?: string }
@@ -44,6 +45,8 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const [roster, setRoster] = useState<RosterPlayer[]>([])
   const [phase, setPhase] = useState<Phase | null>(null)
   const [loading, setLoading] = useState(true)
+  // Team coaches can view the roster and handle health reports; editing players and the roster is admins only
+  const isAdmin = useIsAdmin()
   const [tab, setTab] = useState<Tab>('roster')
 
   // Edit player modal
@@ -164,7 +167,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
         </div>
         <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
           <a href={`/team/${teamId}`} target="_blank" rel="noopener noreferrer" style={{ background: 'var(--carolina)', color: 'var(--white)', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 700, padding: '0.5rem 1rem', borderRadius: 8 }}>▶ Team Mode</a>
-          <button onClick={openAddPlayer} className="btn-volt" style={{ padding: '0.5rem 1rem', fontSize: '0.82rem' }}>+ Add Player</button>
+          {isAdmin && <button onClick={openAddPlayer} className="btn-volt" style={{ padding: '0.5rem 1rem', fontSize: '0.82rem' }}>+ Add Player</button>}
         </div>
       </div>
 
@@ -216,11 +219,15 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                     </td>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       <div style={{ display: 'flex', gap: '0.625rem' }}>
-                        <button onClick={() => openEdit(p)} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Edit</button>
-                        <span style={{ color: 'var(--gray-border)' }}>|</span>
+                        {isAdmin && <>
+                          <button onClick={() => openEdit(p)} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Edit</button>
+                          <span style={{ color: 'var(--gray-border)' }}>|</span>
+                        </>}
                         <Link href={`/coach/players/${p.id}`} style={{ color: 'var(--carolina-dark)', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}>Detail</Link>
-                        <span style={{ color: 'var(--gray-border)' }}>|</span>
-                        <button onClick={() => removeFromTeam(p.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Remove</button>
+                        {isAdmin && <>
+                          <span style={{ color: 'var(--gray-border)' }}>|</span>
+                          <button onClick={() => removeFromTeam(p.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Remove</button>
+                        </>}
                       </div>
                     </td>
                   </tr>
@@ -285,7 +292,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                         ) : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>No data</span>}
                       </td>
                       <td style={{ padding: '0.75rem 0.875rem' }}>
-                        <button onClick={() => openEdit(p)} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, padding: 0 }}>Edit</button>
+                        {isAdmin && <button onClick={() => openEdit(p)} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, padding: 0 }}>Edit</button>}
                       </td>
                     </tr>
                   )

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getBestOneRepMax, getTrend, estimateOneRepMax } from '@/lib/fitness'
+import { getCoach } from '@/lib/coachAuth'
+import { canSeeTeam, notYourTeam, signInRequired } from '@/lib/coachScope'
 
 type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
 type LogRow = { exercise_id: string; session_id: string; weight_lbs: number | null; reps_completed: number | null; completed: boolean }
@@ -9,6 +11,9 @@ type HealthRow = { id: string; player_id: string; report_type: string; body_part
 export async function GET(req: NextRequest) {
   const teamId = req.nextUrl.searchParams.get('teamId')
   if (!teamId) return NextResponse.json({ error: 'Missing teamId' }, { status: 400 })
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
+  if (!canSeeTeam(coach, teamId)) return notYourTeam()
 
   const db = createServerClient()
 

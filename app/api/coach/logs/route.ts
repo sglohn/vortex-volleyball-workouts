@@ -3,7 +3,9 @@
 // Coach "Workout Logs": every set players logged on a given day, with
 // possible mistakes flagged (lib/outliers.ts), and corrections.
 //
-//   GET    ?date=YYYY-MM-DD   all sessions that club-local day (default today)
+//   GET    ?date=YYYY-MM-DD   all sessions that club-local day (default today);
+//                             team coaches see only their own players
+//   PATCH / DELETE are admins only (middleware.ts)
 //   PATCH  { id, weight_lbs, reps_completed, velocity_ms, completed, band? }   fix a set
 //          (band: band exercises only, e.g. 'hip_blue' — lib/loads.ts BANDS)
 //   DELETE { id }                                                       remove a set
@@ -16,6 +18,8 @@ import { createServerClient } from '@/lib/supabase'
 import { clubDateString, clubDayBounds, isDateString } from '@/lib/clubTime'
 import { asBand, asEquipment, isBandEquipment, setPoundsMoved, type Equipment } from '@/lib/loads'
 import { flagExerciseSets } from '@/lib/outliers'
+import { getCoach } from '@/lib/coachAuth'
+import { signInRequired, visiblePlayerIds } from '@/lib/coachScope'
 
 export const dynamic = 'force-dynamic'
 
@@ -83,7 +87,12 @@ export async function GET(req: NextRequest) {
     .order('checked_in_at', { ascending: true })
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 })
 
-  const sessions = (sessionsRaw ?? []) as SessionRow[]
+  // Team coaches: only their own players' sessions (lib/coachScope.ts)
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
+  const visible = await visiblePlayerIds(db, coach)
+  const allowed = visible ? new Set(visible) : null
+  const sessions = ((sessionsRaw ?? []) as SessionRow[]).filter(s => !allowed || allowed.has(s.player_id))
   if (!sessions.length) return NextResponse.json({ date, sessions: [] })
 
   const playerIds = [...new Set(sessions.map(s => s.player_id))]

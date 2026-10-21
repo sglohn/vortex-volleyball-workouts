@@ -17,6 +17,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { clubDateString, isDateString } from '@/lib/clubTime'
+import { getCoach } from '@/lib/coachAuth'
+import { canSeeTeam, notYourTeam, signInRequired } from '@/lib/coachScope'
 import { MAX_WEEK_SLOTS, loadWeekPlan, playerWeekFrom, weekStartOf, type WeekSessionRow } from '@/lib/weekPlan'
 
 export const dynamic = 'force-dynamic'
@@ -24,6 +26,9 @@ export const dynamic = 'force-dynamic'
 export async function GET(req: NextRequest) {
   const teamId = req.nextUrl.searchParams.get('teamId')
   if (!teamId) return NextResponse.json({ error: 'Missing teamId' }, { status: 400 })
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
+  if (!canSeeTeam(coach, teamId)) return notYourTeam()
   const weekParam = req.nextUrl.searchParams.get('week')
   const today = clubDateString()
   const weekStart = weekStartOf(isDateString(weekParam) ? weekParam : today)

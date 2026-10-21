@@ -4,6 +4,8 @@ import { createServerClient } from '@/lib/supabase'
 import { getBestOneRepMax, getTrend } from '@/lib/fitness'
 import { calculateAge } from '@/lib/age'
 import { calculateAthleticismScore, buildPopulationStats, type AthleticismInputs } from '@/lib/athleticism'
+import { getCoach } from '@/lib/coachAuth'
+import { canSeePlayer, inList, notYourTeam, signInRequired, visiblePlayerIds } from '@/lib/coachScope'
 
 // Fetches the latest measurement snapshot (the combine-relevant fields
 // only) for every active player, keyed by player_id. Used both to build
@@ -45,8 +47,12 @@ async function getLatestMeasurementPool(db: ReturnType<typeof createServerClient
 export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
   const db = createServerClient()
+  // Admins see the whole club; team coaches only players on their teams
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
 
   if (playerId) {
+    if (!(await canSeePlayer(db, coach, playerId))) return notYourTeam()
     // Single player detail
     const { data: player } = await db.from('players').select('*').eq('id', playerId).single()
     const { data: sessions } = await db.from('sessions').select('*').eq('player_id', playerId).order('checked_in_at', { ascending: false }).limit(20)
@@ -100,6 +106,8 @@ export async function GET(req: NextRequest) {
       populationStats
     )
 
+    // Player PINs are for admins (Edit Player) only
+    if (player && !coach.isAdmin) delete player.pin
     const enrichedPlayer = player ? {
       ...player,
       age: calculateAge(player.date_of_birth),
@@ -111,7 +119,10 @@ export async function GET(req: NextRequest) {
   }
 
   // Player list — now includes measurements + best lifts for leaderboard/sorting
-  const { data: players } = await db.from('players').select('*').eq('is_active', true).order('name')
+  const visible = await visiblePlayerIds(db, coach)
+  let playersQuery = db.from('players').select('*').eq('is_active', true)
+  if (visible) playersQuery = playersQuery.in('id', inList(visible))
+  const { data: players } = await playersQuery.order('name')
   const { data: playerTeams } = await db.from('player_teams').select('player_id, is_primary, teams(id, name, color, age_group)').eq('is_primary', true)
   const { data: activeHealth } = await db.from('health_reports').select('player_id').eq('status', 'active')
   const flaggedIds = new Set((activeHealth ?? []).map(h => h.player_id))
@@ -178,6 +189,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Player PINs are for admins (Edit Player) only
+  if (!coach.isAdmin) for (const p of players ?? []) delete p.pin
   const enriched = (players ?? []).map(p => {
     const team = teamMap[p.id]
     const meas = measMap[p.id] ?? {

@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react'
 import BrandMark from '@/components/BrandMark'
 import { BRAND } from '@/lib/brand'
 import { isHiddenPage } from '@/lib/features'
+import { CoachProvider, coachCanOpen, type SignedInCoach } from '@/components/CoachContext'
 
 const ALL_NAV = [
   { href: '/coach/dashboard', label: 'Dashboard',       short: 'Home',      icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> },
@@ -20,11 +21,12 @@ const ALL_NAV = [
   { href: '/coach/players',   label: 'Players',         short: 'Players',   icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg> },
   { href: '/coach/logs',      label: 'Workout Logs',    short: 'Logs',      icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg> },
   { href: '/coach/comparisons', label: 'Comparisons',    short: 'Compare',   icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> },
+  { href: '/coach/coaches',   label: 'Coaches',         short: 'Coaches',   icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2l7 3v6c0 5-3 9-7 11-4-2-7-6-7-11V5z"/><circle cx="12" cy="10" r="2.5"/><path d="M8 16c.8-1.6 2.3-2.5 4-2.5s3.2.9 4 2.5"/></svg> },
   { href: '/coach/display',   label: 'TV Display',      short: 'TV',        icon: <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg> },
 ]
 
 // Hide pages for features this sport doesn't use (lib/features.ts)
-const NAV = ALL_NAV.filter(n => !isHiddenPage(n.href))
+const SPORT_NAV = ALL_NAV.filter(n => !isHiddenPage(n.href))
 
 // Bottom nav shows these 5 on mobile — most used pages
 // (Schedule on volleyball, Week Plan on lacrosse; the other is hidden)
@@ -36,6 +38,10 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
   const [menuOpen, setMenuOpen] = useState(false)
   // Exercise change requests waiting + self-guided swaps not yet seen (app/coach/requests)
   const [openRequests, setOpenRequests] = useState(0)
+  // Who's signed in (GET /api/coach). Team coaches only get their pages
+  // (components/CoachContext.tsx); admins get everything.
+  const [coach, setCoach] = useState<SignedInCoach | null>(null)
+  const NAV = coach && !coach.isAdmin ? SPORT_NAV.filter(n => coachCanOpen(n.href)) : SPORT_NAV
 
   useEffect(() => {
     if (path === '/coach' || path === '/coach/display') return
@@ -67,7 +73,11 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
     fetch('/api/coach')
       .then(r => r.json())
       .then(d => {
-        if (!d?.signedIn) { localStorage.removeItem('vx_coach'); router.push('/coach') }
+        if (!d?.signedIn) { localStorage.removeItem('vx_coach'); router.push('/coach'); return }
+        const who = d.coach as SignedInCoach
+        setCoach(who)
+        // A team coach who opens an admin page (old link, bookmark) goes to the dashboard
+        if (!who.isAdmin && !coachCanOpen(path)) router.replace('/coach/dashboard')
       })
       .catch(() => { /* offline — leave the page alone */ })
   }, [path, router])
@@ -109,7 +119,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
             <BrandMark size={30} tone="accent" />
             <div>
               <div style={{ whiteSpace: 'nowrap', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.95rem', letterSpacing: '0.1em', color: 'var(--yellow)', lineHeight: 1 }}>{BRAND.name}</div>
-              <div style={{ fontSize: '0.58rem', color: 'var(--carolina-light)', letterSpacing: '0.06em', textTransform: 'uppercase', opacity: 0.7 }}>S&C Coach</div>
+              <div style={{ fontSize: '0.58rem', color: 'var(--carolina-light)', letterSpacing: '0.06em', textTransform: 'uppercase', opacity: 0.7 }}>{coach && !coach.setup ? coach.name : 'S&C Coach'}</div>
             </div>
           </div>
           <nav style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '2px' }}>
@@ -172,7 +182,7 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
           )}
 
           <main className="coach-main" style={{ flex: 1, overflowY: 'auto', background: 'var(--page-bg)' }}>
-            {children}
+            <CoachProvider value={coach}>{children}</CoachProvider>
           </main>
         </div>
       </div>

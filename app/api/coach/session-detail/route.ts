@@ -2,6 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { asEquipment, setPoundsMoved, type Equipment } from '@/lib/loads'
+import { getCoach } from '@/lib/coachAuth'
+import { canSeePlayer, notYourTeam, signInRequired } from '@/lib/coachScope'
 
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')
@@ -16,6 +18,9 @@ export async function GET(req: NextRequest) {
     .single()
 
   if (!session) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
+  if (!(await canSeePlayer(db, coach, session.player_id))) return notYourTeam()
 
   // Fetch logs without the broken FK join
   const { data: logs } = await db

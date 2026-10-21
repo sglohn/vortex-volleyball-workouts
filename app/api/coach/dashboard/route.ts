@@ -1,20 +1,35 @@
-import { NextResponse } from 'next/server'
+// FILE: app/api/coach/dashboard/route.ts
+//
+// Coach dashboard. Admins see the whole club; a team coach sees only their
+// teams and the players on them (lib/coachScope.ts).
+
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { requestSummary } from '@/lib/exerciseLevels'
+import { getCoach } from '@/lib/coachAuth'
+import { inList, signInRequired, visiblePlayerIds, visibleTeamIds } from '@/lib/coachScope'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
   const db = createServerClient()
+  // null = everyone (admin)
+  const visible = await visiblePlayerIds(db, coach)
+  const visibleTeams = visibleTeamIds(coach)
+  // For .in('player_id', …) on every player query; admins get everyone
+  const pids = visible ? inList(visible) : null
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const todayStr = today.toISOString().split('T')[0]
   const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
 
   // Today's sessions with player/team info
-  const { data: sessions } = await db
+  let sessionsQuery = db
     .from('sessions')
     .select('id, player_id, checked_in_at, completed_at')
     .gte('checked_in_at', today.toISOString())
-    .order('checked_in_at', { ascending: false })
+  if (pids) sessionsQuery = sessionsQuery.in('player_id', pids)
+  const { data: sessions } = await sessionsQuery.order('checked_in_at', { ascending: false })
 
   const playerIds = [...new Set(sessions?.map(s => s.player_id) ?? [])]
   const { data: players } = await db.from('players').select('id, name, jersey_number').in('id', playerIds.length ? playerIds : ['none'])
@@ -44,12 +59,13 @@ export async function GET() {
   }))
 
   // Unconfirmed health reports
-  const { data: unconfirmed } = await db
+  let unconfirmedQuery = db
     .from('health_reports')
     .select('id, player_id, body_part, report_type, pain_level, players(name)')
     .eq('confirmed_by_coach', false)
     .eq('status', 'active')
-    .order('reported_at', { ascending: false })
+  if (pids) unconfirmedQuery = unconfirmedQuery.in('player_id', pids)
+  const { data: unconfirmed } = await unconfirmedQuery.order('reported_at', { ascending: false })
 
   const unconfirmedHealth = (unconfirmed ?? []).map(r => ({
     id: r.id,
@@ -60,16 +76,24 @@ export async function GET() {
   }))
 
   // Active injuries count
-  const { count: activeInjuries } = await db.from('health_reports').select('*', { count: 'exact', head: true }).eq('status', 'active').eq('confirmed_by_coach', true)
+  let injuriesQuery = db.from('health_reports').select('*', { count: 'exact', head: true }).eq('status', 'active').eq('confirmed_by_coach', true)
+  if (pids) injuriesQuery = injuriesQuery.in('player_id', pids)
+  const { count: activeInjuries } = await injuriesQuery
 
   // Week session count
-  const { count: weekCount } = await db.from('sessions').select('*', { count: 'exact', head: true }).gte('checked_in_at', weekAgo.toISOString())
+  let weekQuery = db.from('sessions').select('*', { count: 'exact', head: true }).gte('checked_in_at', weekAgo.toISOString())
+  if (pids) weekQuery = weekQuery.in('player_id', pids)
+  const { count: weekCount } = await weekQuery
 
   // Total active players
-  const { count: totalPlayers } = await db.from('players').select('*', { count: 'exact', head: true }).eq('is_active', true)
+  let totalQuery = db.from('players').select('*', { count: 'exact', head: true }).eq('is_active', true)
+  if (pids) totalQuery = totalQuery.in('id', pids)
+  const { count: totalPlayers } = await totalQuery
 
   // Teams with current phase AND today's scheduled workout
-  const { data: teams } = await db.from('teams').select('*').eq('is_active', true).order('age_group')
+  let teamsQuery = db.from('teams').select('*').eq('is_active', true)
+  if (visibleTeams) teamsQuery = teamsQuery.in('id', inList(visibleTeams))
+  const { data: teams } = await teamsQuery.order('age_group')
 
   // Fetch today's schedule for all teams in one query
   const { data: todaySchedule } = await db
@@ -99,10 +123,12 @@ export async function GET() {
   // Exercise change requests waiting + self-guided swaps not yet seen
   // (empty before the levels migration; see app/api/coach/change-requests)
   let changeRequests: Array<{ id: string; kind: string; playerName: string; exerciseName: string; summary: string; createdAt: string }> = []
-  const { data: openRequests, error: requestsError } = await db
+  let requestsQuery = db
     .from('exercise_change_requests')
     .select('id, kind, reason, body_part, pain_level, created_at, players(name), exercise:exercise_id(name), original:original_exercise_id(name)')
     .or('status.eq.pending,and(kind.eq.self_guided_swap,coach_seen_at.is.null)')
+  if (pids) requestsQuery = requestsQuery.in('player_id', pids)
+  const { data: openRequests, error: requestsError } = await requestsQuery
     .order('created_at', { ascending: false })
     .limit(20)
   if (!requestsError) {

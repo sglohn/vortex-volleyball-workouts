@@ -10,6 +10,12 @@
 //                              volleyball only, see lib/features.ts)
 //   GET /api/coach/phases      TV display (training phases, no player data)
 //   GET /api/coach/templates   TV display (workout contents, no player data)
+//   GET /api/coach/signin-list admin names for the Admin sign-in screen
+//
+// Coaches (role 'coach', lib/coachAuth.ts) can only use the routes in
+// COACH_ROUTES below; everything else under /api/coach is admins only.
+// Those routes then limit what they return to the coach's own teams
+// (lib/coachScope.ts).
 //
 // The TV display (/coach/display and /api/display-snapshot for the Roku)
 // only uses those open reads, so it keeps working without signing in.
@@ -19,7 +25,7 @@
 // workout), API calls get 404.
 
 import { NextRequest, NextResponse } from 'next/server'
-import { COACH_COOKIE, coachAuthConfigured, verifyCoachToken } from '@/lib/coachAuth'
+import { coachAuthConfigured, getCoach } from '@/lib/coachAuth'
 import { hiddenPageHome, isHiddenApi, isHiddenPage } from '@/lib/features'
 
 const PUBLIC_GET = new Set([
@@ -27,7 +33,28 @@ const PUBLIC_GET = new Set([
   '/api/coach/schedule',
   '/api/coach/phases',
   '/api/coach/templates',
+  '/api/coach/signin-list',
 ])
+
+// What a team coach (not an admin) may call. Each of these routes also
+// checks that the player / team / request belongs to one of the coach's teams.
+const COACH_ROUTES: Record<string, string[]> = {
+  '/api/coach/dashboard':       ['GET'],
+  '/api/coach/health':          ['GET', 'POST'],              // view, add an injury / health note
+  '/api/coach/team-detail':     ['GET'],
+  '/api/coach/players':         ['GET'],
+  '/api/coach/logs':            ['GET'],
+  '/api/coach/session-detail':  ['GET'],
+  '/api/coach/change-requests': ['GET', 'PATCH'],             // view, approve / decline, mark seen
+  '/api/coach/overrides':       ['GET', 'POST', 'DELETE'],    // one player's exercise replacements only
+  '/api/coach/player-programs': ['GET'],
+  '/api/coach/week-plan':       ['GET'],
+  '/api/coach/exercises':       ['GET'],
+  '/api/coach/teams':           ['GET'],
+  '/api/coach/schedule':        ['GET'],
+  '/api/coach/phases':          ['GET'],
+  '/api/coach/templates':       ['GET'],
+}
 
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname.replace(/\/+$/, '') || '/'
@@ -53,8 +80,12 @@ export async function middleware(req: NextRequest) {
     )
   }
 
-  const ok = await verifyCoachToken(req.cookies.get(COACH_COOKIE)?.value)
-  if (!ok) return NextResponse.json({ error: 'Coach sign-in required' }, { status: 401 })
+  const coach = await getCoach(req)
+  if (!coach) return NextResponse.json({ error: 'Coach sign-in required' }, { status: 401 })
+
+  if (!coach.isAdmin && !COACH_ROUTES[path]?.includes(req.method)) {
+    return NextResponse.json({ error: 'Only admins can do that' }, { status: 403 })
+  }
 
   return NextResponse.next()
 }
