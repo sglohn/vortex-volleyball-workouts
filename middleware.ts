@@ -54,6 +54,7 @@ const COACH_ROUTES: Record<string, string[]> = {
   '/api/coach/schedule':        ['GET'],
   '/api/coach/phases':          ['GET'],
   '/api/coach/templates':       ['GET'],
+  '/api/coach/join-workout':    ['POST'],             // join their own team's workout (own profile only)
 }
 
 export async function middleware(req: NextRequest) {

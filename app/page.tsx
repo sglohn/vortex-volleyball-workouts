@@ -5,7 +5,10 @@
 // ("Coach Emma Haddix"), and a search box (long lists only) that finds a
 // team by team name or coach name.
 // Team coaches sign in here too: their names are at the top of their team's
-// list, tagged "Coach", and their PIN opens the coach side (app/api/coach).
+// list, tagged "Coach". After their PIN (app/api/coach) they pick "Join
+// today's workout" (app/api/coach/join-workout: the team's workout on their
+// own workout profile, straight to the workout, no body check) or "Coach
+// dashboard".
 // Admins use the small "Admin" link at the bottom (app/coach/page.tsx).
 // Lacrosse (week plan teams, lib/weekPlan.ts): after the PIN, a "this week"
 // card shows her Days in order — the one waiting, the ones done, the ones
@@ -35,7 +38,7 @@ function teamMatches(team: Team, text: string): boolean {
 interface Player { id: string; name: string; jersey_number?: string; teamId: string }
 interface TeamCoach { id: string; name: string }
 
-type Step = 'team' | 'player' | 'pin' | 'week'
+type Step = 'team' | 'player' | 'pin' | 'week' | 'coach'
 
 // From /api/checkin on week plan teams (publicWeek in lib/weekPlan.ts)
 type DayState = 'done' | 'in_progress' | 'next' | 'locked'
@@ -187,7 +190,8 @@ export default function HomePage() {
       })
       if (res.ok) {
         localStorage.setItem('vx_coach', 'true')
-        router.push('/coach/dashboard')
+        // Join today's workout, or go to the coach side
+        setPin(''); setCheckingIn(false); setStep('coach')
         return
       }
       const data = await res.json().catch(() => ({}))
@@ -222,10 +226,39 @@ export default function HomePage() {
     } catch { setError('Something went wrong'); setCheckingIn(false) }
   }
 
+  // Coach joins one of their team's workouts on their own workout profile
+  // (app/api/coach/join-workout). Same screens as players, without the body check.
+  async function joinWorkout() {
+    if (!selectedCoach || !selectedTeam) return
+    setCheckingIn(true); setError('')
+    try {
+      const res = await fetch('/api/coach/join-workout', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teamId: selectedTeam.id }),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) { setError(data.error || `Could not join (${res.status})`); setCheckingIn(false); return }
+      if (data.week) {
+        if (data.sessionId) saveSession(data)
+        setWeek(data.week as WeekInfo)
+        setStep('week')
+        setCheckingIn(false)
+        return
+      }
+      saveSession(data)
+      router.push('/player/workout')
+    } catch { setError('Something went wrong'); setCheckingIn(false) }
+  }
+
   function saveSession(data: Record<string, unknown>) {
     if (!selectedPlayer) return
     localStorage.setItem('vx_session', JSON.stringify({
-        sessionId: data.sessionId, playerId: selectedPlayer.id, playerName: selectedPlayer.name,
+        sessionId: data.sessionId,
+        // A coach's workout profile has its own player ID (data.playerId)
+        playerId: (data.playerId as string | undefined) ?? selectedPlayer.id,
+        playerName: (data.playerName as string | undefined) ?? selectedPlayer.name,
+        isCoach: data.coach === true,
         teamId: data.teamId, templateId: data.templateId,
         hasHealthFlags: data.hasHealthFlags, healthReports: data.healthReports,
         isResumed: data.isResumed,
@@ -405,6 +438,32 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* ── COACH: JOIN THE WORKOUT OR GO TO THE COACH SIDE ── */}
+        {step === 'coach' && selectedCoach && selectedTeam && (
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.75rem', color: '#fff', margin: '0 auto 0.625rem' }}>
+              {selectedCoach.name.replace(/^coach\s+/i, '').charAt(0).toUpperCase()}
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: 'var(--black)' }}>{selectedCoach.name}</div>
+            <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>{selectedTeam.name}</div>
+
+            {error && (
+              <div style={{ background: 'var(--danger-light)', border: '1.5px solid #fecaca', borderRadius: 8, padding: '0.625rem', marginBottom: '1rem', color: 'var(--danger)', fontSize: '0.9rem' }}>{error}</div>
+            )}
+
+            <button onClick={joinWorkout} disabled={checkingIn}
+              style={{ width: '100%', background: selectedTeam.color, color: '#fff', border: 'none', borderRadius: 12, padding: '1rem 1.25rem', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', marginBottom: '0.375rem', opacity: checkingIn ? 0.6 : 1 }}>
+              {checkingIn ? 'Starting…' : 'Join today\'s workout'}
+            </button>
+            <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '1.25rem' }}>Do {selectedTeam.name}&apos;s workout on your phone, same as the players</p>
+
+            <button className="btn-ghost" onClick={() => router.push('/coach/dashboard')} disabled={checkingIn}
+              style={{ width: '100%', padding: '0.875rem 1.25rem', fontSize: '0.95rem' }}>
+              Coach dashboard →
+            </button>
+          </div>
+        )}
+
         {/* ── STEP 4: THIS WEEK (week plan teams) ── */}
         {step === 'week' && week && selectedPlayer && (() => {
           const done = week.days.filter(d => d.state === 'done').length
@@ -436,7 +495,7 @@ export default function HomePage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
                   {week.days.map(d => (
                     <WeekDayRow key={d.slot} day={d} resumed={week.resumed} starting={checkingIn}
-                      onStart={() => { setCheckingIn(true); router.push('/player/bodycheck') }} />
+                      onStart={() => { setCheckingIn(true); router.push(selectedCoach ? '/player/workout' : '/player/bodycheck') }} />
                   ))}
                 </div>
               )}

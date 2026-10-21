@@ -9,6 +9,7 @@ export async function GET() {
     .from('players')
     .select('id, name, jersey_number, position, date_of_birth, gender')
     .eq('is_active', true)
+    .is('coach_id', null)   // not coaches' workout profiles (lib/coachWorkout.ts)
     .order('name')
 
   if (pErr) return NextResponse.json({ error: pErr.message, players: [] })

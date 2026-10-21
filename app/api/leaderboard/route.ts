@@ -11,6 +11,8 @@
 //   - Column 3 is always New PRs (or the past week's PRs before anyone has
 //     set one today).
 //   - Girls are only compared with girls, boys only with boys.
+//   - Coaches who join a team's workout (lib/coachWorkout.ts) show with that
+//     team, on the boys board for a boys team and the girls board otherwise.
 // The rules for each board live in lib/leaderboardBoards.ts.
 //
 // Optional query params:
@@ -27,6 +29,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { coachBoardRows } from '@/lib/coachWorkout'
 import { asEquipment, setLoad, setPoundsMoved, type Equipment } from '@/lib/loads'
 import { CLUB_TIMEZONE, clubDateOf, clubDateString, clubDayBounds } from '@/lib/clubTime'
 import {
@@ -262,7 +265,12 @@ export async function GET(req: NextRequest) {
         .eq('is_primary', true)
     : { data: [] }
 
-  const checkedInTeamIds = [...new Set((playerTeams ?? []).map(pt => pt.team_id as string))]
+  // Coaches who joined a team's workout today go with that team (lib/coachWorkout.ts)
+  const placedIds = new Set((playerTeams ?? []).map(pt => pt.player_id as string))
+  const coachRows = await coachBoardRows(db, start, { playerIds: checkedInIds.filter(id => !placedIds.has(id)) })
+  const boardRows = [...(playerTeams ?? []), ...coachRows]
+
+  const checkedInTeamIds = [...new Set(boardRows.map(pt => pt.team_id as string))]
 
   const { data: teamsRaw } = checkedInTeamIds.length
     ? await db.from('teams').select('id, name, age_group, color').in('id', checkedInTeamIds)
@@ -276,7 +284,7 @@ export async function GET(req: NextRequest) {
     teamColor: rokuColor(team.color, ACCENTS.weight),
   })
 
-  const players: PoolPlayer[] = (playerTeams ?? [])
+  const players: PoolPlayer[] = boardRows
     .map(pt => {
       const p = one(pt.players as unknown as PlayerJoin | PlayerJoin[] | null)
       const team = teamById[pt.team_id as string]
@@ -353,8 +361,11 @@ export async function GET(req: NextRequest) {
         .in('team_id', shownTeamIds).eq('is_primary', true)
     : { data: [] }
 
+  // …and coaches who joined one of these teams' workouts in the last week
+  const weekCoaches = await coachBoardRows(db, clubDayBounds(addDays(date, -6)).start, { teamIds: shownTeamIds })
+
   const pool = new Map<string, PoolPlayer>(players.map(p => [p.id, p]))
-  for (const pt of rosterRaw ?? []) {
+  for (const pt of [...(rosterRaw ?? []), ...weekCoaches]) {
     const p = one(pt.players as unknown as PlayerJoin | PlayerJoin[] | null)
     const team = teamById[pt.team_id as string]
     if (p && team && p.is_active && !pool.has(p.id)) pool.set(p.id, toPoolPlayer(p, team))
