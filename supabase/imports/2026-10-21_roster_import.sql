@@ -31,7 +31,7 @@ begin;
 -- 1. The roster (from ClubwideRoster_Vortex_2026-10-21.xls)
 -- ─────────────────────────────────────────────────────────────────────────
 set client_min_messages = warning;
-drop table if exists pg_temp._rt, pg_temp._rp, pg_temp._rc, pg_temp._p, pg_temp._cur, pg_temp._tcand,
+drop table if exists pg_temp._dup, pg_temp._alias, pg_temp._rt, pg_temp._rp, pg_temp._rc, pg_temp._p, pg_temp._cur, pg_temp._tcand,
   pg_temp._tm, pg_temp._rpx, pg_temp._pm, pg_temp._new, pg_temp._cm;
 
 create or replace function pg_temp.norm(t text) returns text language sql immutable as $f$
@@ -71,6 +71,30 @@ insert into _rt values
 (25, 18, 'Nova', '18 Nova', '18s', false, true, null, 'Emma Haddix'),
 (26, 18, 'Storm', '18 Storm Boys', 'Boys 18s', true, true, null, 'Steven Lohn, Ted Hackett'),
 (27, 18, 'Havoc', '18 Havoc Boys', 'Boys 18s', true, true, null, 'Ted Hackett, Steven Lohn');
+
+-- The app's current name for each team (named by coach, e.g. "16 - Phil & Annie")
+create temp table _alias (key int, app_name text);
+insert into _alias values
+(4, '13 - Andria'),
+(5, '13 - Bailey'),
+(8, '14 - Austin'),
+(9, '14 - Sarah'),
+(10, '14 - Ragen'),
+(11, '14 - Ivy'),
+(13, '15 - Nick'),
+(14, '15 - Serena'),
+(15, '15 - Shannon & Emma'),
+(16, '15 - Skylar'),
+(18, '16 - Alfie'),
+(19, '16 - Phil & Annie'),
+(20, '16 - Caitlyn'),
+(21, '17 - Jackson'),
+(22, '17 - Mike'),
+(23, '17 - Lauren'),
+(24, '18 - Marj'),
+(25, '18 - Emma'),
+(26, 'Boys - 18 Storm'),
+(27, 'Boys - 18 Havoc');
 
 -- Players on the included teams
 create temp table _rp (rid int primary key, team_key int, first text, last text, jersey text, dob date);
@@ -267,42 +291,45 @@ insert into _rp values
 -- way the app does it (lib/coachAuth.ts hashPin), so the app reads it normally.
 create temp table _rc (cname text, team_key int, pin_hash text);
 insert into _rc values
-('Coach Andria Dobson', 4, 'pbkdf2$100000$xIKWKDEbu7twDc5Q4n7Eiw$z4sNvaUH-QoCQhTc3LKn3Y07zpioZExt1iqeD5WbIpw'),
-('Coach Bailey Chapman', 5, 'pbkdf2$100000$OTxSU3pWKN_s1taCDtccNg$8QegZGi5IqXuwV_uXGFIWIEA1LUobDXQj2Co2drG3zM'),
-('Coach Austin Bryant', 8, 'pbkdf2$100000$p8HBID2rPjT--lUwrxlhUg$xN4QPWz9SMikf5U_iuB8dkCRI0wAX1zhNAroua2Qcg0'),
-('Coach Sarah Bass', 9, 'pbkdf2$100000$ZA9Rlo2gIpApflHs_4mQQA$dTStNjeGYDEhth5I79yiqBZNB6SfrumJZ7pQH8WtdTA'),
-('Coach Ragen Dobson', 10, 'pbkdf2$100000$Rk5_Dx18_Urv7ynVRgEbEQ$xE1vX47Bi5snbeIpXEVxvH_xr0z_9-VjYPfWDEs3wFo'),
-('Coach Ivy Kimmerling', 11, 'pbkdf2$100000$Dmp88dyUodT0nG0HKZ3J2g$_MEU8bcsJgBIKgh83FWsLbD553NPd_jWRElvFShZBNo'),
-('Coach Nick Tovar', 13, 'pbkdf2$100000$hyFa6fC6eh21HJ8WXd6M8g$4vwMPnaauoOJtgE97fbL4K3Bw87yCuXd9VAkKUreEL0'),
-('Coach Serena Bird', 14, 'pbkdf2$100000$9HWeZzyJPuVWmW6XsSArfg$J5VXkG3ZvVJ36GwlJ0netdHWmT7vrwsw6PKY2ZlGg3k'),
-('Coach Emma Carter', 15, 'pbkdf2$100000$lPoxP3_ZT6s3lLYHroFx_Q$SphhzXb7YYP9GeLBNIHmjgEUjWR7LwkL1nKuSHCgvLo'),
-('Coach Shannon Carter', 15, 'pbkdf2$100000$LtscPnhSaa3uvXqdQymn5g$mzJyelT53UWO1rmFl-v0hdkWEnnEMThwzkEVVFvNR_g'),
-('Coach Skylar Kimmerling', 16, 'pbkdf2$100000$lrUO6m6r4EBCWuPP2pdRaw$IvPPF1fooGCCWflPLiKPjrkN7H7W3xj1eOZr7N92fyA'),
-('Coach Alfie Dodd', 18, 'pbkdf2$100000$J1mUkPacUYIUM-B3LRW1VQ$Ro_cWNlTXyrdARNadvfIaxsuom7k5s959wdW7EQmli4'),
-('Coach Phillip Finnell', 19, 'pbkdf2$100000$6H-5WZwrITOIqhVDlvuKXA$eo2ZDw5m-2Y80GRAbgVEi0Df3KiaiWkN5JbuM51sBCc'),
-('Coach Caitlyn Lambitz', 20, 'pbkdf2$100000$2zFt7v2uqIVv3qHiI48D9w$ySRcD3XCpxLuEG-v4oDLBvSVM6JQuV35i9qhApsXTdw'),
-('Coach Jackson Lenoir', 21, 'pbkdf2$100000$EHbngs83rAilTSb8EvAMQw$i4LjZNoOUSuGIaIhp4s5jW1gyT7PucrbSeYEEyZNjsM'),
-('Coach Michael DeMeo', 22, 'pbkdf2$100000$Be3KqOCMaJf3sipkU1xApw$YEVpsdPxNGg_LmnFTShhv7uyREF9qqjRowegOgsEpkE'),
-('Coach Lauren Cox', 23, 'pbkdf2$100000$8qqHR1w0776lF98d-0I49w$RfKh83a9ISyRya9oVJP8WKD1rOXmDrBwUbUcZrXOoNE'),
-('Coach Marjorie Smith', 24, 'pbkdf2$100000$pF1cO3AmKewdshdPu37O3w$wVp1V0Nj2YHbS304v9lsRt2FZnD81HwbijEvlfzIZ-k'),
-('Coach Emma Haddix', 25, 'pbkdf2$100000$zG2-PR8TD7AaIUPI_3NDJg$y_-8c8EY5gd7pj1_bF5CfUqBsaqMAfas02DvZ2LXVRU'),
-('Coach Ted Hackett', 26, 'pbkdf2$100000$fSJbHL5B-L3lrFY2SZai5w$pzSZtFvY-wy-Q1qgv_L-pcYQkzgAuzrx_AEvjZZ8g_g'),
-('Coach Ted Hackett', 27, 'pbkdf2$100000$fSJbHL5B-L3lrFY2SZai5w$pzSZtFvY-wy-Q1qgv_L-pcYQkzgAuzrx_AEvjZZ8g_g');
+('Coach Andria Dobson', 4, 'pbkdf2$100000$HLELEd1J2_EwKUvb2IwVCA$K6PHyCw09MTuIdz8RtrINkWQaLJeX06fwPzqALiHu2A'),
+('Coach Bailey Chapman', 5, 'pbkdf2$100000$4cb7gPJo6yQZ_rBQxWs7hA$z01qCaP-8Eyet0gSkBbTNl1APdxRwmr-BMQ5rxt785Y'),
+('Coach Austin Bryant', 8, 'pbkdf2$100000$UJaaKGVQnnrB7eU47rWN7g$QLB9DQkCG9zTzBAbMmCXAI27auVkbcI1zufBaC2J3G0'),
+('Coach Sarah Bass', 9, 'pbkdf2$100000$LH1jXcgWX6fEtd0HQHjgdQ$subWw1dCi6xXcMcH6nNCooF7EGEHEfyJ_uT8o95p_LQ'),
+('Coach Ragen Dobson', 10, 'pbkdf2$100000$mHCDkPzHVC0_kutzXfNfgQ$VoAXyN8vjebIkNOwAwQ8HPQ6jPlz_FM-ddTYqeJk01g'),
+('Coach Ivy Kimmerling', 11, 'pbkdf2$100000$BSAeWnsM8b6193A1Unq2fQ$Xkvs6vlG0Ak7cTrYX4yEgDn_-W91MXHCatbfTBonrkU'),
+('Coach Nick Tovar', 13, 'pbkdf2$100000$ZNx-mCKfS78ZvPszfrsoZw$OxwgXH1ckddqnHvO592HwuTSmgIQUQFeFgpL6nWA54A'),
+('Coach Serena Bird', 14, 'pbkdf2$100000$KWHTNQmdpLEXA7QqrEyd0w$KKiz-jOTPEcm37qBBVqLmuvHJtRPCA6NRBkvPV56ptw'),
+('Coach Emma Carter', 15, 'pbkdf2$100000$c2jpJUSiLIURH6LpeZDSoQ$PcudPlXoj7cZgJuzY7Oi_Tk5yOjXXtnEhYpI50Mx3vw'),
+('Coach Shannon Carter', 15, 'pbkdf2$100000$amW4EBRUyHm9zHJ7NpsJoQ$8AKuvKwfL74nqm6iQn8CTXeGTvVN_EKtvyjKuZieUQo'),
+('Coach Skylar Kimmerling', 16, 'pbkdf2$100000$95fuUFwbWbz1wQtMz78bEA$nhx_qbrySto2MAmpCt6h2INLyKKD4WprHK2qQ_dYsy0'),
+('Coach Alfie Dodd', 18, 'pbkdf2$100000$w7_ciY256clen3lV76lH4Q$8iHa9XQR7x8TGnObxqmkeyUJaOdxqPOHEN6IFeVMQyc'),
+('Coach Phillip Finnell', 19, 'pbkdf2$100000$Ok7QNz4mwnLjAv_ggzj7_g$mrpeg_FKO19zu0pT0nEY1ki53g1gmeBC5MWt1aQW99Q'),
+('Coach Caitlyn Lambitz', 20, 'pbkdf2$100000$rViZoxYQXSRtD_J4LvalSQ$lJnm2URNhBwEKNrj6YSEzzDeai0ruW4Vh7oy2HJVyXs'),
+('Coach Jackson Lenoir', 21, 'pbkdf2$100000$wfARAMvmnlTS9R-BaBzmTg$xrFuvYGT_DhzwcWRPlkm_4lNrQhurLSMZycHghIBE9o'),
+('Coach Michael DeMeo', 22, 'pbkdf2$100000$OuM_LIP7zLtFVwdfZsOHgQ$7qyAl9m_z6w_G-RiOHbUhb7rD0LoR3E6vQA5V4jXuds'),
+('Coach Lauren Cox', 23, 'pbkdf2$100000$eWJQ2lvnaag3R-g4ZUQA9A$Q2oo7m3f7-1LYZrqA9h2VMIlZBUOtqcYq41oKPSs3eg'),
+('Coach Marjorie Smith', 24, 'pbkdf2$100000$oH0nPmElRfX63lJ-PssDRA$d7r8AH_0k4YCpjhmiVQHWGqK3_P6rVBgQg0SG-GuefY'),
+('Coach Emma Haddix', 25, 'pbkdf2$100000$zQ4C0zJAphQwgKdEpQlKLw$JQ_sFGKrz3y-S4NRUrzl8eMsgRlL7QWpr-N31J0Ltpc'),
+('Coach Ted Hackett', 26, 'pbkdf2$100000$19NVdX-c-e09Hra5s3RQQw$d6HuvS_xts6NhWJqHm0WWoI-AB5ABKMpMOzqtbtMVts'),
+('Coach Ted Hackett', 27, 'pbkdf2$100000$19NVdX-c-e09Hra5s3RQQw$d6HuvS_xts6NhWJqHm0WWoI-AB5ABKMpMOzqtbtMVts');
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 2. Match the roster to what's already in the app (changes nothing yet)
 -- ─────────────────────────────────────────────────────────────────────────
 
--- Teams: an app team matches when its name contains the team nickname
--- ("Pallavolo"), best if it's also active and has the age in its name
+-- Teams: an app team matches when it has the app's current name for that
+-- team ("16 - Phil & Annie", always wins), or its name contains the team
+-- nickname ("Pallavolo"), best if it's also active and has the age in its name
 create temp table _tcand as
 select rt.key, t.id as team_id, t.name, t.age_group, coalesce(t.is_active, false) as is_active,
-       (case when coalesce(t.is_active, false) then 2 else 0 end)
+       (case when exists (select 1 from _alias a where a.key = rt.key and pg_temp.norm(a.app_name) = pg_temp.norm(t.name)) then 10 else 0 end)
+     + (case when coalesce(t.is_active, false) then 2 else 0 end)
      + (case when pg_temp.norm(t.name) like '%' || rt.age || '%' or pg_temp.norm(t.age_group) like '%' || rt.age || '%' then 1 else 0 end) as score
 from _rt rt
 join public.teams t
   on not coalesce(t.is_open_gym, false)
- and pg_temp.norm(t.name) like '%' || pg_temp.norm(rt.nick) || '%';
+ and (pg_temp.norm(t.name) like '%' || pg_temp.norm(rt.nick) || '%'
+      or exists (select 1 from _alias a where a.key = rt.key and pg_temp.norm(a.app_name) = pg_temp.norm(t.name)));
 
 create temp table _tm (key int primary key, team_id uuid, old_name text, old_age_group text,
                        old_active boolean, status text);
@@ -317,10 +344,18 @@ from _rt rt
 left join lateral (
   select c.*,
          count(*) over (partition by c.score) as n_best,
-         (select count(distinct c2.key) from _tcand c2 where c2.team_id = c.team_id) as claimed
+         (select count(distinct c2.key) from _tcand c2 where c2.team_id = c.team_id and c2.score >= 10) as claimed
   from _tcand c where c.key = rt.key
   order by c.score desc limit 1
 ) best on true;
+
+-- Copies of a roster team made by an earlier run of this import (same name
+-- as the roster team, but not the team being kept): folded into the kept team
+create temp table _dup as
+select tm.key, t.id as dup_id, t.name as dup_name
+from _tm tm join _rt rt using (key)
+join public.teams t on pg_temp.norm(t.name) = pg_temp.norm(rt.name) and t.id <> tm.team_id
+where tm.status = 'matched' and rt.include and not coalesce(t.is_open_gym, false);
 
 -- Players already in the app
 create temp table _p as
@@ -483,6 +518,13 @@ begin
   end if;
 end $$;
 
+-- Copies from an earlier run: coaches unlinked, turned off and marked
+-- (players are moved off them below, like any other old team)
+delete from public.coach_teams where team_id in (select dup_id from _dup);
+update public.teams t
+set is_active = false, name = d.dup_name || ' (duplicate)'
+from _dup d where t.id = d.dup_id and t.name not like '%(duplicate)';
+
 -- Teams: add missing ones, fix names / age groups, make sure they're on
 insert into public.teams (id, name, age_group, is_active)
 select tm.team_id, rt.name, rt.age_group, true
@@ -587,7 +629,9 @@ select section, team, name, what_happens from (
 
   -- App teams that aren't on the roster at all
   union all
-  select 2, 0, '2 OTHER APP TEAMS', t.name, '', 'Not on the roster: left as is'
+  select 2, 0, '2 OTHER APP TEAMS', t.name, '',
+         coalesce((select 'Copy from an earlier run: turned off, its players and coach go back to "' || rt.name || '"'
+                   from _dup d join _rt rt using (key) where d.dup_id = t.id), 'Not on the roster: left as is')
   from public.teams t
   where coalesce(t.is_active, false) and not coalesce(t.is_open_gym, false)
     and t.id not in (select team_id from _tm where team_id is not null)
