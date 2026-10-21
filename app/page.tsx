@@ -1,6 +1,9 @@
 // FILE: app/page.tsx
 //
 // Player sign-in: team → name → 4-digit PIN.
+// Team list: team name, with its coaches in small type underneath
+// ("Coach Emma Haddix"), and a search box (long lists only) that finds a
+// team by team name or coach name.
 // Team coaches sign in here too: their names are at the top of their team's
 // list, tagged "Coach", and their PIN opens the coach side (app/api/coach).
 // Admins use the small "Admin" link at the bottom (app/coach/page.tsx).
@@ -16,8 +19,19 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import BrandMark from '@/components/BrandMark'
 import { BRAND } from '@/lib/brand'
+import { teamInitial } from '@/lib/teamInitial'
 
-interface Team { id: string; name: string; age_group?: string; color: string }
+interface Team { id: string; name: string; age_group?: string; color: string; coaches?: string[] }
+
+// Show the team search box once the list is long enough to need it
+const TEAM_SEARCH_MIN = 8
+
+// Team or coach name contains what was typed ("nova", "haddix", "coach emma")
+function teamMatches(team: Team, text: string): boolean {
+  const s = text.trim().toLowerCase()
+  if (!s) return true
+  return team.name.toLowerCase().includes(s) || (team.coaches ?? []).some(c => c.toLowerCase().includes(s))
+}
 interface Player { id: string; name: string; jersey_number?: string; teamId: string }
 interface TeamCoach { id: string; name: string }
 
@@ -97,6 +111,7 @@ export default function HomePage() {
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null)
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null)
   const [search, setSearch] = useState('')
+  const [teamSearch, setTeamSearch] = useState('')
   const [pin, setPin] = useState('')
   const [error, setError] = useState('')
   const [checkingIn, setCheckingIn] = useState(false)
@@ -248,18 +263,27 @@ export default function HomePage() {
           <div>
             <p style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '0.95rem', marginBottom: '1rem', textAlign: 'center' }}>Which team are you on?</p>
             {loading && <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '2rem' }}>Loading…</div>}
+            {teams.length >= TEAM_SEARCH_MIN && (
+              <input className="input" placeholder="Search team or coach…" value={teamSearch}
+                onChange={e => setTeamSearch(e.target.value)} style={{ marginBottom: '0.75rem' }} autoComplete="off" />
+            )}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.625rem' }}>
-              {teams.map(team => (
+              {!loading && teamSearch && !teams.some(t => teamMatches(t, teamSearch)) && (
+                <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', fontSize: '0.85rem' }}>No teams or coaches found</div>
+              )}
+              {teams.filter(t => teamMatches(t, teamSearch)).map(team => (
                 <button key={team.id} onClick={() => selectTeam(team)}
                   style={{ background: 'var(--white)', border: `2px solid ${team.color}40`, borderRadius: 12, padding: '1rem 1.25rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '1rem', textAlign: 'left', transition: 'all 0.15s', boxShadow: '0 1px 4px rgba(0,0,0,0.06)' }}
                   onMouseEnter={e => { e.currentTarget.style.borderColor = team.color; e.currentTarget.style.background = `${team.color}08` }}
                   onMouseLeave={e => { e.currentTarget.style.borderColor = `${team.color}40`; e.currentTarget.style.background = 'var(--white)' }}>
                   <div style={{ width: 44, height: 44, borderRadius: 10, background: team.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem', color: '#fff', flexShrink: 0 }}>
-                    {team.name.charAt(0)}
+                    {teamInitial(team.name)}
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', color: 'var(--black)' }}>{team.name}</div>
-                    {team.age_group && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{team.age_group}</div>}
+                    {team.coaches?.length
+                      ? <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{team.coaches.join(' · ')}</div>
+                      : team.age_group && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>{team.age_group}</div>}
                   </div>
                   <div style={{ marginLeft: 'auto', color: team.color, fontSize: '1.2rem' }}>›</div>
                 </button>
@@ -290,7 +314,7 @@ export default function HomePage() {
               {selectedTeam ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <div style={{ width: 28, height: 28, borderRadius: 6, background: selectedTeam.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '0.9rem', color: '#fff', flexShrink: 0 }}>
-                    {selectedTeam.name.charAt(0)}
+                    {teamInitial(selectedTeam.name)}
                   </div>
                   <span style={{ fontWeight: 700, color: 'var(--black)' }}>{selectedTeam.name}</span>
                 </div>

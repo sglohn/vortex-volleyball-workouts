@@ -7,6 +7,7 @@ import { inchesToFeetInches, calcVertical, painLevelColor, painLevelLabel } from
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { FEATURES, POSITIONS } from '@/lib/features'
 import { useIsAdmin } from '@/components/CoachContext'
+import { teamInitial } from '@/lib/teamInitial'
 
 interface Measurement { height_in?: number; wingspan_in?: number; standing_reach_in?: number; standing_vertical_in?: number; approach_vertical_in?: number; measured_at?: string }
 interface HealthReport { id: string; report_type: string; body_part: string; pain_level?: number; status: string; confirmed_by_coach: boolean; description?: string; reported_at: string; coach_notes?: string }
@@ -154,7 +155,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.75rem' }}>
         <Link href="/coach/teams" style={{ color: 'var(--carolina-dark)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 500, marginTop: '0.4rem' }}>← Teams</Link>
         <div style={{ width: 48, height: 48, borderRadius: 12, background: team.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: 'white', flexShrink: 0 }}>
-          {team.name.charAt(0)}
+          {teamInitial(team.name)}
         </div>
         <div style={{ flex: 1 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
