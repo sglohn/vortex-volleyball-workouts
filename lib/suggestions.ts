@@ -29,7 +29,8 @@
 // 3. LOADABLE WEIGHT (lib/loads.ts)
 //    Every suggestion is rounded to a weight that can actually be loaded
 //    for the exercise's equipment: barbell = 45 bar + plate pairs (5 lb
-//    steps, never under 45); dumbbells = 5–50 by 5s, given per dumbbell
+//    steps, never under 45); dumbbells = the nearest one this site has
+//    (lib/loads.ts DUMBBELLS_LBS), given per dumbbell
 //    (the number on the dumbbell, which is also what players enter);
 //    landmine = plates on the end in 2.5 lb steps.
 //

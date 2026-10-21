@@ -187,7 +187,8 @@ function BandButton({ band, on, coachPick, big, onTap }: { band: BandInfo; on: b
     <button type="button" onClick={onTap} aria-pressed={on}
       style={{ position: 'relative', padding: big ? '0.9rem 0.25rem 0.7rem' : '0.75rem 0.25rem 0.6rem', borderRadius: 12, cursor: 'pointer',
         background: band.swatch, color: band.ink,
-        border: on ? '3px solid var(--carolina)' : '3px solid transparent',
+        // a white band needs an outline to show on the white page
+        border: on ? '3px solid var(--carolina)' : band.swatch.toLowerCase() === '#ffffff' ? '3px solid var(--gray-border)' : '3px solid transparent',
         boxShadow: on ? '0 0 0 3px var(--carolina-light)' : '0 1px 3px rgba(0,0,0,0.15)',
         opacity: on ? 1 : 0.92, textAlign: 'center' }}>
       {coachPick && (

@@ -1,6 +1,14 @@
 // FILE: lib/loads.ts
 //
-// Equipment and weight rules for the Vortex weight room.
+// Equipment and weight rules for the weight room.
+//
+// Each site has its own dumbbells and large bands (lib/brand.ts):
+//   Vortex            dumbbells 5–50 by 5s; large bands Yellow, Red, Black, Purple
+//   Bruisers Lacrosse dumbbells 2.5, 5, 7.5, 10, 12.5, 15, then 20–50 by 5s;
+//                     large bands Orange (extra light), Red (light),
+//                     Green (medium), Orange (heavy, the thicker one),
+//                     White (extra heavy)
+// Bars, plates, trap bars, hip bands and med balls are the same on both.
 //
 // What players type:
 //   Barbell        - the total on the bar (bar + plates), e.g. 135
@@ -22,12 +30,16 @@
 // Suggestions are always a weight that can actually be loaded:
 //   Barbell   - 45 lb bar + pairs of 45/35/25/10/5/2.5 plates
 //               → 45, 50, 55 … (5 lb steps, never below the empty bar)
-//   Dumbbells - 5 to 50 in steps of 5 (per dumbbell)
+//   Dumbbells - the nearest dumbbell this site has (per dumbbell)
 //   Landmine  - plates on one end in 2.5 lb steps (lightest suggestion is
 //               2.5; players can still enter 0 for the empty bar)
 //   Other / not set - nearest 5 lbs
 //   Bands and med balls get no weight suggestion. For bands the coach picks
 //   a band per exercise in the workout (template_block_exercises.recommended_band).
+
+import { BRAND } from '@/lib/brand'
+
+const LACROSSE = BRAND.sport === 'lacrosse'
 
 export type Equipment =
   | 'barbell' | 'dumbbell_1' | 'dumbbell_2' | 'landmine'
@@ -39,14 +51,17 @@ export const EQUIPMENT_OPTIONS: { value: Equipment; label: string; hint: string 
   { value: 'dumbbell_2', label: '2 dumbbells',  hint: 'Player enters the number on one dumbbell; counts double' },
   { value: 'landmine',   label: 'Landmine',     hint: 'Bar against the wall; player enters plates on the end' },
   { value: 'medball',    label: 'Med ball',     hint: 'Player picks the 10 lb (default) or 14 lb ball' },
-  { value: 'large_band', label: 'Large band',   hint: 'Player taps the band color: Yellow, Red, Black, Purple' },
+  { value: 'large_band', label: 'Large band',   hint: LACROSSE ? 'Player taps the band: Orange, Red, Green, Orange (heavy), White' : 'Player taps the band color: Yellow, Red, Black, Purple' },
   { value: 'hip_band',   label: 'Hip band',     hint: 'Player taps the band color: Green, Yellow, Blue, Red, Black' },
   { value: 'other',      label: 'Other',        hint: 'Machine, sled, etc.' },
 ]
 
 export const BAR_LBS = 45
 export const PLATES_LBS = [45, 35, 25, 10, 5, 2.5]   // per side, used in pairs
-export const DUMBBELLS_LBS = [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+// The dumbbells on the rack, lightest first (the number on one dumbbell)
+export const DUMBBELLS_LBS = LACROSSE
+  ? [2.5, 5, 7.5, 10, 12.5, 15, 20, 25, 30, 35, 40, 45, 50]
+  : [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
 
 // A 45 lb bar with one end in a landmine pivot. Lifted at the free end, the
 // lifter carries about half the bar (~22.5 lbs) at any angle; 25 also
@@ -59,8 +74,9 @@ export const MEDBALL_DEFAULT_LBS = 10
 
 // ── Bands ─────────────────────────────────────────────────────────────────
 // Lightest to heaviest. The key is what's saved (set_logs.band and
-// template_block_exercises.recommended_band); the SQL migration
-// 2026-10-19_bands_and_medballs.sql lists the same keys.
+// template_block_exercises.recommended_band); the SQL migrations
+// 2026-10-19_bands_and_medballs.sql and 2026-10-21_lacrosse_large_bands.sql
+// list the same keys. Large bands differ by site; hip bands are the same.
 
 export type BandKind = 'large' | 'hip'
 
@@ -73,11 +89,24 @@ export interface BandInfo {
   ink: string          // text color on the swatch
 }
 
-export const BANDS: BandInfo[] = [
+const VORTEX_LARGE_BANDS: BandInfo[] = [
   { key: 'large_yellow', kind: 'large', color: 'Yellow', level: 'Extra light', swatch: '#facc15', ink: '#111827' },
   { key: 'large_red',    kind: 'large', color: 'Red',    level: 'Light',       swatch: '#dc2626', ink: '#ffffff' },
   { key: 'large_black',  kind: 'large', color: 'Black',  level: 'Medium',      swatch: '#111827', ink: '#ffffff' },
   { key: 'large_purple', kind: 'large', color: 'Purple', level: 'Heavy',       swatch: '#7c3aed', ink: '#ffffff' },
+]
+
+// Two of these are orange; the heavy one is the thicker band
+const LACROSSE_LARGE_BANDS: BandInfo[] = [
+  { key: 'large_orange',       kind: 'large', color: 'Orange', level: 'Extra light', swatch: '#fb923c', ink: '#111827' },
+  { key: 'large_red',          kind: 'large', color: 'Red',    level: 'Light',       swatch: '#dc2626', ink: '#ffffff' },
+  { key: 'large_green',        kind: 'large', color: 'Green',  level: 'Medium',      swatch: '#16a34a', ink: '#ffffff' },
+  { key: 'large_orange_heavy', kind: 'large', color: 'Orange', level: 'Heavy',       swatch: '#c2410c', ink: '#ffffff' },
+  { key: 'large_white',        kind: 'large', color: 'White',  level: 'Extra heavy', swatch: '#ffffff', ink: '#111827' },
+]
+
+export const BANDS: BandInfo[] = [
+  ...(LACROSSE ? LACROSSE_LARGE_BANDS : VORTEX_LARGE_BANDS),
   { key: 'hip_green',    kind: 'hip',   color: 'Green',  level: 'Extra light', swatch: '#16a34a', ink: '#ffffff' },
   { key: 'hip_yellow',   kind: 'hip',   color: 'Yellow', level: 'Light',       swatch: '#facc15', ink: '#111827' },
   { key: 'hip_blue',     kind: 'hip',   color: 'Blue',   level: 'Medium',      swatch: '#2563eb', ink: '#ffffff' },
@@ -116,10 +145,21 @@ export function bandInfo(key: string | null | undefined): BandInfo | null {
   return BANDS.find(b => b.key === key) ?? null
 }
 
-/** "Blue band" */
+/** True when another band of the same kind has the same color (lacrosse's two oranges) */
+function colorRepeats(b: BandInfo): boolean {
+  return BANDS.some(o => o.kind === b.kind && o.key !== b.key && o.color === b.color)
+}
+
+/** "Orange" or, when two bands share the color, "Orange (heavy)" */
+export function bandName(b: BandInfo): string {
+  return colorRepeats(b) ? `${b.color} (${b.level.toLowerCase()})` : b.color
+}
+
+/** "Blue band"; "Orange band (heavy)" when two bands share the color */
 export function bandLabel(key: string | null | undefined): string {
   const b = bandInfo(key)
-  return b ? `${b.color} band` : ''
+  if (!b) return ''
+  return colorRepeats(b) ? `${b.color} band (${b.level.toLowerCase()})` : `${b.color} band`
 }
 
 /** "Blue band (medium)" */
