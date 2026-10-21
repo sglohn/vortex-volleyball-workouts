@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useIsAdmin } from '@/components/CoachContext'
+import { teamInitial } from '@/lib/teamInitial'
 
-interface Team { id: string; name: string; age_group?: string; color: string; is_active: boolean; playerCount?: number; is_open_gym?: boolean }
+interface Team { id: string; name: string; age_group?: string; color: string; is_active: boolean; playerCount?: number; is_open_gym?: boolean; coaches?: string[] }
 
 const COLORS = ['#56a0d3','#111827','#ef4444','#f97316','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16']
 const AGE_GROUPS = ['12s','13s','14s','15s','16s','17s','18s','Boys 13s','Boys 14s','Boys 15s','Boys 16s','Boys 17s','Boys 18s','Open']
@@ -87,7 +88,7 @@ export default function CoachTeamsPage() {
             {/* Color swatch */}
             <div style={{ width:40, height:40, borderRadius:10, background:t.color, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
               <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1rem', color:'white' }}>
-                {t.is_open_gym ? '⚡' : t.name.charAt(0)}
+                {t.is_open_gym ? '⚡' : teamInitial(t.name)}
               </span>
             </div>
             <div style={{ flex:1, minWidth:0 }}>
@@ -101,6 +102,9 @@ export default function CoachTeamsPage() {
                   : <>{t.age_group && <span>{t.age_group} · </span>}<span>{t.playerCount ?? 0} players</span></>
                 }
               </div>
+              {!t.is_open_gym && !!t.coaches?.length && (
+                <div style={{ fontSize:'0.78rem', color:'var(--text-secondary)', marginTop:'0.1rem' }}>{t.coaches.join(' · ')}</div>
+              )}
             </div>
             <div style={{ display:'flex', gap:'0.625rem', alignItems:'center', flexShrink:0 }}>
               {!t.is_open_gym && (

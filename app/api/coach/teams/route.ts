@@ -1,7 +1,8 @@
 // FILE: app/api/coach/teams/route.ts
 //
-//   GET          active teams with player counts. Open to everyone (the player
-//                sign-in screen and TV display use it, middleware.ts).
+//   GET          active teams with player counts and coach names
+//                (coaches: ["Coach Emma Haddix", …]). Open to everyone (the
+//                player sign-in screen and TV display use it, middleware.ts).
 //                A signed-in team coach gets only their own teams, unless
 //                ?all=1 (the sign-in screen and TV display ask for all).
 //   POST / PUT   admins only (middleware.ts)
@@ -34,14 +35,39 @@ export async function GET(req: NextRequest) {
     return { ...team, playerCount: count ?? 0 }
   }))
 
+  // Each team's coaches (team coach accounts, not admins), shown in small
+  // type under the team name so players and coaches can find their team by
+  // either one. Names only.
+  const coachesByTeam = new Map<string, string[]>()
+  if (enriched.length) {
+    const { data: links } = await db
+      .from('coach_teams')
+      .select('team_id, coaches!inner(name, role, is_active)')
+      .in('team_id', enriched.map(t => t.id))
+      .eq('coaches.is_active', true)
+      .eq('coaches.role', 'coach')
+    type C = { name: string }
+    for (const row of (links ?? []) as unknown as { team_id: string; coaches: C | C[] | null }[]) {
+      const c = Array.isArray(row.coaches) ? row.coaches[0] : row.coaches
+      if (!c?.name) continue
+      const list = coachesByTeam.get(row.team_id) ?? []
+      list.push(c.name)
+      coachesByTeam.set(row.team_id, list)
+    }
+  }
+  const withCoaches = enriched.map(team => ({
+    ...team,
+    coaches: (coachesByTeam.get(team.id) ?? []).sort((a, b) => a.localeCompare(b)),
+  }))
+
   // Sort: regular teams first (by age_group), Open Gym last
-  enriched.sort((a, b) => {
+  withCoaches.sort((a, b) => {
     if (a.is_open_gym && !b.is_open_gym) return 1
     if (!a.is_open_gym && b.is_open_gym) return -1
-    return (a.age_group ?? '').localeCompare(b.age_group ?? '')
+    return (a.age_group ?? '').localeCompare(b.age_group ?? '') || a.name.localeCompare(b.name)
   })
 
-  return NextResponse.json({ teams: enriched })
+  return NextResponse.json({ teams: withCoaches })
 }
 
 export async function POST(req: NextRequest) {
