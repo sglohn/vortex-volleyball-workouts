@@ -98,7 +98,7 @@ export default function CoachDashboardPage() {
       })()}
 
       {/* Stat row — clickable */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '2rem' }}>
+      <div className="grid-stats" style={{ marginBottom: '2rem' }}>
         {[
           {
             value: data?.sessionsTodayCount ?? 0,
@@ -160,7 +160,7 @@ export default function CoachDashboardPage() {
             <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Teams</h2>
             <Link href="/coach/teams" style={{ fontSize: '0.8rem', color: 'var(--volt)', textDecoration: 'none' }}>Manage teams →</Link>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '0.75rem' }}>
+          <div className="grid-cards">
             {data.teamsActive.map(team => {
               const phase = team.phase
               const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
@@ -196,7 +196,7 @@ export default function CoachDashboardPage() {
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem', marginBottom: '1.5rem' }}>
+      <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
 
         {/* Today's check-ins */}
         <div ref={checkinsRef} className="card" style={{ padding: '1.25rem' }}>

@@ -375,7 +375,7 @@ function WorkoutLogsInner() {
                             )}
                             <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                               <input type="checkbox" disabled={!isAdmin} checked={d.completed} onChange={e => edit(s, { completed: e.target.checked })}
-                                aria-label={`Set ${s.setNumber} done`} style={{ width: 18, height: 18 }} />
+                                aria-label={`Set ${s.setNumber} done`} style={{ width: 22, height: 22 }} />
                             </label>
                             <div className="log-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.375rem' }}>
                               {isAdmin && changed && (

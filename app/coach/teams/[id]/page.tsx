@@ -152,31 +152,31 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   return (
     <div style={{ padding: '2rem', maxWidth: 1000 }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', marginBottom: '1.75rem' }}>
-        <Link href="/coach/teams" style={{ color: 'var(--carolina-dark)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 500, marginTop: '0.4rem' }}>← Teams</Link>
+      <div className="wrap-phone" style={{ display: 'flex', alignItems: 'flex-start', gap: '1rem', rowGap: '0.625rem', marginBottom: '1.75rem' }}>
+        <Link href="/coach/teams" className="full-phone" style={{ color: 'var(--carolina-dark)', textDecoration: 'none', fontSize: '0.85rem', fontWeight: 500, marginTop: '0.4rem' }}>← Teams</Link>
         <div style={{ width: 48, height: 48, borderRadius: 12, background: team.color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.3rem', color: 'white', flexShrink: 0 }}>
           {teamInitial(team.name)}
         </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 800 }}>{team.name}</h1>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', rowGap: '0.375rem', flexWrap: 'wrap' }}>
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.4rem, 6vw, 1.75rem)', fontWeight: 800 }}>{team.name}</h1>
             {team.age_group && <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 500 }}>{team.age_group}</span>}
             {phaseConfig && <span style={{ fontSize: '0.72rem', fontWeight: 700, color: phaseConfig.color, background: `${phaseConfig.color}18`, padding: '0.2rem 0.625rem', borderRadius: 5, border: `1px solid ${phaseConfig.color}30` }}>{phaseConfig.label} Phase</span>}
             {activeHealthCount > 0 && <span className="tag tag-danger">⚠ {activeHealthCount} health flag{activeHealthCount > 1 ? 's' : ''}</span>}
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.82rem', marginTop: '0.2rem' }}>{roster.length} players</p>
         </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+        <div className="full-phone" style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
           <a href={`/team/${teamId}`} target="_blank" rel="noopener noreferrer" style={{ background: 'var(--carolina)', color: 'var(--white)', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 700, padding: '0.5rem 1rem', borderRadius: 8 }}>▶ Team Mode</a>
           {isAdmin && <button onClick={openAddPlayer} className="btn-volt" style={{ padding: '0.5rem 1rem', fontSize: '0.82rem' }}>+ Add Player</button>}
         </div>
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', background: 'var(--carolina-light)', padding: '0.25rem', borderRadius: 10, width: 'fit-content', border: '1.5px solid var(--carolina-border)' }}>
+      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', background: 'var(--carolina-light)', padding: '0.25rem', borderRadius: 10, width: 'fit-content', maxWidth: '100%', border: '1.5px solid var(--carolina-border)' }}>
         {([['roster','Roster'], ['stats', FEATURES.measurements ? 'Measurements & Stats' : 'Stats'], ['health','Health Board']] as [Tab, string][]).map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)}
-            style={{ padding: '0.5rem 1.1rem', borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', transition: 'all 0.12s', background: tab === t ? 'var(--carolina)' : 'transparent', color: tab === t ? 'var(--white)' : 'var(--carolina-dark)' }}>
+            style={{ padding: '0.5rem 1.1rem', borderRadius: 7, border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.85rem', lineHeight: 1.25, transition: 'all 0.12s', background: tab === t ? 'var(--carolina)' : 'transparent', color: tab === t ? 'var(--white)' : 'var(--carolina-dark)' }}>
             {label}{t === 'health' && activeHealthCount > 0 ? ` (${activeHealthCount})` : ''}
           </button>
         ))}
@@ -186,12 +186,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
       {/* ── ROSTER TAB ── */}
       {tab === 'roster' && (
-        <div className="card" style={{ overflow: 'hidden' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <div className="card" style={{ overflowX: 'auto' }}>
+          <table className="tbl-tight" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--carolina-light)', borderBottom: '1.5px solid var(--carolina-border)' }}>
                 {['Player','Position','Sessions','Last Active','Health','Actions'].map(h => (
-                  <th key={h} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.72rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{h}</th>
+                  <th key={h} className={h === 'Position' || h === 'Last Active' || h === 'Sessions' ? 'hide-phone' : undefined} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.72rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -209,9 +209,9 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                         <span style={{ fontWeight: 600 }}>{p.name}</span>
                       </div>
                     </td>
-                    <td style={{ padding: '0.875rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{p.position || '—'}</td>
-                    <td style={{ padding: '0.875rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{p.sessionCount}</td>
-                    <td style={{ padding: '0.875rem 1rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>{p.lastSeen ? new Date(p.lastSeen).toLocaleDateString() : 'Never'}</td>
+                    <td className="hide-phone" style={{ padding: '0.875rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{p.position || '—'}</td>
+                    <td className="hide-phone" style={{ padding: '0.875rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{p.sessionCount}</td>
+                    <td className="hide-phone" style={{ padding: '0.875rem 1rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>{p.lastSeen ? new Date(p.lastSeen).toLocaleDateString() : 'Never'}</td>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       {activeHealth.length > 0
                         ? <button onClick={() => { setHealthPlayer(p); setTab('health') }} style={{ background: 'var(--danger-light)', border: '1px solid #fecaca', borderRadius: 5, padding: '0.2rem 0.6rem', fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 700, cursor: 'pointer' }}>⚠ {activeHealth.length}</button>
@@ -219,15 +219,15 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                       }
                     </td>
                     <td style={{ padding: '0.875rem 1rem' }}>
-                      <div style={{ display: 'flex', gap: '0.625rem' }}>
+                      <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap' }}>
                         {isAdmin && <>
-                          <button onClick={() => openEdit(p)} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Edit</button>
-                          <span style={{ color: 'var(--gray-border)' }}>|</span>
+                          <button className="tap-phone" onClick={() => openEdit(p)} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Edit</button>
+                          <span className="hide-phone" style={{ color: 'var(--gray-border)' }}>|</span>
                         </>}
                         <Link href={`/coach/players/${p.id}`} style={{ color: 'var(--carolina-dark)', fontSize: '0.82rem', textDecoration: 'none', fontWeight: 600 }}>Detail</Link>
                         {isAdmin && <>
-                          <span style={{ color: 'var(--gray-border)' }}>|</span>
-                          <button onClick={() => removeFromTeam(p.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Remove</button>
+                          <span className="hide-phone" style={{ color: 'var(--gray-border)' }}>|</span>
+                          <button className="tap-phone" onClick={() => removeFromTeam(p.id)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Remove</button>
                         </>}
                       </div>
                     </td>

@@ -33,15 +33,16 @@ export default function PlayerLayout({ children }: { children: React.ReactNode }
       <div style={{ background: 'var(--black)', padding: '0.625rem 1rem', display: 'flex', alignItems: 'center', gap: '0.75rem', position: 'sticky', top: 0, zIndex: 10, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
         <BrandMark size={28} tone="accent" />
         <span style={{ whiteSpace: 'nowrap', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', letterSpacing: '0.1em', color: 'var(--yellow)' }}>{BRAND.appTitle.toUpperCase()}</span>
-        <div style={{ flex: 1 }} />
-        {playerName && <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', fontWeight: 500 }}>{playerName}</span>}
-        <Link href="/" style={{ color: 'var(--carolina-light)', fontSize: '0.75rem', textDecoration: 'none', fontWeight: 500 }}>Sign out</Link>
+        <div style={{ flex: 1, minWidth: 0 }} />
+        {/* Long names shorten with "…" instead of wrapping on small phones */}
+        {playerName && <span style={{ fontSize: '0.78rem', color: 'rgba(255,255,255,0.6)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>{playerName}</span>}
+        <Link href="/" style={{ color: 'var(--carolina-light)', fontSize: '0.8rem', textDecoration: 'none', fontWeight: 500, padding: '0.6rem 0.25rem 0.6rem 0.5rem', margin: '-0.6rem 0', whiteSpace: 'nowrap', flexShrink: 0 }}>Sign out</Link>
       </div>
 
       <main style={{ flex: 1, overflowY: 'auto', paddingBottom: '5rem' }}>{children}</main>
 
       {/* Bottom nav */}
-      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--white)', borderTop: '1.5px solid var(--gray-border)', display: 'flex', justifyContent: 'space-around', padding: '0.4rem 0', zIndex: 10, boxShadow: '0 -2px 12px rgba(0,0,0,0.07)' }}>
+      <nav style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'var(--white)', borderTop: '1.5px solid var(--gray-border)', display: 'flex', justifyContent: 'space-around', padding: '0.4rem 0.25rem calc(0.4rem + env(safe-area-inset-bottom))', gap: '0.125rem', zIndex: 10, boxShadow: '0 -2px 12px rgba(0,0,0,0.07)' }}>
         {nav.map(item => (
           <Link key={item.href} href={item.href} className={`nav-item ${path === item.href ? 'active' : ''}`}>
             {item.icon}{item.label}

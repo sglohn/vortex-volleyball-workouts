@@ -450,9 +450,16 @@ export default function CoachPlayersPage() {
         @media (max-width: 1500px) {
           .vx-players-table { min-width: 1400px; }
         }
+        /* Phones: the player's name stays on screen while the numbers
+           scroll sideways (the rank column is dropped to make room) */
+        @media (max-width: 640px) {
+          .vx-players-table th:first-child, .vx-players-table td:first-child { display: none; }
+          .vx-players-table td:nth-child(2) { position: sticky; left: 0; z-index: 1; background: var(--white); box-shadow: 2px 0 6px rgba(0,0,0,0.06); max-width: 150px; }
+          .vx-players-table th:nth-child(2) { position: sticky; left: 0; top: 0; z-index: 2; background: var(--carolina-light); }
+        }
       `}</style>
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' }}>
+      <div className="wrap-phone" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem', gap: '0.75rem' }}>
         <div>
           <h1 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:800 }}>Players</h1>
           <p style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{players.length} active players · {teams.length} teams</p>

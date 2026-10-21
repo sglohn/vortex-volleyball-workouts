@@ -190,7 +190,7 @@ export default function TemplatesPage() {
 
   return (
     <div style={{ padding: '2rem', maxWidth: 900 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+      <div className="wrap-phone" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', gap: '0.75rem' }}>
         <div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800 }}>Workout Templates</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>{templates.length} templates</p>
