@@ -60,11 +60,11 @@ function AccountCard({ a, teams, onEdit, onToggle, onRemove, busy }: {
       <div style={{ display: 'flex', gap: '0.625rem', alignItems: 'center', flexShrink: 0 }}>
         {!confirmRemove ? (
           <>
-            <button onClick={onEdit} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Edit</button>
+            <button className="tap-phone" onClick={onEdit} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Edit</button>
             <span style={{ color: 'var(--gray-border)' }}>|</span>
-            <button onClick={onToggle} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>{a.isActive ? 'Turn off' : 'Turn on'}</button>
+            <button className="tap-phone" onClick={onToggle} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>{a.isActive ? 'Turn off' : 'Turn on'}</button>
             <span style={{ color: 'var(--gray-border)' }}>|</span>
-            <button onClick={() => setConfirmRemove(true)} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Remove</button>
+            <button className="tap-phone" onClick={() => setConfirmRemove(true)} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--danger)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Remove</button>
           </>
         ) : (
           <>

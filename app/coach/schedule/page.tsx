@@ -294,11 +294,13 @@ function ScheduleContent() {
             </button>
           ))}
         </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
         <button className="btn-ghost" onClick={() => setWeekStart(d => addDays(d, -7))} style={{ padding: '0.4rem 0.875rem' }}>← Prev</button>
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem' }}>
           {weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} – {addDays(weekStart, view === 'week' ? 6 : 83).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
         </span>
         <button className="btn-ghost" onClick={() => setWeekStart(d => addDays(d, 7))} style={{ padding: '0.4rem 0.875rem' }}>Next →</button>
+        </div>
         <button className="btn-ghost" onClick={() => setWeekStart(getMonday(new Date()))} style={{ padding: '0.4rem 0.875rem', fontSize: '0.8rem' }}>Today</button>
       </div>
 
@@ -318,7 +320,7 @@ function ScheduleContent() {
           <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 700 }}>
             <thead>
               <tr>
-                <th style={{ width: 140, padding: '0.5rem 0.75rem', textAlign: 'left', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1.5px solid var(--gray-border)' }}>Team</th>
+                <th style={{ width: 140, padding: '0.5rem 0.75rem', textAlign: 'left', fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1.5px solid var(--gray-border)', position: 'sticky', left: 0, zIndex: 1, background: 'var(--page-bg)' }}>Team</th>
                 {weekDays.map((d, i) => (
                   <th key={i} style={{ padding: '0.5rem', textAlign: 'center', fontSize: '0.72rem', color: fmt(d) === TODAY ? 'var(--carolina)' : 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', borderBottom: '1.5px solid var(--gray-border)', fontWeight: fmt(d) === TODAY ? 700 : 600, background: fmt(d) === TODAY ? 'var(--carolina-light)' : 'transparent' }}>
                     {DAY_LABELS[i]}<br /><span style={{ fontSize: '0.7rem', fontWeight: 400 }}>{d.getDate()}</span>
@@ -329,7 +331,8 @@ function ScheduleContent() {
             <tbody>
               {visibleTeams.map(team => (
                 <tr key={team.id} style={{ borderBottom: '1px solid var(--gray-border)' }}>
-                  <td style={{ padding: '0.625rem 0.75rem' }}>
+                  {/* Team name stays put while the days scroll sideways on phones */}
+                  <td style={{ padding: '0.625rem 0.75rem', position: 'sticky', left: 0, zIndex: 1, background: 'var(--page-bg)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: team.color, flexShrink: 0 }} />
                       <div>
@@ -371,7 +374,7 @@ function ScheduleContent() {
           <table style={{ borderCollapse: 'collapse', fontSize: '0.78rem', minWidth: 900 }}>
             <thead>
               <tr>
-                <th style={{ width: 120, padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.72rem', color: 'var(--text-muted)', borderBottom: '1.5px solid var(--gray-border)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Team</th>
+                <th style={{ width: 120, padding: '0.4rem 0.75rem', textAlign: 'left', fontSize: '0.72rem', color: 'var(--text-muted)', borderBottom: '1.5px solid var(--gray-border)', textTransform: 'uppercase', letterSpacing: '0.05em', position: 'sticky', left: 0, zIndex: 1, background: 'var(--page-bg)' }}>Team</th>
                 {seasonWeeks.map((w, i) => (
                   <th key={i} style={{ padding: '0.4rem 0.25rem', textAlign: 'center', fontSize: '0.7rem', color: 'var(--text-muted)', borderBottom: '1.5px solid var(--gray-border)', fontWeight: 600, minWidth: 72 }}>
                     <div style={{ fontWeight: 700, color: 'var(--black)' }}>Wk {i+1}</div>
@@ -383,7 +386,7 @@ function ScheduleContent() {
             <tbody>
               {visibleTeams.map(team => (
                 <tr key={team.id} style={{ borderBottom: '1px solid var(--gray-border)' }}>
-                  <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, fontSize: '0.82rem' }}>
+                  <td style={{ padding: '0.5rem 0.75rem', fontWeight: 600, fontSize: '0.82rem', position: 'sticky', left: 0, zIndex: 1, background: 'var(--page-bg)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: team.color, flexShrink: 0 }} />
                       {team.name}

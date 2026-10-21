@@ -503,17 +503,19 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
     <div style={{ minHeight: '100vh', background: 'var(--page-bg)', display: 'flex', flexDirection: 'column' }}>
 
       {/* Top bar */}
-      <div style={{ background: 'var(--black)', padding: '0.875rem 1.5rem', display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
+      <div style={{ background: 'var(--black)', padding: '0.875rem clamp(0.875rem, 4vw, 1.5rem)', display: 'flex', alignItems: 'center', gap: '1rem', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}>
         <BrandMark size={32} tone="accent" />
-        <div>
+        {/* Title hidden on phones so the team name gets the room */}
+        <div className="hide-phone">
           <div style={{ whiteSpace: 'nowrap', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem', letterSpacing: '0.08em', color: 'var(--volt)', lineHeight: 1 }}>{BRAND.appTitle.toUpperCase()}</div>
           <div style={{ fontSize: '0.7rem', color: 'rgba(255,255,255,0.5)', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Team Mode</div>
         </div>
-        <div style={{ flex: 1, textAlign: 'center' }}>
-          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: 'var(--white)' }}>{team.name}{team.age_group ? ` · ${team.age_group}` : ''}</div>
+        <div style={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+          {/* Age group only when the name doesn't already start with it ("15 Ares" / "15s") */}
+          <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem', color: 'var(--white)' }}>{team.name}{team.age_group && !team.name.startsWith(team.age_group.replace(/\D/g, '')) ? ` · ${team.age_group}` : ''}</div>
           {workoutName && <div style={{ fontSize: '0.75rem', color: 'rgba(255,255,255,0.55)' }}>{workoutName}</div>}
         </div>
-        <div style={{ textAlign: 'right' }}>
+        <div style={{ textAlign: 'right', flexShrink: 0 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.1rem', color: 'var(--volt)' }}>{checkedInCount}/{roster.length}</div>
           <div style={{ fontSize: '0.65rem', color: 'rgba(255,255,255,0.5)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Checked in</div>
         </div>

@@ -162,12 +162,12 @@ export default function CoachPlayerDetailPage() {
     <div style={{ padding: '2rem', maxWidth: 960 }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem', flexWrap: 'wrap' }}>
-        <a href="/coach/players" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.9rem' }}>← Players</a>
+        <a href="/coach/players" className="full-phone" style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '0.9rem' }}>← Players</a>
         <div style={{ width: 52, height: 52, borderRadius: '50%', background: team?.color ? `${team.color}25` : 'rgba(74,222,128,0.15)', border: `2px solid ${team?.color ?? 'var(--volt)'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '1.2rem', fontWeight: 700, color: team?.color ?? 'var(--volt)', flexShrink: 0 }}>
           {player.jersey_number || String(player.name).charAt(0)}
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '1.75rem', fontWeight: 800 }}>{player.name}</h1>
+          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.4rem, 6vw, 1.75rem)', fontWeight: 800, lineHeight: 1.15 }}>{player.name}</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
             {player.position ? `${player.position}` : ''}
             {player.position && ' · '}
@@ -226,7 +226,7 @@ export default function CoachPlayerDetailPage() {
 
       {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--volt)', fontSize: '0.9rem' }}>{msg}</div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: FEATURES.vbt ? 'minmax(0, 3fr) minmax(0, 2fr)' : 'minmax(0, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
+      <div className="one-col-phone" style={{ display: 'grid', gridTemplateColumns: FEATURES.vbt ? 'minmax(0, 3fr) minmax(0, 2fr)' : 'minmax(0, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
         {/* Left col: health + measurements */}
         <div>
           {/* Health card */}
@@ -340,7 +340,7 @@ export default function CoachPlayerDetailPage() {
       {exercises.length > 0 && (
         <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
           <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1.25rem' }}>Strength Progress</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '1.5rem' }}>
+          <div className="one-col-phone" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '1.5rem' }}>
             {exercises.map((ex: Record<string, unknown>) => {
               const history = ex.history as Array<{ date: string; oneRepMax: number }>
               if (!history?.length) return null

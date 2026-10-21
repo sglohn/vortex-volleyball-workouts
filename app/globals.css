@@ -292,7 +292,11 @@ textarea.input { resize: vertical; }
 .nav-item {
   display: flex; flex-direction: column; align-items: center;
   gap: 2px;
-  padding: 0.5rem 0.75rem;
+  /* Five tabs share the width evenly, so none falls off a narrow phone */
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 0.5rem 0.25rem;
+  white-space: nowrap;
   border-radius: 8px;
   color: var(--text-muted);
   font-size: 0.65rem;
@@ -334,6 +338,36 @@ textarea.input { resize: vertical; }
   height: 4px;
   background: linear-gradient(90deg, var(--black) 0%, var(--carolina) 60%, var(--yellow) 100%);
   border-radius: 2px 2px 0 0;
+}
+
+/* ── Layouts that fold up on phones ──
+   Put the class on the container and leave gridTemplateColumns /
+   flexDirection out of its inline style (inline styles beat classes). */
+.grid-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem; }
+.grid-2     { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
+.grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem; }
+
+@media (max-width: 640px) {
+  .grid-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.625rem; }
+  .grid-2     { grid-template-columns: minmax(0, 1fr); gap: 1rem; }
+  .grid-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+  /* A row that becomes a column on phones */
+  .stack-phone { flex-direction: column !important; align-items: stretch !important; }
+  /* A row that wraps onto more lines on phones */
+  .wrap-phone { flex-wrap: wrap !important; }
+  /* Takes a whole line of its own inside a wrapping row */
+  .full-phone { flex-basis: 100% !important; width: 100%; }
+  /* Any grid → one column on phones (beats the inline gridTemplateColumns) */
+  .one-col-phone { grid-template-columns: minmax(0, 1fr) !important; }
+  /* Tighter table cells */
+  .tbl-tight th, .tbl-tight td { padding: 0.625rem 0.5rem !important; }
+  /* Hide / show on phones */
+  .hide-phone { display: none !important; }
+  /* Small text buttons (Edit, Remove…) get a bigger area to tap */
+  .tap-phone { padding: 0.5rem 0.625rem !important; margin: -0.25rem 0; }
+}
+@media (min-width: 641px) {
+  .only-phone { display: none !important; }
 }
 
 /* ── Mobile responsive ── */

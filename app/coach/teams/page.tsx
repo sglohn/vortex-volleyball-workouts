@@ -66,7 +66,7 @@ export default function CoachTeamsPage() {
 
   return (
     <div style={{ padding:'2rem', maxWidth:800 }}>
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2rem' }}>
+      <div className="wrap-phone" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2rem', gap: '0.75rem' }}>
         <div>
           <h1 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:800 }}>Teams</h1>
           <p style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{teams.length} active teams</p>
@@ -84,7 +84,7 @@ export default function CoachTeamsPage() {
       <div style={{ display:'flex', flexDirection:'column', gap:'0.625rem' }}>
         {teams.length === 0 && <div className="card" style={{ padding:'2rem', textAlign:'center', color:'var(--text-muted)' }}>No teams yet. Add your first team above.</div>}
         {teams.map(t => (
-          <div key={t.id} className="card" style={{ padding:'1.1rem 1.25rem', borderLeft:`4px solid ${t.color}`, display:'flex', alignItems:'center', gap:'1rem' }}>
+          <div key={t.id} className="card wrap-phone" style={{ padding:'1.1rem 1.25rem', borderLeft:`4px solid ${t.color}`, display:'flex', alignItems:'center', gap:'1rem', rowGap:'0.75rem' }}>
             {/* Color swatch */}
             <div style={{ width:40, height:40, borderRadius:10, background:t.color, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
               <span style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1rem', color:'white' }}>
@@ -106,7 +106,7 @@ export default function CoachTeamsPage() {
                 <div style={{ fontSize:'0.78rem', color:'var(--text-secondary)', marginTop:'0.1rem' }}>{t.coaches.join(' · ')}</div>
               )}
             </div>
-            <div style={{ display:'flex', gap:'0.625rem', alignItems:'center', flexShrink:0 }}>
+            <div className="full-phone" style={{ display:'flex', gap:'0.625rem', alignItems:'center', flexShrink:0, flexWrap:'wrap' }}>
               {!t.is_open_gym && (
                 <a href={`/team/${t.id}`} target="_blank" rel="noopener noreferrer"
                   style={{ background:'var(--carolina)', color:'var(--white)', fontSize:'0.78rem', textDecoration:'none', fontWeight:700, padding:'0.35rem 0.75rem', borderRadius:6, letterSpacing:'0.03em' }}>
@@ -118,9 +118,9 @@ export default function CoachTeamsPage() {
                 Schedule
               </Link>}
               {isAdmin && !t.is_open_gym && <>
-                <button onClick={() => openEdit(t)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Edit</button>
-                <span style={{ color:'var(--gray-border)' }}>|</span>
-                <button onClick={() => setDeleteConfirm(t)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Delete</button>
+                <button className="tap-phone" onClick={() => openEdit(t)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Edit</button>
+                <span className="hide-phone" style={{ color:'var(--gray-border)' }}>|</span>
+                <button className="tap-phone" onClick={() => setDeleteConfirm(t)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Delete</button>
               </>}
             </div>
           </div>
