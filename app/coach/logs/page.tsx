@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { clubDateString } from '@/lib/clubTime'
 import { useIsAdmin } from '@/components/CoachContext'
-import { EQUIPMENT_OPTIONS, bandInfo, bandsFor, isBandEquipment, loadLabel, type Equipment } from '@/lib/loads'
+import { EQUIPMENT_OPTIONS, bandInfo, bandName, bandsFor, isBandEquipment, loadLabel, type Equipment } from '@/lib/loads'
 
 interface LogSet {
   id: string
@@ -364,7 +364,7 @@ function WorkoutLogsInner() {
                                   borderColor: s.flags.length ? 'var(--warning)' : cellInput.borderColor as string,
                                   boxShadow: bandInfo(d.band) ? `inset 6px 0 0 ${bandInfo(d.band)!.swatch}` : 'none' }}>
                                 <option value="">No band</option>
-                                {bandsFor(ex.equipment).map(b => <option key={b.key} value={b.key}>{b.color}</option>)}
+                                {bandsFor(ex.equipment).map(b => <option key={b.key} value={b.key}>{bandName(b)}</option>)}
                               </select>
                             )}
                             <input disabled={!isAdmin} aria-label={`Set ${s.setNumber} reps`} type="number" inputMode="numeric" value={d.reps}
