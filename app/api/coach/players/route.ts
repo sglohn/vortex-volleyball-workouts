@@ -120,7 +120,8 @@ export async function GET(req: NextRequest) {
 
   // Player list — now includes measurements + best lifts for leaderboard/sorting
   const visible = await visiblePlayerIds(db, coach)
-  let playersQuery = db.from('players').select('*').eq('is_active', true)
+  // Coaches' workout profiles (lib/coachWorkout.ts) aren't players
+  let playersQuery = db.from('players').select('*').eq('is_active', true).is('coach_id', null)
   if (visible) playersQuery = playersQuery.in('id', inList(visible))
   const { data: players } = await playersQuery.order('name')
   const { data: playerTeams } = await db.from('player_teams').select('player_id, is_primary, teams(id, name, color, age_group)').eq('is_primary', true)

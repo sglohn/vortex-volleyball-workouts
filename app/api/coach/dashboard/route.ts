@@ -86,7 +86,7 @@ export async function GET(req: NextRequest) {
   const { count: weekCount } = await weekQuery
 
   // Total active players
-  let totalQuery = db.from('players').select('*', { count: 'exact', head: true }).eq('is_active', true)
+  let totalQuery = db.from('players').select('*', { count: 'exact', head: true }).eq('is_active', true).is('coach_id', null)
   if (pids) totalQuery = totalQuery.in('id', pids)
   const { count: totalPlayers } = await totalQuery
 

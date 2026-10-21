@@ -7,6 +7,7 @@ export async function GET() {
     .from('players')
     .select('id, name, jersey_number')
     .eq('is_active', true)
+    .is('coach_id', null)   // not coaches' workout profiles (lib/coachWorkout.ts)
     .order('name')
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
