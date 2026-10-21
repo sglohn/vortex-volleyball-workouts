@@ -1,12 +1,26 @@
+// FILE: app/api/coach/overrides/route.ts
+//
+// Per-player workout changes and per-schedule exercise swaps.
+// Team coaches (lib/coachScope.ts) can see and change only their own
+// players' exercise replacements (type 'exercise_skip' / 'player_skip').
+// Whole-workout changes for a player ('player_template') and schedule swaps
+// ('schedule_exercise') are admins only.
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { getCoach } from '@/lib/coachAuth'
+import { adminsOnly, canSeePlayer, notYourTeam, signInRequired } from '@/lib/coachScope'
+
+const PLAYER_SKIP = new Set(['player_skip', 'exercise_skip'])
 
 export async function GET(req: NextRequest) {
   const playerId   = req.nextUrl.searchParams.get('playerId')
   const scheduleId = req.nextUrl.searchParams.get('scheduleId')
   const db = createServerClient()
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
 
   if (playerId) {
+    if (!(await canSeePlayer(db, coach, playerId))) return notYourTeam()
     const today = new Date().toISOString().split('T')[0]
     const [{ data: overrides }, { data: skips }, { data: templates }] = await Promise.all([
       db.from('player_overrides').select('*').eq('player_id', playerId).order('override_date', { ascending: false }),
@@ -20,6 +34,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (scheduleId) {
+    if (!coach.isAdmin) return adminsOnly()
     const { data: overrides } = await db
       .from('schedule_exercise_overrides')
       .select('*, replacement:replacement_exercise_id(id,name,default_reps), original:original_block_exercise_id(id,exercise_id,custom_reps,lib:exercise_id(id,name))')
@@ -34,6 +49,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const db = createServerClient()
   const { type } = body
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
+  if (!coach.isAdmin) {
+    if (!PLAYER_SKIP.has(type)) return adminsOnly()
+    if (!(await canSeePlayer(db, coach, body.playerId))) return notYourTeam()
+  }
 
   if (type === 'player_template') {
     const { playerId, date, templateId, notes } = body
@@ -74,6 +95,13 @@ export async function DELETE(req: NextRequest) {
   const body = await req.json()
   const db = createServerClient()
   const { type, id } = body
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
+  if (!coach.isAdmin) {
+    if (!PLAYER_SKIP.has(type)) return adminsOnly()
+    const { data: skip } = await db.from('player_exercise_skips').select('player_id').eq('id', id).maybeSingle()
+    if (!skip || !(await canSeePlayer(db, coach, skip.player_id))) return notYourTeam()
+  }
 
   if (type === 'player_template') {
     await db.from('player_overrides').delete().eq('id', id)

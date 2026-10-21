@@ -14,6 +14,9 @@
 //         { id, action: 'seen' }          self-guided swap: mark as seen
 //         { action: 'seen_all' }
 //
+// Team coaches see and answer only their own players' requests
+// (lib/coachScope.ts); admins see the whole club.
+//
 // Approving adds a player replacement (player_exercise_skips, skip_type
 // 'replace') for the exercise the workout calls for — the same thing the
 // coach can add on a player's page, where it can also be removed early:
@@ -26,6 +29,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { clubDateString, clubDateOf } from '@/lib/clubTime'
 import { asText, changeOptions, reasonLabel, requestSummary, wantsLabel } from '@/lib/exerciseLevels'
+import { getCoach } from '@/lib/coachAuth'
+import { canSeePlayer, inList, notYourTeam, signInRequired, visiblePlayerIds } from '@/lib/coachScope'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -61,24 +66,34 @@ async function loadLibrary(db: Db): Promise<LibRow[]> {
 const openFilter = 'status.eq.pending,and(kind.eq.self_guided_swap,coach_seen_at.is.null)'
 
 export async function GET(req: NextRequest) {
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
   const db = createServerClient()
+  const visible = await visiblePlayerIds(db, coach)
+  const pids = visible ? inList(visible) : null
 
   if (req.nextUrl.searchParams.get('count')) {
-    const { count, error } = await db
+    let countQuery = db
       .from('exercise_change_requests')
       .select('id', { count: 'exact', head: true })
       .or(openFilter)
+    if (pids) countQuery = countQuery.in('player_id', pids)
+    const { count, error } = await countQuery
     return NextResponse.json({ open: error ? 0 : count ?? 0 })
   }
 
   const since = new Date(Date.now() - HISTORY_DAYS * 86400000).toISOString()
+  let openQuery = db.from('exercise_change_requests').select('*').or(openFilter)
+  let recentQuery = db.from('exercise_change_requests').select('*')
+    .gte('created_at', since)
+    .in('status', ['approved', 'declined', 'noted'])
+  if (pids) {
+    openQuery = openQuery.in('player_id', pids)
+    recentQuery = recentQuery.in('player_id', pids)
+  }
   const [openRes, recentRes, library] = await Promise.all([
-    db.from('exercise_change_requests').select('*').or(openFilter).order('created_at', { ascending: false }).limit(100),
-    db.from('exercise_change_requests').select('*')
-      .gte('created_at', since)
-      .in('status', ['approved', 'declined', 'noted'])
-      .order('created_at', { ascending: false })
-      .limit(60),
+    openQuery.order('created_at', { ascending: false }).limit(100),
+    recentQuery.order('created_at', { ascending: false }).limit(60),
     loadLibrary(db),
   ])
   if (openRes.error) return notReady()
@@ -150,14 +165,19 @@ export async function GET(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const action = body.action as string
+  const coach = await getCoach(req)
+  if (!coach) return signInRequired()
   const db = createServerClient()
   const now = new Date().toISOString()
 
   if (action === 'seen_all') {
-    const { error } = await db.from('exercise_change_requests')
+    const visible = await visiblePlayerIds(db, coach)
+    let seenQuery = db.from('exercise_change_requests')
       .update({ coach_seen_at: now })
       .eq('kind', 'self_guided_swap')
       .is('coach_seen_at', null)
+    if (visible) seenQuery = seenQuery.in('player_id', inList(visible))
+    const { error } = await seenQuery
     if (error) return notReady()
     return NextResponse.json({ ok: true })
   }
@@ -167,6 +187,7 @@ export async function PATCH(req: NextRequest) {
 
   const { data: request, error: loadError } = await db.from('exercise_change_requests').select('*').eq('id', id).single()
   if (loadError) return loadError.code === 'PGRST116' ? NextResponse.json({ error: 'Request not found' }, { status: 404 }) : notReady()
+  if (!(await canSeePlayer(db, coach, request.player_id))) return notYourTeam()
 
   if (action === 'seen') {
     await db.from('exercise_change_requests').update({ coach_seen_at: now }).eq('id', id)

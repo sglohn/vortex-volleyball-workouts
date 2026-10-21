@@ -2,7 +2,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { canAccessPlayer, signInAgain } from '@/lib/playerAuth'
-import { isCoachRequest } from '@/lib/coachAuth'
+import { getCoach } from '@/lib/coachAuth'
+import { canSeePlayer, notYourTeam } from '@/lib/coachScope'
 
 export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
@@ -21,10 +22,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { playerId, ...fields } = body
   if (!playerId) return NextResponse.json({ error: 'Missing playerId' }, { status: 400 })
-  // Only coaches record measurements
-  if (!(await isCoachRequest(req))) return NextResponse.json({ error: 'Coach sign-in required' }, { status: 401 })
+  // Only coaches record measurements (team coaches: their own players)
+  const coach = await getCoach(req)
+  if (!coach) return NextResponse.json({ error: 'Coach sign-in required' }, { status: 401 })
 
   const db = createServerClient()
+  if (!(await canSeePlayer(db, coach, playerId))) return notYourTeam()
   const today = new Date().toISOString().split('T')[0]
 
   const KEYS = ['height_in','wingspan_in','standing_reach_in','standing_vertical_in','approach_vertical_in','acceleration_sec','pro_agility_sec','swing_velocity_mph']

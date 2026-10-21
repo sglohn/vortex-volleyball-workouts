@@ -1,14 +1,26 @@
 // FILE: app/api/coach/teams/route.ts
+//
+//   GET          active teams with player counts. Open to everyone (the player
+//                sign-in screen and TV display use it, middleware.ts).
+//                A signed-in team coach gets only their own teams, unless
+//                ?all=1 (the sign-in screen and TV display ask for all).
+//   POST / PUT   admins only (middleware.ts)
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
+import { getCoach } from '@/lib/coachAuth'
+import { inList } from '@/lib/coachScope'
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const db = createServerClient()
-  const { data: teams } = await db
+  let query = db
     .from('teams')
     .select('*')
     .eq('is_active', true)
-    .order('age_group')
+  if (!req.nextUrl.searchParams.get('all')) {
+    const coach = await getCoach(req)
+    if (coach && !coach.isAdmin) query = query.in('id', inList(coach.teamIds))
+  }
+  const { data: teams } = await query.order('age_group')
 
   // Enrich with player counts — ACTIVE players only.
   // The !inner join lets us filter on players.is_active so removed players

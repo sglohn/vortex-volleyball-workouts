@@ -5,6 +5,7 @@ import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
 import { calculateAge } from '@/lib/age'
 import { FEATURES, POSITIONS } from '@/lib/features'
+import { useIsAdmin } from '@/components/CoachContext'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface Player {
@@ -130,8 +131,9 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
   p: Player
   rank: number
   sortKey: SortKey
-  onEdit: (p: Player) => void
-  onDelete: (p: Player) => void
+  /** Left out for team coaches: editing and removing players is admins only */
+  onEdit?: (p: Player) => void
+  onDelete?: (p: Player) => void
 }) {
   const sv = standingVertical(p)
   const mv = maxVertical(p)
@@ -198,9 +200,11 @@ function PlayerRow({ p, rank, sortKey, onEdit, onDelete }: {
         <td style={cellStyle('swing_velocity_mph')}>{fmtMph(p.swing_velocity_mph)}</td>
       </>)}
       <td style={{ padding:'0.55rem 0.6rem', whiteSpace:'nowrap' }}>
+        {onEdit && onDelete && <>
         <button onClick={() => onEdit(p)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Edit</button>
         <span style={{ color:'var(--gray-border)', margin:'0 0.4rem' }}>|</span>
         <button onClick={() => onDelete(p)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.8rem', fontWeight:600, padding:0 }}>Remove</button>
+        </>}
       </td>
     </tr>
   )
@@ -212,8 +216,9 @@ function PlayerTable({ rows, sortKey, sortDir, onSort, onEdit, onDelete }: {
   sortKey: SortKey
   sortDir: SortDir
   onSort: (k: SortKey) => void
-  onEdit: (p: Player) => void
-  onDelete: (p: Player) => void
+  /** Left out for team coaches: editing and removing players is admins only */
+  onEdit?: (p: Player) => void
+  onDelete?: (p: Player) => void
 }) {
   return (
     <div className="card" style={{
@@ -243,6 +248,8 @@ function PlayerTable({ rows, sortKey, sortDir, onSort, onEdit, onDelete }: {
 
 // ── Main page ────────────────────────────────────────────────────────────────
 export default function CoachPlayersPage() {
+  // Team coaches see their own players; adding, editing and removing are admins only
+  const isAdmin = useIsAdmin()
   const [players, setPlayers] = useState<Player[]>([])
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
@@ -425,7 +432,9 @@ export default function CoachPlayersPage() {
   }, [scopeKey, scopeValue, teams])
 
   // Shared table props
-  const tableProps = { sortKey, sortDir, onSort: handleSort, onEdit: openEdit, onDelete: setDeleteConfirm }
+  const tableProps = isAdmin
+    ? { sortKey, sortDir, onSort: handleSort, onEdit: openEdit, onDelete: setDeleteConfirm }
+    : { sortKey, sortDir, onSort: handleSort }
 
   if (loading) return <div style={{ padding:'2rem', color:'var(--text-muted)' }}>Loading…</div>
 
@@ -448,7 +457,7 @@ export default function CoachPlayersPage() {
           <h1 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:800 }}>Players</h1>
           <p style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{players.length} active players · {teams.length} teams</p>
         </div>
-        <button className="btn-volt" onClick={openAdd} style={{ padding:'0.625rem 1.25rem' }}>+ Add Player</button>
+        {isAdmin && <button className="btn-volt" onClick={openAdd} style={{ padding:'0.625rem 1.25rem' }}>+ Add Player</button>}
       </div>
 
       {msg && (

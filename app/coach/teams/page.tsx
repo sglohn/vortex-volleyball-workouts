@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
+import { useIsAdmin } from '@/components/CoachContext'
 
 interface Team { id: string; name: string; age_group?: string; color: string; is_active: boolean; playerCount?: number; is_open_gym?: boolean }
 
@@ -19,6 +20,8 @@ export default function CoachTeamsPage() {
   const [saving, setSaving] = useState(false)
   const [sessionTeams, setSessionTeams] = useState<string[]>([])
   const [sessionUrl, setSessionUrl] = useState('')
+  // Team coaches see their own teams here; adding, editing and scheduling are admins only
+  const isAdmin = useIsAdmin()
 
   useEffect(() => {
     fetch('/api/coach/teams').then(r => r.json()).then(d => { setTeams(d.teams ?? []); setLoading(false) })
@@ -67,12 +70,12 @@ export default function CoachTeamsPage() {
           <h1 style={{ fontFamily:'var(--font-display)', fontSize:'2rem', fontWeight:800 }}>Teams</h1>
           <p style={{ color:'var(--text-muted)', fontSize:'0.85rem' }}>{teams.length} active teams</p>
         </div>
-        <div style={{ display:'flex', gap:'0.625rem' }}>
+        {isAdmin && <div style={{ display:'flex', gap:'0.625rem' }}>
           <a href="/coach/season-rollover" style={{ padding:'0.625rem 1.25rem', border:'1.5px solid var(--carolina)', borderRadius:8, color:'var(--carolina-dark)', fontFamily:'var(--font-display)', fontWeight:700, fontSize:'0.85rem', textDecoration:'none', display:'flex', alignItems:'center', gap:'0.4rem' }}>
             🔄 Season Rollover
           </a>
           <button className="btn-volt" onClick={openAdd} style={{ padding:'0.625rem 1.25rem' }}>+ New Team</button>
-        </div>
+        </div>}
       </div>
 
       {msg && <div style={{ background: msgErr?'var(--danger-light)':'var(--carolina-light)', border:`1.5px solid ${msgErr?'#fecaca':'var(--carolina-border)'}`, borderRadius:8, padding:'0.75rem', marginBottom:'1rem', color: msgErr?'var(--danger)':'var(--carolina-deep)', fontSize:'0.9rem' }}>{msg}</div>}
@@ -106,11 +109,11 @@ export default function CoachTeamsPage() {
                   ▶ Team Mode
                 </a>
               )}
-              <Link href={`/coach/schedule?team=${t.id}`}
+              {isAdmin && <Link href={`/coach/schedule?team=${t.id}`}
                 style={{ color:'var(--carolina-dark)', fontSize:'0.82rem', textDecoration:'none', fontWeight:600 }}>
                 Schedule
-              </Link>
-              {!t.is_open_gym && <>
+              </Link>}
+              {isAdmin && !t.is_open_gym && <>
                 <button onClick={() => openEdit(t)} style={{ background:'none', border:'none', color:'var(--carolina-dark)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Edit</button>
                 <span style={{ color:'var(--gray-border)' }}>|</span>
                 <button onClick={() => setDeleteConfirm(t)} style={{ background:'none', border:'none', color:'var(--danger)', cursor:'pointer', fontSize:'0.82rem', fontWeight:600, padding:0 }}>Delete</button>

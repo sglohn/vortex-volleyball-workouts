@@ -1,6 +1,9 @@
 // FILE: app/page.tsx
 //
 // Player sign-in: team → name → 4-digit PIN.
+// Team coaches sign in here too: their names are at the top of their team's
+// list, tagged "Coach", and their PIN opens the coach side (app/api/coach).
+// Admins use the small "Admin" link at the bottom (app/coach/page.tsx).
 // Lacrosse (week plan teams, lib/weekPlan.ts): after the PIN, a "this week"
 // card shows her Days in order — the one waiting, the ones done, the ones
 // still locked — or why nothing is waiting (done today, done for the week,
@@ -16,6 +19,7 @@ import { BRAND } from '@/lib/brand'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface Player { id: string; name: string; jersey_number?: string; teamId: string }
+interface TeamCoach { id: string; name: string }
 
 type Step = 'team' | 'player' | 'pin' | 'week'
 
@@ -66,6 +70,23 @@ function WeekDayRow({ day, onStart, resumed, starting }: { day: WeekDay; onStart
   )
 }
 
+// A team coach in the "Who are you?" list
+function CoachRow({ coach, color, onPick }: { coach: TeamCoach; color: string; onPick: () => void }) {
+  return (
+    <button onClick={onPick}
+      style={{ background: 'var(--white)', border: `1.5px solid ${color}30`, borderRadius: 10, padding: '0.75rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--black)', textAlign: 'left', transition: 'all 0.15s' }}
+      onMouseEnter={e => { e.currentTarget.style.borderColor = color; e.currentTarget.style.background = `${color}08` }}
+      onMouseLeave={e => { e.currentTarget.style.borderColor = `${color}30`; e.currentTarget.style.background = 'var(--white)' }}>
+      <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--black)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, color: '#fff', flexShrink: 0 }}>
+        {coach.name.charAt(0).toUpperCase()}
+      </div>
+      <span style={{ fontWeight: 500 }}>{coach.name}</span>
+      <span className="tag" style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0.15rem 0.5rem', borderRadius: 6, background: 'var(--black)', color: '#fff' }}>Coach</span>
+      <div style={{ marginLeft: 'auto', color, fontSize: '1.1rem' }}>›</div>
+    </button>
+  )
+}
+
 export default function HomePage() {
   const router = useRouter()
   const [teams, setTeams] = useState<Team[]>([])
@@ -84,7 +105,7 @@ export default function HomePage() {
   useEffect(() => {
     localStorage.removeItem('vx_session')
     Promise.all([
-      fetch('/api/coach/teams').then(r => r.json()),
+      fetch('/api/coach/teams?all=1').then(r => r.json()),
       fetch('/api/player/list').then(r => r.json()),
     ]).then(([teamData, playerData]) => {
       setTeams(teamData.teams ?? [])
@@ -97,7 +118,10 @@ export default function HomePage() {
 
   // Fetch players for selected team
   const [teamPlayers, setTeamPlayers] = useState<Player[]>([])
+  const [teamCoaches, setTeamCoaches] = useState<TeamCoach[]>([])
   const [loadingTeamPlayers, setLoadingTeamPlayers] = useState(false)
+  // Set when the person signing in is one of the team's coaches, not a player
+  const [selectedCoach, setSelectedCoach] = useState<TeamCoach | null>(null)
 
   async function selectTeam(team: Team) {
     setSelectedTeam(team)
@@ -110,10 +134,12 @@ export default function HomePage() {
     setTeamPlayers((d.roster ?? []).map((p: { id: string; name: string; jerseyNumber?: string }) => ({
       id: p.id, name: p.name, jersey_number: p.jerseyNumber, teamId: team.id,
     })))
+    setTeamCoaches(d.coaches ?? [])
     setLoadingTeamPlayers(false)
   }
 
   function selectPlayer(player: Player) {
+    setSelectedCoach(null)
     setSelectedPlayer(player)
     setPin('')
     setError('')
@@ -127,7 +153,36 @@ export default function HomePage() {
     setPin(p => p + k)
   }
 
+  function selectCoach(c: TeamCoach) {
+    setSelectedCoach(c)
+    setSelectedPlayer({ id: c.id, name: c.name, teamId: selectedTeam?.id ?? '' })
+    setPin('')
+    setError('')
+    setStep('pin')
+  }
+
+  async function coachSignIn() {
+    if (!selectedCoach || pin.length !== 4) return
+    setCheckingIn(true); setError('')
+    try {
+      const res = await fetch('/api/coach', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ coachId: selectedCoach.id, pin }),
+      })
+      if (res.ok) {
+        localStorage.setItem('vx_coach', 'true')
+        router.push('/coach/dashboard')
+        return
+      }
+      const data = await res.json().catch(() => ({}))
+      setError(data?.error || (res.status === 401 ? 'Wrong PIN' : `Server error (${res.status}). Try again in a minute.`))
+      setPin(''); setCheckingIn(false)
+    } catch { setError('Something went wrong'); setCheckingIn(false) }
+  }
+
   async function handleCheckin() {
+    if (selectedCoach) return coachSignIn()
     if (!selectedPlayer || pin.length !== 4) return
     setCheckingIn(true); setError('')
     try {
@@ -221,7 +276,7 @@ export default function HomePage() {
             </div>
 
             <div style={{ marginTop: '1.25rem', textAlign: 'center' }}>
-              <a href="/coach" style={{ color: 'var(--carolina-dark)', fontSize: '0.8rem', textDecoration: 'none', letterSpacing: '0.05em', fontWeight: 500 }}>Coach Dashboard →</a>
+              <a href="/coach" style={{ color: 'var(--text-muted)', fontSize: '0.75rem', textDecoration: 'none', letterSpacing: '0.05em', fontWeight: 500 }}>Admin</a>
             </div>
           </div>
         )}
@@ -230,7 +285,7 @@ export default function HomePage() {
         {step === 'player' && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-              <button onClick={() => { setStep('team'); setSelectedTeam(null); setTeamPlayers([]) }}
+              <button onClick={() => { setStep('team'); setSelectedTeam(null); setTeamPlayers([]); setTeamCoaches([]) }}
                 style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', padding: '0.35rem 0.875rem', fontSize: '0.85rem', fontWeight: 600, flexShrink: 0 }}>← Back</button>
               {selectedTeam ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -261,7 +316,10 @@ export default function HomePage() {
                     {!selectedTeam && search.length < 2 && (
                       <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', fontSize: '0.85rem' }}>Type at least 2 letters to search</div>
                     )}
-                    {noResults && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', fontSize: '0.85rem' }}>No players found</div>}
+                    {selectedTeam && teamCoaches
+                      .filter(c => c.name.toLowerCase().includes(search.toLowerCase()))
+                      .map(c => <CoachRow key={c.id} coach={c} color={selectedTeam.color} onPick={() => selectCoach(c)} />)}
+                    {noResults && !(selectedTeam && teamCoaches.some(c => c.name.toLowerCase().includes(search.toLowerCase()))) && <div style={{ color: 'var(--text-muted)', textAlign: 'center', padding: '1.5rem', fontSize: '0.85rem' }}>No players found</div>}
                     {displayList.sort((a, b) => a.name.localeCompare(b.name)).map(p => (
                       <button key={p.id} onClick={() => selectPlayer(p)}
                         style={{ background: 'var(--white)', border: `1.5px solid ${selectedTeam ? `${selectedTeam.color}30` : 'var(--gray-border)'}`, borderRadius: 10, padding: '0.75rem 1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.75rem', color: 'var(--black)', textAlign: 'left', transition: 'all 0.15s' }}
@@ -285,10 +343,10 @@ export default function HomePage() {
         {step === 'pin' && selectedPlayer && (
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.75rem' }}>
-              <button onClick={() => { setStep('player'); setSelectedPlayer(null); setPin(''); setError('') }}
+              <button onClick={() => { setStep('player'); setSelectedPlayer(null); setSelectedCoach(null); setPin(''); setError('') }}
                 style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', padding: '0.35rem 0.875rem', fontSize: '0.85rem', fontWeight: 600 }}>← Back</button>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                Checking in as <strong style={{ color: 'var(--black)' }}>{selectedPlayer.name}</strong>
+                {selectedCoach ? 'Signing in as ' : 'Checking in as '}<strong style={{ color: 'var(--black)' }}>{selectedPlayer.name}</strong>
               </span>
             </div>
 
@@ -298,7 +356,7 @@ export default function HomePage() {
                 {(selectedPlayer as unknown as { jersey_number?: string }).jersey_number || selectedPlayer.name.charAt(0).toUpperCase()}
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1.2rem', color: 'var(--black)' }}>{selectedPlayer.name}</div>
-              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{selectedTeam?.name ?? 'Individual Program'}</div>
+              <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{selectedCoach ? `Coach · ${selectedTeam?.name ?? ''}` : selectedTeam?.name ?? 'Individual Program'}</div>
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginBottom: '1.75rem' }}>
@@ -319,7 +377,7 @@ export default function HomePage() {
                   disabled={checkingIn}>{k}</button>
               ))}
             </div>
-            {checkingIn && <div style={{ textAlign: 'center', color: 'var(--carolina-dark)', fontWeight: 500 }}>Checking in…</div>}
+            {checkingIn && <div style={{ textAlign: 'center', color: 'var(--carolina-dark)', fontWeight: 500 }}>{selectedCoach ? 'Signing in…' : 'Checking in…'}</div>}
           </div>
         )}
 

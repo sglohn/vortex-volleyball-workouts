@@ -7,6 +7,7 @@
 'use client'
 import { useState } from 'react'
 import { painLevelColor, painLevelLabel } from '@/lib/fitness'
+import { useIsAdmin } from '@/components/CoachContext'
 
 // ─── Body map data (mirrored from player/bodycheck) ───────────────────────────
 
@@ -203,6 +204,7 @@ function Figure({ zones, redZones, orangeZones, yellowZones, recurringZones, mir
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, onUpdate }: Props) {
+  const isAdmin = useIsAdmin()
   const [side, setSide] = useState<'front' | 'back'>('front')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -388,7 +390,7 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
         <div style={{ marginBottom: '0.75rem' }}>
           <div style={{ fontSize: '0.7rem', color: '#f87171', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>Current</div>
           {currentReports.map(r => (
-            <ReportRow key={r.id} r={r} expanded={expanded === r.id} onToggle={() => setExpanded(expanded === r.id ? null : r.id)} onUpdate={updateReport} onDelete={deleteReport} saving={saving} />
+            <ReportRow key={r.id} r={r} expanded={expanded === r.id} onToggle={() => setExpanded(expanded === r.id ? null : r.id)} onUpdate={updateReport} onDelete={isAdmin ? deleteReport : undefined} saving={saving} />
           ))}
         </div>
       )}
@@ -398,7 +400,7 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
         <div style={{ marginBottom: '0.75rem' }}>
           <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '0.4rem' }}>History ({resolvedReports.length})</div>
           {resolvedReports.slice(0, 5).map(r => (
-            <ReportRow key={r.id} r={r} expanded={expanded === r.id} onToggle={() => setExpanded(expanded === r.id ? null : r.id)} onUpdate={updateReport} onDelete={deleteReport} saving={saving} resolved />
+            <ReportRow key={r.id} r={r} expanded={expanded === r.id} onToggle={() => setExpanded(expanded === r.id ? null : r.id)} onUpdate={updateReport} onDelete={isAdmin ? deleteReport : undefined} saving={saving} resolved />
           ))}
           {resolvedReports.length > 5 && (
             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', paddingLeft: '0.25rem' }}>+ {resolvedReports.length - 5} more resolved</div>
@@ -457,7 +459,8 @@ function ReportRow({ r, expanded, onToggle, onUpdate, onDelete, saving, resolved
   expanded: boolean
   onToggle: () => void
   onUpdate: (id: string, status: string) => void
-  onDelete: (id: string) => void
+  /** Left out for team coaches: deleting a report is admins only */
+  onDelete?: (id: string) => void
   saving: boolean
   resolved?: boolean
 }) {
@@ -494,8 +497,8 @@ function ReportRow({ r, expanded, onToggle, onUpdate, onDelete, saving, resolved
               </div>
             ) : <div />}
 
-            {/* Delete */}
-            {!confirmDelete ? (
+            {/* Delete (admins only) */}
+            {!onDelete ? null : !confirmDelete ? (
               <button onClick={() => setConfirmDelete(true)} style={{ background: 'none', border: 'none', color: 'rgba(248,113,113,0.4)', cursor: 'pointer', fontSize: '0.72rem', padding: '0.25rem 0.375rem', borderRadius: 4, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
                 onMouseEnter={e => (e.currentTarget.style.color = '#f87171')}
                 onMouseLeave={e => (e.currentTarget.style.color = 'rgba(248,113,113,0.4)')}>

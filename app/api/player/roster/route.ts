@@ -1,7 +1,11 @@
 // FILE: app/api/player/roster/route.ts   (new file)
 //
 // Names only, for the player sign-in screen (app/page.tsx).
-//   GET ?teamId=<id>  → { roster: [{ id, name, jerseyNumber }] }
+//   GET ?teamId=<id>  → { roster: [{ id, name, jerseyNumber }], coaches: [{ id, name }] }
+//
+// coaches: the team's coaches (role 'coach', coach_teams), listed at the top
+// of "Who are you?" so they sign in the same way. Admins aren't listed here;
+// they use the Admin link at the bottom of the screen (app/coach/page.tsx).
 //
 // The sign-in screen used to call /api/coach/team-detail, which also
 // returned every player's health reports, measurements and sessions to
@@ -31,5 +35,19 @@ export async function GET(req: NextRequest) {
     .map(p => ({ id: p.id, name: p.name, jerseyNumber: p.jersey_number ?? undefined }))
     .sort((a, b) => a.name.localeCompare(b.name))
 
-  return NextResponse.json({ roster })
+  // Team coaches (empty before the coach accounts migration)
+  const { data: coachLinks } = await db
+    .from('coach_teams')
+    .select('coaches!inner(id, name, role, is_active)')
+    .eq('team_id', teamId)
+    .eq('coaches.is_active', true)
+    .eq('coaches.role', 'coach')
+  type C = { id: string; name: string }
+  const coaches = ((coachLinks ?? []) as unknown as { coaches: C | C[] | null }[])
+    .map(r => (Array.isArray(r.coaches) ? r.coaches[0] : r.coaches))
+    .filter((c): c is C => !!c)
+    .map(c => ({ id: c.id, name: c.name }))
+    .sort((a, b) => a.name.localeCompare(b.name))
+
+  return NextResponse.json({ roster, coaches })
 }
