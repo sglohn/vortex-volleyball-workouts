@@ -29,7 +29,7 @@
 -- 1. The roster (from ClubwideRoster_Vortex_2026-10-21.xls)
 -- ─────────────────────────────────────────────────────────────────────────
 set client_min_messages = warning;
-drop table if exists pg_temp._dup, pg_temp._alias, pg_temp._rt, pg_temp._rp, pg_temp._rc, pg_temp._p, pg_temp._cur, pg_temp._tcand,
+drop table if exists pg_temp._keep, pg_temp._ren, pg_temp._dup, pg_temp._alias, pg_temp._rt, pg_temp._rp, pg_temp._rc, pg_temp._p, pg_temp._cur, pg_temp._tcand,
   pg_temp._tm, pg_temp._rpx, pg_temp._pm, pg_temp._new, pg_temp._cm;
 
 create or replace function pg_temp.norm(t text) returns text language sql immutable as $f$
@@ -93,6 +93,17 @@ insert into _alias values
 (25, '18 - Emma'),
 (26, 'Boys - 18 Storm'),
 (27, 'Boys - 18 Havoc');
+
+-- Players not on the website roster who stay on their team (practice players)
+create temp table _keep (key int, pname text);
+insert into _keep select key, n from (values
+('18 Havoc Boys', 'Eli Richardson')
+) v(tname, n) join _rt on _rt.name = v.tname;
+
+-- App players whose name is changed to the roster name
+create temp table _ren (first text, last text);
+insert into _ren values
+('Kynidie', 'Blackwell');
 
 -- Players on the included teams
 create temp table _rp (rid int primary key, team_key int, first text, last text, jersey text, dob date);
@@ -289,27 +300,27 @@ insert into _rp values
 -- way the app does it (lib/coachAuth.ts hashPin), so the app reads it normally.
 create temp table _rc (cname text, team_key int, pin_hash text);
 insert into _rc values
-('Coach Andria Dobson', 4, 'pbkdf2$100000$HLELEd1J2_EwKUvb2IwVCA$K6PHyCw09MTuIdz8RtrINkWQaLJeX06fwPzqALiHu2A'),
-('Coach Bailey Chapman', 5, 'pbkdf2$100000$4cb7gPJo6yQZ_rBQxWs7hA$z01qCaP-8Eyet0gSkBbTNl1APdxRwmr-BMQ5rxt785Y'),
-('Coach Austin Bryant', 8, 'pbkdf2$100000$UJaaKGVQnnrB7eU47rWN7g$QLB9DQkCG9zTzBAbMmCXAI27auVkbcI1zufBaC2J3G0'),
-('Coach Sarah Bass', 9, 'pbkdf2$100000$LH1jXcgWX6fEtd0HQHjgdQ$subWw1dCi6xXcMcH6nNCooF7EGEHEfyJ_uT8o95p_LQ'),
-('Coach Ragen Dobson', 10, 'pbkdf2$100000$mHCDkPzHVC0_kutzXfNfgQ$VoAXyN8vjebIkNOwAwQ8HPQ6jPlz_FM-ddTYqeJk01g'),
-('Coach Ivy Kimmerling', 11, 'pbkdf2$100000$BSAeWnsM8b6193A1Unq2fQ$Xkvs6vlG0Ak7cTrYX4yEgDn_-W91MXHCatbfTBonrkU'),
-('Coach Nick Tovar', 13, 'pbkdf2$100000$ZNx-mCKfS78ZvPszfrsoZw$OxwgXH1ckddqnHvO592HwuTSmgIQUQFeFgpL6nWA54A'),
-('Coach Serena Bird', 14, 'pbkdf2$100000$KWHTNQmdpLEXA7QqrEyd0w$KKiz-jOTPEcm37qBBVqLmuvHJtRPCA6NRBkvPV56ptw'),
-('Coach Emma Carter', 15, 'pbkdf2$100000$c2jpJUSiLIURH6LpeZDSoQ$PcudPlXoj7cZgJuzY7Oi_Tk5yOjXXtnEhYpI50Mx3vw'),
-('Coach Shannon Carter', 15, 'pbkdf2$100000$amW4EBRUyHm9zHJ7NpsJoQ$8AKuvKwfL74nqm6iQn8CTXeGTvVN_EKtvyjKuZieUQo'),
-('Coach Skylar Kimmerling', 16, 'pbkdf2$100000$95fuUFwbWbz1wQtMz78bEA$nhx_qbrySto2MAmpCt6h2INLyKKD4WprHK2qQ_dYsy0'),
-('Coach Alfie Dodd', 18, 'pbkdf2$100000$w7_ciY256clen3lV76lH4Q$8iHa9XQR7x8TGnObxqmkeyUJaOdxqPOHEN6IFeVMQyc'),
-('Coach Phillip Finnell', 19, 'pbkdf2$100000$Ok7QNz4mwnLjAv_ggzj7_g$mrpeg_FKO19zu0pT0nEY1ki53g1gmeBC5MWt1aQW99Q'),
-('Coach Caitlyn Lambitz', 20, 'pbkdf2$100000$rViZoxYQXSRtD_J4LvalSQ$lJnm2URNhBwEKNrj6YSEzzDeai0ruW4Vh7oy2HJVyXs'),
-('Coach Jackson Lenoir', 21, 'pbkdf2$100000$wfARAMvmnlTS9R-BaBzmTg$xrFuvYGT_DhzwcWRPlkm_4lNrQhurLSMZycHghIBE9o'),
-('Coach Michael DeMeo', 22, 'pbkdf2$100000$OuM_LIP7zLtFVwdfZsOHgQ$7qyAl9m_z6w_G-RiOHbUhb7rD0LoR3E6vQA5V4jXuds'),
-('Coach Lauren Cox', 23, 'pbkdf2$100000$eWJQ2lvnaag3R-g4ZUQA9A$Q2oo7m3f7-1LYZrqA9h2VMIlZBUOtqcYq41oKPSs3eg'),
-('Coach Marjorie Smith', 24, 'pbkdf2$100000$oH0nPmElRfX63lJ-PssDRA$d7r8AH_0k4YCpjhmiVQHWGqK3_P6rVBgQg0SG-GuefY'),
-('Coach Emma Haddix', 25, 'pbkdf2$100000$zQ4C0zJAphQwgKdEpQlKLw$JQ_sFGKrz3y-S4NRUrzl8eMsgRlL7QWpr-N31J0Ltpc'),
-('Coach Ted Hackett', 26, 'pbkdf2$100000$19NVdX-c-e09Hra5s3RQQw$d6HuvS_xts6NhWJqHm0WWoI-AB5ABKMpMOzqtbtMVts'),
-('Coach Ted Hackett', 27, 'pbkdf2$100000$19NVdX-c-e09Hra5s3RQQw$d6HuvS_xts6NhWJqHm0WWoI-AB5ABKMpMOzqtbtMVts');
+('Coach Andria Dobson', 4, 'pbkdf2$100000$u_Y-Jm9IoBEQUullSG_MxQ$m79Fhh64CmBQmriqYs6cQX4iLbWHrbGfNNYBEaf5BIs'),
+('Coach Bailey Chapman', 5, 'pbkdf2$100000$cPw2z5UjOM5RxsI1IS60DQ$9R4CdP7o0GBLt6QpzAPBCGgt7H7t4QShq6wzvZlD7h0'),
+('Coach Austin Bryant', 8, 'pbkdf2$100000$A_CaPWzUnMqbrp-4eL5-yA$gU_n1gu13xUXNywn1QhCK3exH4jKocd25tpNd-Xc2TI'),
+('Coach Sarah Bass', 9, 'pbkdf2$100000$wt8TLdr57r7yH_VLXhZnDA$ybZ1lnlrahonmjQEM1K7MZBLpI-GvapOpauIzKqs-0s'),
+('Coach Ragen Dobson', 10, 'pbkdf2$100000$NMx_LT0vEEqm7-CMQRIHaQ$lqi8B2dK4kHlCB44Az7CkeQTtsUD0NnqxGAh-fMsGtA'),
+('Coach Ivy Kimmerling', 11, 'pbkdf2$100000$Qadp_vKLx74xdnHn3fMPcA$jY8Qpmm7cXKOMoK_X8ncXwBd_jlXjgYbc8LLfPnFI-c'),
+('Coach Nick Tovar', 13, 'pbkdf2$100000$rw1jHz9duOi4iPfhUCk96Q$_hgeW_o2cpZyrWzXJgL8TM0FJ2EB9K1MmeOxBugNMbU'),
+('Coach Serena Bird', 14, 'pbkdf2$100000$wt8u-huC_jnZckwaQ1zFYw$JuTKH192a94UQ1fr3hsyW-twYQAPnmOI6l88fN9R504'),
+('Coach Emma Carter', 15, 'pbkdf2$100000$hPeNOxe-LcjZlobHrvHXTg$1-jLYD21eCXc10hYtePWBgdpcjtITv8Sbf3Mn6daMEI'),
+('Coach Shannon Carter', 15, 'pbkdf2$100000$ZwGdMaYEocybV4HCeizoqA$NL9hwQOO4fB3iKHYldA8hpmWzK742ohPzQEcQxLtg54'),
+('Coach Skylar Kimmerling', 16, 'pbkdf2$100000$PYPRR0MQkYMmrKXIzpu0Lg$h84U4gve9xcf0jclDOi_db6byZ3D3Tdkj8Z0bMLTfos'),
+('Coach Alfie Dodd', 18, 'pbkdf2$100000$mWp9iGnlpZbV6XR2OjG_wQ$seaUBawFPTlxfN5-4BBrJWviSpdmmMvCMM_sAaqrSX4'),
+('Coach Phillip Finnell', 19, 'pbkdf2$100000$D2ZnMIB9wjDeJzELv-jEWQ$rAbI50Gtv6Ii_7I8jNYkszqViGk66boK5wNCH7wTYSI'),
+('Coach Caitlyn Lambitz', 20, 'pbkdf2$100000$RdpFDNiHazuGcOhAdExYDQ$ZKtQ-p3bMubwdytc9R1JdnXihBvGqQ646TXnaaB_Fw0'),
+('Coach Jackson Lenoir', 21, 'pbkdf2$100000$5vQIb3_it1SqRiYmzkVQ-A$qA4roQ1wQRUB_XqqWgJTrjnjcqPk9J0wMcC0tQO7uks'),
+('Coach Michael DeMeo', 22, 'pbkdf2$100000$V2xlWdpXDJ-PVp30omyPBg$lQdmYk9m861CtOwZSlz9vH3p-G5nw3J6k0d5M9_pa0k'),
+('Coach Lauren Cox', 23, 'pbkdf2$100000$ZEdXOezvga6ZJyYrtX_3LQ$sQLvVAyJywPfy9nHsPoKEivndEheNp22cR3tfEEZtAI'),
+('Coach Marjorie Smith', 24, 'pbkdf2$100000$Tf-laqKOWdy5PB6s0aYIFw$J1i1moT-1gqK7O5_kFta83AWe6ISil2FEeccMen6h00'),
+('Coach Emma Haddix', 25, 'pbkdf2$100000$rr33BMVCYIjgIrKSKmsR5g$0BP9uOMfUKDcaQ2lj8jghPEUtG_WS7O5ESagPRZNhPs'),
+('Coach Ted Hackett', 26, 'pbkdf2$100000$zOJxsn4A2UsZ0qTS74mAeg$iTVBfV5l7wFFh4WnW0SwxCVxvygi3fI5ZlHGprFoK5Y'),
+('Coach Ted Hackett', 27, 'pbkdf2$100000$zOJxsn4A2UsZ0qTS74mAeg$iTVBfV5l7wFFh4WnW0SwxCVxvygi3fI5ZlHGprFoK5Y');
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 2. Match the roster to what's already in the app (changes nothing yet)
@@ -559,6 +570,8 @@ select section, team, name, what_happens from (
          p.name || case when p.n <> r.rn then '  (roster: ' || r.first || ' ' || r.last || ')' else '' end,
          coalesce(nullif(concat_ws('; ',
            case when m.needs_check then 'matched by ' || m.how end,
+           (select 'name changes to ' || r.first || ' ' || r.last from _ren n
+             where n.first = r.first and n.last = r.last and p.name <> r.first || ' ' || r.last),
            case when not p.is_active then 'was removed, will be turned back on' end,
            (select 'moves from ' || string_agg(c.team_name, ', ') from _cur c where c.player_id = p.id and c.team_id <> r.team_id),
            case when not exists (select 1 from _cur c where c.player_id = p.id and c.team_id = r.team_id)
@@ -586,6 +599,16 @@ select section, team, name, what_happens from (
   from _cur c join _tm tm on tm.team_id = c.team_id and tm.status = 'matched'
   join _rt rt on rt.key = tm.key and rt.include
   join _p p on p.id = c.player_id
+  where c.player_id not in (select pid from _pm)
+    and not exists (select 1 from _keep k where k.key = tm.key and pg_temp.norm(k.pname) = p.n)
+
+  -- Practice players kept on their team
+  union all
+  select 7, tm.key, '7 KEPT ON TEAM', rt.name, p.name, 'Practice player (not on the website roster): stays on the team'
+  from _cur c join _tm tm on tm.team_id = c.team_id and tm.status = 'matched'
+  join _rt rt on rt.key = tm.key and rt.include
+  join _p p on p.id = c.player_id
+  join _keep k on k.key = tm.key and pg_temp.norm(k.pname) = p.n
   where c.player_id not in (select pid from _pm)
 
   -- Players on a team that is being turned off
