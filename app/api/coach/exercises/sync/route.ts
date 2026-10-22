@@ -27,14 +27,25 @@
 //   Sync never deletes or hides anything, and never touches exercises that
 //   aren't in the feed.
 //
+// Easier/harder levels and backups (lib/exerciseLevelsSync.ts), shown as
+// `levels` in the preview:
+//   fill     blank here → filled in with volleyball's on confirm
+//            (POST { fillLevels: true }, run after the adds, so exercises
+//            added in the same sync get theirs too)
+//   differs  set differently here → only with the "levels" action
+//            ("Use volleyball's")
+//
 // Actions (POST): add, update, force (use the source version), link, pass,
-// unpass (offer again). At most 5 add/update/force per call, since each can
+// unpass (offer again), levels (use volleyball's levels/backup for one).
+// POST { fillLevels: true } fills every blank level/backup (can be sent with
+// or without actions). At most 5 add/update/force per call, since each can
 // copy photos and a clip.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { addExercise, exerciseDiff, LIBRARY_COLUMNS, updateExisting, type Db, type LibraryRow } from '@/lib/exerciseCopy'
 import { fetchFeed, nameKey, rowHash, syncConfigured, type FeedExercise } from '@/lib/exerciseFeed'
+import { planLevels, type LevelsItem } from '@/lib/exerciseLevelsSync'
 
 export const maxDuration = 120
 export const dynamic = 'force-dynamic'
@@ -43,7 +54,7 @@ const MAX_HEAVY = 5
 const MAX_ACTIONS = 400
 
 type Link = { source_id: string; exercise_id: string | null; synced_hash: string | null }
-type Action = 'add' | 'update' | 'force' | 'link' | 'pass' | 'unpass'
+type Action = 'add' | 'update' | 'force' | 'link' | 'pass' | 'unpass' | 'levels'
 
 type State = {
   feed: FeedExercise[]
@@ -94,6 +105,25 @@ type Plan =
   | { kind: 'update'; row: LibraryRow; changes: string[] }
   | { kind: 'kept'; row: LibraryRow; changes: string[] }
 
+function levelsPlan(state: State): LevelsItem[] {
+  const links = new Map([...state.links.values()].map(l => [l.source_id, l.exercise_id]))
+  return planLevels(state.feed, state.rows, links)
+}
+
+/** Writes volleyball's family/level/backup to one exercise here. */
+async function writeLevels(db: Db, item: LevelsItem, values: LevelsItem['set']): Promise<string | null> {
+  if (!Object.keys(values).length) return null
+  const { error } = await db.from('exercise_library').update(values).eq('id', item.exercise_id)
+  return error?.message ?? null
+}
+
+function levelsDetail(item: LevelsItem, parts: string[]): string {
+  return [
+    parts.includes('family') && item.vbFamily ? `family: ${item.vbFamily}` : '',
+    parts.includes('backup') && item.vbBackup ? `backup: ${item.vbBackup}` : '',
+  ].filter(Boolean).join(' · ')
+}
+
 function planFor(state: State, f: FeedExercise): Plan {
   const link = state.links.get(f.id)
   if (link) {
@@ -127,6 +157,11 @@ export async function GET(req: NextRequest) {
     passed: [] as { source_id: string; name: string }[],
     matchIds: [] as string[],
     upToDate: 0,
+    levels: levelsPlan(state).map(i => ({
+      source_id: i.source_id, name: i.name, fill: i.fill, differs: i.differs,
+      vbFamily: i.vbFamily, hereFamily: i.hereFamily, vbBackup: i.vbBackup, hereBackup: i.hereBackup,
+      backupMissing: i.backupMissing,
+    })),
   }
   for (const f of state.feed) {
     const p = planFor(state, f)
@@ -143,7 +178,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json(out)
 }
 
-type Result = { source_id: string; name: string; status: 'added' | 'updated' | 'unchanged' | 'linked' | 'passed' | 'offered' | 'skipped' | 'error'; detail?: string }
+type Result = { source_id: string; name: string; status: 'added' | 'updated' | 'unchanged' | 'linked' | 'passed' | 'offered' | 'levels' | 'skipped' | 'error'; detail?: string }
 
 /** Saves the link and the fingerprint of the exercise as it is now. */
 async function saveLink(db: Db, sourceId: string, exerciseId: string): Promise<string | null> {
@@ -215,6 +250,14 @@ async function runAction(db: Db, state: State, sourceId: string, action: Action)
       const { error } = await db.from('exercise_sync').upsert({ source_id: f.id, exercise_id: null, synced_hash: null, synced_at: new Date().toISOString() })
       return error ? { source_id: f.id, name, status: 'error', detail: error.message } : { source_id: f.id, name, status: 'passed' }
     }
+    case 'levels': {
+      const item = levelsPlan(state).find(i => i.source_id === f.id)
+      if (!item || (!item.fill.length && !item.differs.length)) return { source_id: f.id, name, status: 'skipped', detail: 'levels and backup already match' }
+      const err = await writeLevels(db, item, item.set)
+      return err
+        ? { source_id: f.id, name: item.name, status: 'error', detail: err }
+        : { source_id: f.id, name: item.name, status: 'levels', detail: levelsDetail(item, [...item.fill, ...item.differs]) }
+    }
     case 'unpass': {
       if (!link || link.exercise_id) return { source_id: f.id, name, status: 'skipped' }
       const { error } = await db.from('exercise_sync').delete().eq('source_id', f.id).is('exercise_id', null)
@@ -223,16 +266,17 @@ async function runAction(db: Db, state: State, sourceId: string, action: Action)
   }
 }
 
-const ACTIONS = new Set<Action>(['add', 'update', 'force', 'link', 'pass', 'unpass'])
+const ACTIONS = new Set<Action>(['add', 'update', 'force', 'link', 'pass', 'unpass', 'levels'])
 const HEAVY = new Set<Action>(['add', 'update', 'force'])
 
 export async function POST(req: NextRequest) {
   if (!syncConfigured()) return NextResponse.json({ error: 'Sync is not set up on this site' }, { status: 404 })
-  const body = await req.json().catch(() => null) as { actions?: { source_id?: unknown; action?: unknown }[] } | null
+  const body = await req.json().catch(() => null) as { actions?: { source_id?: unknown; action?: unknown }[]; fillLevels?: unknown } | null
+  const fillLevels = body?.fillLevels === true
   const actions = (Array.isArray(body?.actions) ? body!.actions! : [])
     .filter((a): a is { source_id: string; action: Action } =>
       typeof a?.source_id === 'string' && /^[0-9a-f-]{36}$/i.test(a.source_id) && ACTIONS.has(a.action as Action))
-  if (!actions.length) return NextResponse.json({ error: 'Nothing to do' }, { status: 400 })
+  if (!actions.length && !fillLevels) return NextResponse.json({ error: 'Nothing to do' }, { status: 400 })
   if (actions.length > MAX_ACTIONS) return NextResponse.json({ error: `At most ${MAX_ACTIONS} at a time` }, { status: 400 })
   if (actions.filter(a => HEAVY.has(a.action)).length > MAX_HEAVY) {
     return NextResponse.json({ error: `At most ${MAX_HEAVY} adds/updates at a time` }, { status: 400 })
@@ -247,6 +291,23 @@ export async function POST(req: NextRequest) {
   for (const a of actions) {
     try { results.push(await runAction(db, state, a.source_id, a.action)) }
     catch (e) { results.push({ source_id: a.source_id, name: '?', status: 'error', detail: (e as Error).message }) }
+  }
+
+  // Fill in blank levels/backups. Reloaded first, so anything just added or
+  // linked above (same call) is included.
+  if (fillLevels) {
+    try {
+      if (actions.length) state = await loadState(db)
+      for (const item of levelsPlan(state)) {
+        if (!item.fill.length) continue
+        const err = await writeLevels(db, item, item.setFill)
+        results.push(err
+          ? { source_id: item.source_id, name: item.name, status: 'error', detail: err }
+          : { source_id: item.source_id, name: item.name, status: 'levels', detail: levelsDetail(item, item.fill) })
+      }
+    } catch (e) {
+      results.push({ source_id: '', name: 'Levels and backups', status: 'error', detail: (e as Error).message })
+    }
   }
   return NextResponse.json({ results })
 }
