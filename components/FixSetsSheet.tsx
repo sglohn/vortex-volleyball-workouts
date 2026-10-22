@@ -11,7 +11,7 @@
 //     (opens straight into editing that set)
 //
 // Band exercises show the band colors to tap and med ball exercises show
-// the 10 / 14 lb balls (components/WeightPicker.tsx) instead of a number box.
+// the site's med balls (components/WeightPicker.tsx) instead of a number box.
 //
 // Saving re-sends the set to /api/sets (same as logging it), which updates
 // the existing set instead of adding a new one. Coaches can still fix or

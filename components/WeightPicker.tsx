@@ -11,7 +11,8 @@
 //                 (the bar's felt weight is added in pounds-moved math).
 //   1 dumbbell  - Tap the number printed on the dumbbell.
 //   2 dumbbells - Tap the number on ONE dumbbell; shows "2 × 30 = 60 lbs".
-//   Med ball    - Two buttons: 10 lb ball (picked to start) or the 14 lb ball.
+//   Med ball    - One button per ball this site has (lib/loads.ts MEDBALLS_LBS);
+//                 the 10 lb ball is picked to start. Vortex: 10 or the one 14.
 //   Large band /
 //   Hip band    - Tap the band color. value is the band key ('hip_blue'),
 //                 which the pages save as set_logs.band (lib/loads.ts
@@ -32,7 +33,7 @@
 
 import { useEffect, useState } from 'react'
 import {
-  BAR_LBS, DUMBBELLS_LBS, PLATES_LBS, LANDMINE_BAR_LBS, MEDBALLS_LBS, MEDBALL_DEFAULT_LBS,
+  BAR_LBS, DUMBBELLS_LBS, PLATES_LBS, LANDMINE_BAR_LBS, MEDBALLS_LBS, MEDBALL_DEFAULT_LBS, MEDBALL_PLAYER_HELP,
   asBand, bandInfo, bandLabel, bandLongLabel, bandsFor, isBandEquipment,
   loadLabel, platesPerSide, type BandInfo, type Equipment,
 } from '@/lib/loads'
@@ -200,15 +201,18 @@ function BandButton({ band, on, coachPick, big, onTap }: { band: BandInfo; on: b
   )
 }
 
-function MedballButton({ lbs, on, big, onTap }: { lbs: number; on: boolean; big?: boolean; onTap: () => void }) {
+// Two balls (Vortex) get a word under the number; a full rack doesn't need it.
+function MedballButton({ lbs, on, big, compact, onTap }: { lbs: number; on: boolean; big?: boolean; compact?: boolean; onTap: () => void }) {
   return (
     <button type="button" onClick={onTap} aria-pressed={on}
-      style={{ padding: big ? '1rem 0' : '0.8rem 0', borderRadius: 12, cursor: 'pointer',
+      style={{ padding: compact ? (big ? '0.85rem 0' : '0.65rem 0') : (big ? '1rem 0' : '0.8rem 0'), borderRadius: compact ? 10 : 12, cursor: 'pointer',
         border: `2px solid ${on ? 'var(--carolina)' : 'var(--gray-border)'}`, background: on ? 'var(--carolina)' : 'var(--white)', color: on ? '#fff' : 'var(--text-primary)' }}>
-      <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: big ? '1.6rem' : '1.4rem', lineHeight: 1 }}>{on ? '✓ ' : ''}{lbs} lb</span>
-      <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, opacity: 0.8, marginTop: '0.2rem' }}>
-        {lbs === MEDBALL_DEFAULT_LBS ? 'med ball' : 'the one heavy ball'}
-      </span>
+      <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: compact ? (big ? '1.4rem' : '1.2rem') : (big ? '1.6rem' : '1.4rem'), lineHeight: 1 }}>{on && !compact ? '✓ ' : ''}{lbs}{compact ? '' : ' lb'}</span>
+      {!compact && (
+        <span style={{ display: 'block', fontSize: '0.7rem', fontWeight: 700, opacity: 0.8, marginTop: '0.2rem' }}>
+          {lbs === MEDBALL_DEFAULT_LBS ? 'med ball' : 'the one heavy ball'}
+        </span>
+      )}
     </button>
   )
 }
@@ -266,7 +270,7 @@ export default function WeightPicker({ equipment, value, onChange, suggested, bi
   if (isLandmine) { title = 'Landmine'; help = 'Tap the plates on the end of the bar. Nothing on it? Tap "Empty bar".' }
   if (equipment === 'dumbbell_1') { title = '1 dumbbell'; help = 'Tap the number printed on the dumbbell.' }
   if (equipment === 'dumbbell_2') { title = '2 dumbbells'; help = 'Holding two? Tap the number on ONE of them. We add both up for you.' }
-  if (isMedball) { title = 'Med ball'; help = 'The 10 lb ball is picked for you. Using the 14 lb ball? Tap it.' }
+  if (isMedball) { title = 'Med ball'; help = MEDBALL_PLAYER_HELP }
   if (equipment === 'large_band') { title = 'Large band'; help = 'Tap the color of the band you used.' }
   if (equipment === 'hip_band') { title = 'Hip band'; help = 'Tap the color of the band you used.' }
 
@@ -332,14 +336,23 @@ export default function WeightPicker({ equipment, value, onChange, suggested, bi
         </>
       )}
 
-      {/* ── Med ball: 10 or 14 ── */}
-      {isMedball && (
+      {/* ── Med ball: one button per ball (Vortex 10 / 14; lacrosse 6–30) ── */}
+      {isMedball && (MEDBALLS_LBS.length <= 2 ? (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
           {MEDBALLS_LBS.map(w => (
             <MedballButton key={w} lbs={w} big={big} on={num === w} onTap={() => onChange(String(w))} />
           ))}
         </div>
-      )}
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '0.4rem' }}>
+            {MEDBALLS_LBS.map(w => (
+              <MedballButton key={w} lbs={w} big={big} compact on={num === w} onTap={() => onChange(String(w))} />
+            ))}
+          </div>
+          {num !== null && !Number.isNaN(num) && num > 0 && <TotalBox main={`${fmt(num)} lb ball`} />}
+        </>
+      ))}
 
       {/* ── Bands: tap the color ── */}
       {isBand && (
