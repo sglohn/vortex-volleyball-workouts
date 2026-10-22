@@ -13,6 +13,11 @@
 //
 // Exercises edited on this site since the last sync are left alone; each
 // one has a "Use volleyball version" button (tap twice) if you want it.
+//
+// Easier/harder levels and backups (lib/exerciseLevelsSync.ts): blank ones
+// here are filled in with volleyball's when you confirm (also for exercises
+// added in the same sync). Ones set differently here are listed with "Use
+// volleyball's" (one, or all; tap twice) and otherwise left alone.
 // Sync never deletes anything. Server side: app/api/coach/exercises/sync/route.ts
 'use client'
 import { useEffect, useState } from 'react'
@@ -20,17 +25,23 @@ import { useEffect, useState } from 'react'
 const HEAVY_BATCH = 5
 
 type Item = { source_id: string; name: string; category?: string | null; changes?: string[] }
+type LevelsItem = {
+  source_id: string; name: string; fill: string[]; differs: string[]
+  vbFamily: string | null; hereFamily: string | null; vbBackup: string | null; hereBackup: string | null
+  backupMissing: string | null
+}
 type Preview = {
   configured: boolean; error?: string
   new: Item[]; update: Item[]; kept: Item[]; passed: Item[]
   matchIds: string[]; upToDate: number
+  levels?: LevelsItem[]
 }
-type Action = { source_id: string; action: 'add' | 'update' | 'force' | 'link' | 'pass' | 'unpass' }
+type Action = { source_id: string; action: 'add' | 'update' | 'force' | 'link' | 'pass' | 'unpass' | 'levels' }
 type Result = { source_id: string; name: string; status: string; detail?: string }
 
-async function post(actions: Action[]): Promise<Result[]> {
+async function post(actions: Action[], fillLevels = false): Promise<Result[]> {
   const res = await fetch('/api/coach/exercises/sync', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions }),
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ actions, ...(fillLevels ? { fillLevels: true } : {}) }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) return actions.map(a => ({ source_id: a.source_id, name: '?', status: 'error', detail: data.error ?? `error ${res.status}` }))
@@ -42,6 +53,14 @@ const rowStyle: React.CSSProperties = { display: 'flex', alignItems: 'center', g
 const linkBtn: React.CSSProperties = { background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', padding: 0, fontSize: '0.75rem', fontWeight: 600, whiteSpace: 'nowrap' }
 const muted: React.CSSProperties = { color: 'var(--text-muted)', fontSize: '0.75rem' }
 
+/** "family: Squat, level 2 · backup: Goblet Squat" for the parts listed */
+function levelsLine(i: LevelsItem, parts: string[], side: 'vb' | 'here'): string {
+  return [
+    parts.includes('family') ? `family: ${(side === 'vb' ? i.vbFamily : i.hereFamily) ?? 'none'}` : '',
+    parts.includes('backup') ? `backup: ${(side === 'vb' ? i.vbBackup : i.hereBackup) ?? 'none'}` : '',
+  ].filter(Boolean).join(' · ')
+}
+
 export default function ExerciseSync({ onDone }: { onDone: () => void }) {
   const [available, setAvailable] = useState(false)
   const [open, setOpen] = useState(false)
@@ -52,13 +71,14 @@ export default function ExerciseSync({ onDone }: { onDone: () => void }) {
   const [busy, setBusy] = useState('')            // progress text while working
   const [results, setResults] = useState<Result[] | null>(null)
   const [showPassed, setShowPassed] = useState(false)
+  const [confirmLevels, setConfirmLevels] = useState<string | null>(null)   // source_id, or 'all'
 
   useEffect(() => {
     fetch('/api/coach/exercises/sync?check=1').then(r => r.json()).then(d => setAvailable(!!d.configured)).catch(() => {})
   }, [])
 
   async function loadPreview() {
-    setPreview(null); setLoadError(''); setResults(null); setConfirmForce(null); setSkipNew(new Set())
+    setPreview(null); setLoadError(''); setResults(null); setConfirmForce(null); setConfirmLevels(null); setSkipNew(new Set())
     const res = await fetch('/api/coach/exercises/sync')
     const data = await res.json().catch(() => ({}))
     if (!res.ok || data.error) { setLoadError(data.error ?? `Couldn't check (error ${res.status})`); return }
@@ -75,7 +95,18 @@ export default function ExerciseSync({ onDone }: { onDone: () => void }) {
     setBusy('')
     const bad = r.find(x => x.status === 'error')
     if (bad) { setLoadError(`${bad.name}: ${bad.detail}`); return }
-    if (action.action === 'force') onDone()
+    if (action.action === 'force' || action.action === 'levels') onDone()
+    await loadPreview()
+  }
+
+  // "Use volleyball's" levels/backup for every exercise set differently here
+  async function levelsAll(ids: string[]) {
+    setBusy('Updating levels and backups…')
+    const r = await post(ids.map(id => ({ source_id: id, action: 'levels' as const })))
+    setBusy('')
+    const bad = r.filter(x => x.status === 'error')
+    if (bad.length) { setLoadError(bad.map(b => `${b.name}: ${b.detail}`).join('; ')); return }
+    onDone()
     await loadPreview()
   }
 
@@ -87,16 +118,20 @@ export default function ExerciseSync({ onDone }: { onDone: () => void }) {
     ]
     const links: Action[] = preview.matchIds.map(id => ({ source_id: id, action: 'link' }))
     const all: Result[] = []
+    const fill = fillCount > 0 || heavy.some(a => a.action === 'add')
     // Exact matches are just linked up (quick), in the first call
     const batches: Action[][] = []
     for (let i = 0; i < heavy.length; i += HEAVY_BATCH) batches.push(heavy.slice(i, i + HEAVY_BATCH))
     if (!batches.length) batches.push([])
     batches[0] = [...links, ...batches[0]]
     let done = 0
-    for (const batch of batches) {
-      if (!batch.length) continue
+    for (let b = 0; b < batches.length; b++) {
+      const batch = batches[b]
+      const last = b === batches.length - 1
+      // Levels/backups are filled in with the last call, after every add
+      if (!batch.length && !(last && fill)) continue
       setBusy(heavy.length ? `Syncing ${Math.min(done + HEAVY_BATCH, heavy.length)} of ${heavy.length}…` : 'Syncing…')
-      all.push(...await post(batch))
+      all.push(...await post(batch, last && fill))
       done += HEAVY_BATCH
     }
     setBusy('')
@@ -108,7 +143,12 @@ export default function ExerciseSync({ onDone }: { onDone: () => void }) {
 
   const newCount = preview ? preview.new.filter(n => !skipNew.has(n.source_id)).length : 0
   const updateCount = preview?.update.length ?? 0
-  const nothingToDo = preview && !preview.new.length && !preview.update.length
+  const levelItems = preview?.levels ?? []
+  const fillItems = levelItems.filter(i => i.fill.length)
+  const fillCount = fillItems.length
+  const differItems = levelItems.filter(i => i.differs.length)
+  const missingItems = levelItems.filter(i => i.backupMissing)
+  const nothingToDo = preview && !preview.new.length && !preview.update.length && !fillCount
   const count = (s: string) => (results ?? []).filter(r => r.status === s).length
   const problems = (results ?? []).filter(r => r.status === 'error' || r.status === 'skipped' || r.detail?.includes(' without '))
 
@@ -131,7 +171,8 @@ export default function ExerciseSync({ onDone }: { onDone: () => void }) {
             {results && (
               <div style={{ marginTop: '0.75rem', fontSize: '0.85rem' }}>
                 <p style={{ fontWeight: 600 }}>
-                  Done: {count('added')} added, {count('updated')} updated{count('error') ? `, ${count('error')} failed` : ''}.
+                  Done: {count('added')} added, {count('updated')} updated
+                  {count('levels') ? `, levels/backups set on ${count('levels')}` : ''}{count('error') ? `, ${count('error')} failed` : ''}.
                 </p>
                 {problems.length > 0 && (
                   <ul style={{ margin: '0.5rem 0 0', paddingLeft: '1rem', color: 'var(--text-secondary)' }}>
@@ -148,6 +189,7 @@ export default function ExerciseSync({ onDone }: { onDone: () => void }) {
                 <p style={{ marginTop: '0.5rem', ...muted, fontSize: '0.82rem' }}>
                   {preview.new.length} new · {preview.update.length} changed · {preview.upToDate + preview.matchIds.length} already up to date
                   {preview.kept.length ? ` · ${preview.kept.length} edited here (left alone)` : ''}
+                  {fillCount ? ` · ${fillCount} levels/backups to fill in` : ''}
                 </p>
 
                 {nothingToDo && <p style={{ marginTop: '0.875rem', fontWeight: 600 }}>Everything's up to date.</p>}
@@ -180,10 +222,26 @@ export default function ExerciseSync({ onDone }: { onDone: () => void }) {
                   </>
                 )}
 
-                {(preview.new.length > 0 || preview.update.length > 0) && (
-                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', alignItems: 'center' }}>
-                    <button className="btn-volt" disabled={!!busy || (newCount === 0 && updateCount === 0)} onClick={runSync} style={{ padding: '0.625rem 1.25rem' }}>
-                      {busy || [newCount ? `Add ${newCount} new` : '', updateCount ? `Update ${updateCount}` : ''].filter(Boolean).join(' and ') || 'Nothing selected'}
+                {fillCount > 0 && (
+                  <>
+                    <div style={sectionTitle}>Easier/harder levels and backups to fill in</div>
+                    <p style={{ ...muted, marginBottom: '0.25rem' }}>Blank here, set in volleyball. They&apos;ll be copied over.</p>
+                    {fillItems.map(i => (
+                      <div key={i.source_id} style={rowStyle}>
+                        <span style={{ flex: 1 }}>{i.name}<span style={{ ...muted, display: 'block' }}>{levelsLine(i, i.fill, 'vb')}</span></span>
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {(preview.new.length > 0 || preview.update.length > 0 || fillCount > 0) && (
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button className="btn-volt" disabled={!!busy || (newCount === 0 && updateCount === 0 && fillCount === 0)} onClick={runSync} style={{ padding: '0.625rem 1.25rem' }}>
+                      {busy || [
+                        newCount ? `Add ${newCount} new` : '',
+                        updateCount ? `Update ${updateCount}` : '',
+                        fillCount ? `Fill in ${fillCount} levels/backups` : '',
+                      ].filter(Boolean).join(', ') || 'Nothing selected'}
                     </button>
                     {!busy && <button className="btn-ghost" onClick={close} style={{ padding: '0.625rem 1rem' }}>Cancel</button>}
                   </div>
@@ -204,6 +262,57 @@ export default function ExerciseSync({ onDone }: { onDone: () => void }) {
                         ) : (
                           <button style={linkBtn} disabled={!!busy} onClick={() => setConfirmForce(k.source_id)}>Use volleyball version</button>
                         )}
+                      </div>
+                    ))}
+                  </>
+                )}
+
+                {differItems.length > 0 && (
+                  <>
+                    <div style={sectionTitle}>Levels or backups set differently here</div>
+                    <p style={{ ...muted, marginBottom: '0.25rem' }}>Left alone unless you pick volleyball&apos;s.</p>
+                    {differItems.map(i => (
+                      <div key={i.source_id} style={rowStyle}>
+                        <span style={{ flex: 1 }}>
+                          {i.name}
+                          <span style={{ ...muted, display: 'block' }}>Here: {levelsLine(i, i.differs, 'here')}</span>
+                          <span style={{ ...muted, display: 'block' }}>Volleyball: {levelsLine(i, i.differs, 'vb')}</span>
+                        </span>
+                        {confirmLevels === i.source_id ? (
+                          <button style={{ ...linkBtn, color: '#b91c1c' }} disabled={!!busy}
+                            onClick={() => { setConfirmLevels(null); quick({ source_id: i.source_id, action: 'levels' }, 'Updating…') }}>
+                            Tap again to replace
+                          </button>
+                        ) : (
+                          <button style={linkBtn} disabled={!!busy} onClick={() => setConfirmLevels(i.source_id)}>Use volleyball&apos;s</button>
+                        )}
+                      </div>
+                    ))}
+                    {differItems.length > 1 && (
+                      <div style={{ marginTop: '0.5rem' }}>
+                        {confirmLevels === 'all' ? (
+                          <button style={{ ...linkBtn, color: '#b91c1c' }} disabled={!!busy}
+                            onClick={() => { setConfirmLevels(null); levelsAll(differItems.map(i => i.source_id)) }}>
+                            Tap again to use volleyball&apos;s for all {differItems.length}
+                          </button>
+                        ) : (
+                          <button style={linkBtn} disabled={!!busy} onClick={() => setConfirmLevels('all')}>
+                            Use volleyball&apos;s for all {differItems.length}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {missingItems.length > 0 && (
+                  <>
+                    <div style={sectionTitle}>Backups not in this library</div>
+                    <p style={{ ...muted, marginBottom: '0.25rem' }}>Volleyball&apos;s backup for these isn&apos;t here yet, so it can&apos;t be set. Add it (or tap Offer again if it was left out), then sync again.</p>
+                    {missingItems.map(i => (
+                      <div key={i.source_id} style={rowStyle}>
+                        <span style={{ flex: 1 }}>{i.name}</span>
+                        <span style={muted}>backup: {i.backupMissing}</span>
                       </div>
                     ))}
                   </>

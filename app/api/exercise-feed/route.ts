@@ -6,7 +6,8 @@
 //
 //   GET  (Authorization: Bearer <EXERCISE_FEED_SECRET>)
 //   → { exercises: [{ id, name, category, sets/reps, notes, equipment,
-//                     demo clip links }] }
+//                     demo clip links, easier/harder family + level,
+//                     backup (as the backup's id in this feed) }] }
 //
 // Active exercises only. Nothing about players, teams or workouts, and no
 // bar speed settings.
@@ -19,7 +20,7 @@ export const dynamic = 'force-dynamic'
 
 const FEED_COLUMNS =
   'id, name, category, default_sets, default_reps, logs_weight, coaching_notes, demo_url, ' +
-  'equipment, clip_url, clip_poster_url'
+  'equipment, clip_url, clip_poster_url, variation_family, variation_level, backup_exercise_id'
 
 export async function GET(req: NextRequest) {
   if (!feedAuthorized(req.headers.get('authorization'))) {

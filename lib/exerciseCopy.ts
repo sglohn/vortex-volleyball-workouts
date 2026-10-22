@@ -18,7 +18,10 @@
 //     different from the one copied last time (the copied file's name
 //     carries a short fingerprint of where it came from)
 //   - settings this site keeps for itself (level family, backup exercise,
-//     self-guided spots, bar speed, active/hidden) are never touched
+//     self-guided spots, bar speed, active/hidden) are never touched here.
+//     Sync offers volleyball's levels and backups as a separate step
+//     (lib/exerciseLevelsSync.ts): blanks filled in, different ones only
+//     when the coach asks
 //   - bar speed logging is turned off when VBT is off (lib/features.ts)
 //
 // Server-only.
@@ -47,6 +50,10 @@ export interface SourceExercise {
   equipment?: string | null
   clip_url?: string | null
   clip_poster_url?: string | null
+  // Sync only (lib/exerciseLevelsSync.ts): easier/harder family and backup
+  variation_family?: string | null
+  variation_level?: number | null
+  backup_exercise_id?: string | null
 }
 
 /**
@@ -62,12 +69,15 @@ export type LibraryRow = {
   start_image_position: string | null; end_image_position: string | null
   clip_url?: string | null; clip_poster_url?: string | null
   is_active?: boolean | null
+  // Easier/harder levels and backup (Sync's levels step, lib/exerciseLevelsSync.ts).
+  // Read only; copying an exercise never writes these.
+  variation_family?: string | null; variation_level?: number | null; backup_exercise_id?: string | null
 }
 
 export const LIBRARY_COLUMNS =
   'id, name, category, default_sets, default_reps, logs_weight, equipment, coaching_notes, demo_url, ' +
   'start_image_url, end_image_url, demo_image_url, start_image_position, end_image_position, ' +
-  'clip_url, clip_poster_url, is_active'
+  'clip_url, clip_poster_url, is_active, variation_family, variation_level, backup_exercise_id'
 
 export type CopyResult = { name: string; status: 'added' | 'updated' | 'unchanged' | 'skipped' | 'error'; detail?: string; id?: string }
 
