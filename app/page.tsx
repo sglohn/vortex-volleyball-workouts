@@ -14,6 +14,10 @@
 // card shows her Days in order — the one waiting, the ones done, the ones
 // still locked — or why nothing is waiting (done today, done for the week,
 // no workouts posted). Volleyball goes straight to the body check as before.
+// A Day that's waiting but can't open yet (she finished one today) shows
+// "Tomorrow" instead of Start. If the one she finished today was started on
+// an earlier day (forgot to tap Finish), she can ask an admin to unlock the
+// next Day today (app/api/player/day-unlock → Coach → Requests).
 // Roster comes from /api/player/roster (names only). It used to come from
 // /api/coach/team-detail, which is now coach-only.
 
@@ -50,13 +54,19 @@ interface WeekInfo {
   nextSlot: number | null
   resumed: boolean
   days: WeekDay[]
+  /** done_today: the Day she finished today but started on an earlier day */
+  lateFinish?: { slot: number; startedOn: string } | null
+  /** Her request to unlock the next Day (app/api/player/day-unlock) */
+  unlock?: 'pending' | 'approved' | 'declined' | null
 }
 
 function dayName(date: string): string {
   return new Date(date + 'T00:00:00Z').toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'long' })
 }
 
-function WeekDayRow({ day, onStart, resumed, starting }: { day: WeekDay; onStart: () => void; resumed: boolean; starting: boolean }) {
+// canStart: false when the Day is next but can't be opened yet (she already
+// finished one today); the row says when instead of showing Start.
+function WeekDayRow({ day, onStart, resumed, starting, canStart, waitLabel }: { day: WeekDay; onStart: () => void; resumed: boolean; starting: boolean; canStart: boolean; waitLabel: string }) {
   const current = day.state === 'next' || day.state === 'in_progress'
   const done = day.state === 'done'
   const prev = day.slot - 1
@@ -78,7 +88,10 @@ function WeekDayRow({ day, onStart, resumed, starting }: { day: WeekDay; onStart
         {done && day.finishedOn && <div style={{ fontSize: '0.72rem', color: 'var(--success)', fontWeight: 600 }}>Done {dayName(day.finishedOn)}</div>}
         {day.state === 'locked' && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Finish Day {prev} first</div>}
       </div>
-      {current && (
+      {current && !canStart && (
+        <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0, textAlign: 'right' }}>{waitLabel}</span>
+      )}
+      {current && canStart && (
         <button className="btn-volt" onClick={onStart} disabled={starting} style={{ padding: '0.625rem 1.1rem', fontSize: '0.9rem', flexShrink: 0 }}>
           {resumed ? 'Keep going' : 'Start'}
         </button>
@@ -119,6 +132,10 @@ export default function HomePage() {
   const [error, setError] = useState('')
   const [checkingIn, setCheckingIn] = useState(false)
   const [week, setWeek] = useState<WeekInfo | null>(null)
+  // Her pass from check-in, for asking to unlock the next Day (no session saved then)
+  const [weekPass, setWeekPass] = useState<string | null>(null)
+  const [unlockSending, setUnlockSending] = useState(false)
+  const [unlockError, setUnlockError] = useState('')
 
   useEffect(() => {
     localStorage.removeItem('vx_session')
@@ -217,6 +234,8 @@ export default function HomePage() {
         // there's a workout waiting.
         if (data.sessionId) saveSession(data)
         setWeek(data.week as WeekInfo)
+        setWeekPass((data.playerPass as string | undefined) ?? null)
+        setUnlockError('')
         setStep('week')
         setCheckingIn(false)
         return
@@ -266,9 +285,24 @@ export default function HomePage() {
       }))
   }
 
+  // Ask an admin to unlock her next Day today (she finished a Day today
+  // that she started on an earlier day)
+  async function askUnlock() {
+    if (!weekPass) return
+    setUnlockSending(true); setUnlockError('')
+    try {
+      const res = await fetch('/api/player/day-unlock', { method: 'POST', headers: { 'x-player-pass': weekPass } })
+      const d = await res.json().catch(() => ({}))
+      if (d.week) setWeek(d.week as WeekInfo)
+      if (!res.ok) setUnlockError(res.status === 401 ? 'Please sign in again.' : d.error || 'Not sent. Try again.')
+    } catch { setUnlockError('Not sent. Try again.') }
+    setUnlockSending(false)
+  }
+
   // Back to the start, signed out
   function doneWithWeek() {
     localStorage.removeItem('vx_session')
+    setWeekPass(null); setUnlockError('')
     setWeek(null); setSelectedPlayer(null); setPin(''); setError('')
     setStep(selectedTeam ? 'player' : 'team')
   }
@@ -476,6 +510,8 @@ export default function HomePage() {
           } else if (week.status === 'done_today') {
             heading = 'Nice work today!'
             sub = next ? `Day ${next.slot} will be ready tomorrow. One workout a day.` : 'Your next workout will be ready tomorrow.'
+            if (week.unlock === 'pending') sub = `You asked to start Day ${week.nextSlot} today. Sign in again once a coach says yes.`
+            else if (week.unlock === 'declined') sub = `Your coach said Day ${week.nextSlot} waits until tomorrow.`
           } else if (week.status === 'week_done') {
             heading = 'You\'re done for the week!'
             sub = 'All workouts finished. New ones start Monday.'
@@ -495,8 +531,23 @@ export default function HomePage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', marginBottom: '1.25rem' }}>
                   {week.days.map(d => (
                     <WeekDayRow key={d.slot} day={d} resumed={week.resumed} starting={checkingIn}
+                      canStart={week.status === 'ready'}
+                      waitLabel={week.unlock === 'pending' ? 'Waiting on coach' : 'Tomorrow'}
                       onStart={() => { setCheckingIn(true); router.push(selectedCoach ? '/player/workout' : '/player/bodycheck') }} />
                   ))}
+                </div>
+              )}
+
+              {/* Did the sets on an earlier day but tapped Finish today? Ask to unlock */}
+              {week.status === 'done_today' && week.lateFinish && !week.unlock && !selectedCoach && weekPass && (
+                <div className="card" style={{ padding: '0.875rem 1rem', marginBottom: '1.25rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.625rem' }}>
+                    Did Day {week.lateFinish.slot} on {dayName(week.lateFinish.startedOn)} but forgot to tap Finish?
+                  </div>
+                  <button className="btn-volt" onClick={askUnlock} disabled={unlockSending} style={{ padding: '0.6rem 1.1rem', fontSize: '0.88rem' }}>
+                    {unlockSending ? 'Sending…' : `Ask to start Day ${week.nextSlot} today`}
+                  </button>
+                  {unlockError && <div style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: '0.5rem' }}>{unlockError}</div>}
                 </div>
               )}
 
