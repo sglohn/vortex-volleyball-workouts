@@ -24,7 +24,7 @@
 //
 // Pounds moved counts both dumbbells on 2-dumbbell exercises (lib/loads.ts).
 // Med ball exercises count in pounds moved but not in PRs, Most Improved or
-// Exercise of the Day (switching to the 14 lb ball isn't a PR). Band sets
+// Exercise of the Day (switching to a heavier ball isn't a PR). Band sets
 // have no weight, so they only count as sets.
 
 import { NextRequest, NextResponse } from 'next/server'

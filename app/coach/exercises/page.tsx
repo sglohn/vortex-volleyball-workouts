@@ -17,7 +17,7 @@
 // request, and what self-guided players are offered first when sore.
 'use client'
 import { useState, useEffect } from 'react'
-import { EQUIPMENT_OPTIONS, asEquipment } from '@/lib/loads'
+import { EQUIPMENT_OPTIONS, MEDBALL_COACH_NOTE, asEquipment } from '@/lib/loads'
 import { FEATURES } from '@/lib/features'
 import ExerciseImport from '@/components/ExerciseImport'
 import ExerciseSync from '@/components/ExerciseSync'
@@ -554,7 +554,7 @@ export default function ExercisesPage() {
                   )}
                   {form.equipment === 'medball' && (
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.35rem 0 0' }}>
-                      Players start on the 10 lb ball and can switch to the 14 lb ball. No weight is suggested.
+                      {MEDBALL_COACH_NOTE}
                     </p>
                   )}
                 </div>

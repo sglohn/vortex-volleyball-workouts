@@ -8,7 +8,9 @@
 //                     large bands Orange (extra light), Red (light),
 //                     Green (medium), Orange (heavy, the thicker one),
 //                     White (extra heavy)
-// Bars, plates, trap bars, hip bands and med balls are the same on both.
+//   Med balls: Vortex 10 lb balls and one 14 lb ball; Bruisers Lacrosse
+//              6, 8, 10, 12, 14, 16, 20 and 30 lb balls
+// Bars, plates, trap bars and hip bands are the same on both.
 //
 // What players type:
 //   Barbell        - the total on the bar (bar + plates), e.g. 135
@@ -17,8 +19,8 @@
 //   Landmine       - the plates on the bar's free end, e.g. 25 (0 = empty bar)
 //                    Used for Landmine and Viking Press exercises. Pounds
 //                    moved adds the bar's felt weight (LANDMINE_BAR_LBS).
-//   Med ball       - 10 or 14 (we have 10 lb balls and one 14 lb ball;
-//                    the picker starts on 10)
+//   Med ball       - the ball's weight (MEDBALLS_LBS for this site; the
+//                    picker starts on 10)
 //   Large band /   - the band's color (no weight). Saved in set_logs.band,
 //   Hip band         e.g. 'hip_blue' (BANDS below)
 //   Other          - whatever the weight is (machine, sled, etc.)
@@ -50,7 +52,7 @@ export const EQUIPMENT_OPTIONS: { value: Equipment; label: string; hint: string 
   { value: 'dumbbell_1', label: '1 dumbbell',   hint: 'Player enters the number on the dumbbell' },
   { value: 'dumbbell_2', label: '2 dumbbells',  hint: 'Player enters the number on one dumbbell; counts double' },
   { value: 'landmine',   label: 'Landmine',     hint: 'Bar against the wall; player enters plates on the end' },
-  { value: 'medball',    label: 'Med ball',     hint: 'Player picks the 10 lb (default) or 14 lb ball' },
+  { value: 'medball',    label: 'Med ball',     hint: LACROSSE ? 'Player taps the ball: 6, 8, 10 (default), 12, 14, 16, 20 or 30 lb' : 'Player picks the 10 lb (default) or 14 lb ball' },
   { value: 'large_band', label: 'Large band',   hint: LACROSSE ? 'Player taps the band: Orange, Red, Green, Orange (heavy), White' : 'Player taps the band color: Yellow, Red, Black, Purple' },
   { value: 'hip_band',   label: 'Hip band',     hint: 'Player taps the band color: Green, Yellow, Blue, Red, Black' },
   { value: 'other',      label: 'Other',        hint: 'Machine, sled, etc.' },
@@ -68,9 +70,24 @@ export const DUMBBELLS_LBS = LACROSSE
 // covers grip position and a little friction. Change here if needed.
 export const LANDMINE_BAR_LBS = 25
 
-// Med balls in the weight room: 10 lb balls and one 14 lb ball.
-export const MEDBALLS_LBS = [10, 14]
+// Med balls in the weight room, lightest first.
+//   Vortex: 10 lb balls and one 14 lb ball.
+//   Bruisers Lacrosse: 6, 8, 10, 12, 14, 16, 20 and 30 lb.
+// Both start on the 10 lb ball.
+export const MEDBALLS_LBS = LACROSSE
+  ? [6, 8, 10, 12, 14, 16, 20, 30]
+  : [10, 14]
 export const MEDBALL_DEFAULT_LBS = 10
+
+/** Coach-facing note for med ball exercises (Exercise Library). */
+export const MEDBALL_COACH_NOTE = LACROSSE
+  ? 'Players start on the 10 lb ball and tap the ball they used (6, 8, 10, 12, 14, 16, 20 or 30 lb). No weight is suggested.'
+  : 'Players start on the 10 lb ball and can switch to the 14 lb ball. No weight is suggested.'
+
+/** Player-facing help line in the weight picker. */
+export const MEDBALL_PLAYER_HELP = LACROSSE
+  ? 'The 10 lb ball is picked for you. Used a different ball? Tap its weight.'
+  : 'The 10 lb ball is picked for you. Using the 14 lb ball? Tap it.'
 
 // ── Bands ─────────────────────────────────────────────────────────────────
 // Lightest to heaviest. The key is what's saved (set_logs.band and

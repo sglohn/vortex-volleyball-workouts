@@ -14,7 +14,7 @@
 // Bands and med balls (lib/loads.ts): band exercises show the band colors
 // to tap, with the coach's recommended band; the band is saved instead of a
 // weight. Med ball exercises start on the 10 lb ball with a switch to the
-// 14 lb ball. Neither gets a weight suggestion.
+// site's other balls. Neither gets a weight suggestion.
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
