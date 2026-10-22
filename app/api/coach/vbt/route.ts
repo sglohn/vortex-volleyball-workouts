@@ -19,6 +19,7 @@ import {
   VBT_RULES,
   type VbtDataPoint,
 } from '@/lib/vbt'
+import { clubDateString } from '@/lib/clubTime'
 
 // ------------------------------------------------------------
 // GET
@@ -85,7 +86,7 @@ export async function POST(req: NextRequest) {
     .insert({
       player_id,
       exercise_id,
-      tested_at: tested_at ?? new Date().toISOString().slice(0, 10),
+      tested_at: tested_at ?? clubDateString(),
       mvt_override: mvt ?? null,
       notes: notes ?? null,
       created_by_coach: true,

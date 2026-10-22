@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase'
 import { getBestOneRepMax, getTrend, estimateOneRepMax } from '@/lib/fitness'
 import { getCoach } from '@/lib/coachAuth'
 import { canSeeTeam, notYourTeam, signInRequired } from '@/lib/coachScope'
+import { clubDateString } from '@/lib/clubTime'
 
 type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
 type LogRow = { exercise_id: string; session_id: string; weight_lbs: number | null; reps_completed: number | null; completed: boolean }
@@ -120,7 +121,7 @@ export async function GET(req: NextRequest) {
     strength: strengthByPlayer[p.id] ?? [],
   }))
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = clubDateString()
   const { data: phases } = await db.from('training_phases').select('*').eq('team_id', teamId).lte('starts_on', today).gte('ends_on', today).limit(1)
 
   return NextResponse.json({ team, roster, currentPhase: phases?.[0] ?? null })

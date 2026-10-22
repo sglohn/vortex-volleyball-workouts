@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { clubDateOf } from '@/lib/clubTime'
+import { clubDateOf, clubDateString } from '@/lib/clubTime'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { inchesToFeetInches } from '@/lib/fitness'
 import FeetInchesInput from '@/components/FeetInchesInput'
@@ -65,7 +65,7 @@ export default function CoachPlayerDetailPage() {
       { phase: 'pre_tournament', weeks: 2 },
       { phase: 'recovery', weeks: 1 },
     ],
-    startedOn: new Date().toISOString().split('T')[0],
+    startedOn: clubDateString(),
     notes: '',
   })
   const [savingProgram, setSavingProgram] = useState(false)
@@ -580,7 +580,7 @@ export default function CoachPlayerDetailPage() {
                   </div>
                   {prog.is_active && (
                     <button onClick={async () => {
-                      await fetch('/api/coach/player-programs', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: prog.id, isActive: false, endedOn: new Date().toISOString().split('T')[0] }) })
+                      await fetch('/api/coach/player-programs', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: prog.id, isActive: false, endedOn: clubDateString() }) })
                       setPrograms(prev => prev.map(p => p.id === prog.id ? { ...p, is_active: false } : p))
                     }} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600, flexShrink: 0 }}>Stop Program</button>
                   )}
@@ -672,7 +672,7 @@ export default function CoachPlayerDetailPage() {
                         const d = await res.json()
                         if (d.program) {
                           setPrograms(prev => [d.program, ...prev])
-                          setNewProgram({ name: '3x/Week Individual Program', templateSequence: [], periodizationMode: 'auto', phaseCycle: [{ phase: 'build', weeks: 4 }, { phase: 'pre_tournament', weeks: 2 }, { phase: 'recovery', weeks: 1 }], startedOn: new Date().toISOString().split('T')[0], notes: '' })
+                          setNewProgram({ name: '3x/Week Individual Program', templateSequence: [], periodizationMode: 'auto', phaseCycle: [{ phase: 'build', weeks: 4 }, { phase: 'pre_tournament', weeks: 2 }, { phase: 'recovery', weeks: 1 }], startedOn: clubDateString(), notes: '' })
                         } else {
                           alert(`Failed to start program: ${d.error ?? 'Unknown error'}`)
                         }

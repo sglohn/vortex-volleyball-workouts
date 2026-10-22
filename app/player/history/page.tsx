@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { playerFetch } from '@/lib/playerPass'
+import { clubDateString, clubDateOf } from '@/lib/clubTime'
 
 interface SessionSummary {
   id: string
@@ -44,9 +45,9 @@ export default function PlayerHistoryPage() {
     router.push('/player/workout')
   }
 
-  const today = new Date().toISOString().split('T')[0]
-  const todaySession = sessions.find(s => s.checkedInAt.startsWith(today))
-  const pastSessions = sessions.filter(s => !s.checkedInAt.startsWith(today))
+  const today = clubDateString()
+  const todaySession = sessions.find(s => clubDateOf(s.checkedInAt) === today)
+  const pastSessions = sessions.filter(s => clubDateOf(s.checkedInAt) !== today)
 
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading history…</div>
 

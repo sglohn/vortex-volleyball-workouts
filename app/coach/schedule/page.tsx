@@ -15,7 +15,7 @@ function getMonday(date: Date): Date {
   return d
 }
 function addDays(date: Date, days: number): Date { const d = new Date(date); d.setDate(d.getDate() + days); return d }
-function fmt(date: Date): string { return date.toISOString().split('T')[0] }
+function fmt(date: Date): string { return localFmt(date) }
 function localFmt(date: Date): string {
   return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
 }

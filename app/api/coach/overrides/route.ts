@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getCoach } from '@/lib/coachAuth'
 import { adminsOnly, canSeePlayer, notYourTeam, signInRequired } from '@/lib/coachScope'
+import { clubDateString } from '@/lib/clubTime'
 
 const PLAYER_SKIP = new Set(['player_skip', 'exercise_skip'])
 
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest) {
 
   if (playerId) {
     if (!(await canSeePlayer(db, coach, playerId))) return notYourTeam()
-    const today = new Date().toISOString().split('T')[0]
+    const today = clubDateString()
     const [{ data: overrides }, { data: skips }, { data: templates }] = await Promise.all([
       db.from('player_overrides').select('*').eq('player_id', playerId).order('override_date', { ascending: false }),
       db.from('player_exercise_skips')
