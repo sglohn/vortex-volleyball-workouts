@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import BrandMark from '@/components/BrandMark'
 import { BRAND } from '@/lib/brand'
-import { isHiddenPage } from '@/lib/features'
+import { FEATURES, isHiddenPage } from '@/lib/features'
 import { CoachProvider, coachCanOpen, type SignedInCoach } from '@/components/CoachContext'
 
 const ALL_NAV = [
@@ -46,10 +46,15 @@ export default function CoachLayout({ children }: { children: React.ReactNode })
   useEffect(() => {
     if (path === '/coach' || path === '/coach/display') return
     let stopped = false
-    const check = () => fetch('/api/coach/change-requests?count=1')
+    const count = (url: string) => fetch(url)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { if (!stopped && d) setOpenRequests(d.open ?? 0) })
-      .catch(() => {})
+      .then(d => (d?.open as number | undefined) ?? 0)
+      .catch(() => 0)
+    // Lacrosse: admins also get unlock requests (team coaches get 403 → 0)
+    const check = () => Promise.all([
+      count('/api/coach/change-requests?count=1'),
+      FEATURES.weekPlan ? count('/api/coach/unlock-requests?count=1') : Promise.resolve(0),
+    ]).then(([a, b]) => { if (!stopped) setOpenRequests(a + b) })
     check()
     const t = setInterval(check, 60000)
     window.addEventListener('vx-requests-changed', check)

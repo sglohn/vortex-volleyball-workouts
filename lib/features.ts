@@ -57,7 +57,7 @@ const FEATURE_PATHS: { on: boolean; pages: string[]; apis: string[] }[] = [
   {
     on: FEATURES.weekPlan,
     pages: ['/coach/week-plan'],
-    apis: ['/api/coach/week-plan'],
+    apis: ['/api/coach/week-plan', '/api/coach/unlock-requests', '/api/player/day-unlock'],
   },
 ]
 

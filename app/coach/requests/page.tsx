@@ -10,9 +10,15 @@
 //   Answered          the last 14 days.
 // Data: app/api/coach/change-requests. Approved changes also show on the
 // player's page under Exercise Skips & Replacements, where they can be ended.
+//   Unlock requests   (lacrosse week plans, admins only) a player who did a
+//                     Day's sets earlier but tapped Finish today, asking to
+//                     start her next Day today. Shows when her sets were
+//                     logged. Data: app/api/coach/unlock-requests.
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
+import { useIsAdmin } from '@/components/CoachContext'
+import { FEATURES } from '@/lib/features'
 
 interface Ex { id: string; name: string; level?: number | null }
 interface RequestItem {
@@ -41,6 +47,88 @@ interface RequestItem {
 interface LibraryEx { id: string; name: string; category: string | null }
 
 const FREQUENT = 3   // requests in 30 days that gets flagged
+
+interface UnlockItem {
+  id: string
+  status: 'pending' | 'approved' | 'declined'
+  createdAt: string
+  resolvedAt: string | null
+  resolvedBy: string | null
+  player: { id: string; name: string; jersey: string | null }
+  weekStart: string
+  slot: number
+  slotName: string | null
+  finished: {
+    slot: number; name: string | null
+    startedAt: string; finishedAt: string | null
+    sets: number; firstSetAt: string | null; lastSetAt: string | null
+  } | null
+}
+
+/** "Mon Oct 20, 3:41 PM" in club time */
+function when(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('en-US', { timeZone: 'America/New_York', weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+}
+
+// ── One unlock request ───────────────────────────────────────────
+function UnlockCard({ u, onDone }: { u: UnlockItem; onDone: () => void }) {
+  const [saving, setSaving] = useState<'approve' | 'decline' | null>(null)
+  const [error, setError] = useState('')
+  const f = u.finished
+
+  async function send(action: 'approve' | 'decline') {
+    setSaving(action); setError('')
+    const res = await fetch('/api/coach/unlock-requests', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id, action }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setSaving(null)
+    if (!res.ok) { setError(d.error ?? 'Not saved'); if (res.status === 409) onDone(); return }
+    onDone()
+  }
+
+  const row = (label: string, value: string) => (
+    <div style={{ display: 'flex', gap: '0.5rem', fontSize: '0.82rem' }}>
+      <span style={{ minWidth: 92, color: 'var(--text-muted)' }}>{label}</span>
+      <span style={{ fontWeight: 600 }}>{value}</span>
+    </div>
+  )
+
+  return (
+    <div className="card" style={{ padding: '1.125rem', borderColor: 'rgba(245,158,11,0.45)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.75rem', flexWrap: 'wrap' }}>
+        <Link href={`/coach/players/${u.player.id}`} style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--text-primary)', textDecoration: 'none' }}>
+          {u.player.name}{u.player.jersey ? <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}> #{u.player.jersey}</span> : null}
+        </Link>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{timeAgo(u.createdAt)}</span>
+      </div>
+      <div style={{ marginTop: '0.5rem', fontSize: '0.88rem' }}>
+        Wants to start <strong>Day {u.slot}{u.slotName ? ` (${u.slotName})` : ''}</strong> today
+      </div>
+      {f && (
+        <div style={{ marginTop: '0.625rem', padding: '0.625rem 0.75rem', borderRadius: 8, background: 'var(--page-bg)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, marginBottom: '0.15rem' }}>
+            Day {f.slot}{f.name ? ` · ${f.name}` : ''}
+          </div>
+          {row('Signed in', when(f.startedAt))}
+          {row('Sets logged', f.sets ? `${f.sets} sets, ${when(f.firstSetAt)} – ${when(f.lastSetAt)}` : 'None')}
+          {row('Tapped Finish', when(f.finishedAt))}
+        </div>
+      )}
+      {error && <div style={{ background: 'var(--danger-light)', borderRadius: 8, padding: '0.45rem 0.7rem', marginTop: '0.5rem', color: 'var(--danger)', fontSize: '0.8rem' }}>{error}</div>}
+      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+        <button className="btn-ghost" onClick={() => send('decline')} disabled={!!saving} style={{ flex: 1, padding: '0.6rem' }}>
+          {saving === 'decline' ? 'Saving…' : 'Wait until tomorrow'}
+        </button>
+        <button className="btn-volt" onClick={() => send('approve')} disabled={!!saving} style={{ flex: 2, padding: '0.6rem' }}>
+          {saving === 'approve' ? 'Saving…' : `Unlock Day ${u.slot}`}
+        </button>
+      </div>
+    </div>
+  )
+}
 
 function timeAgo(iso: string): string {
   const mins = Math.round((Date.now() - new Date(iso).getTime()) / 60000)
@@ -210,15 +298,25 @@ export default function CoachRequestsPage() {
   const [library, setLibrary] = useState<LibraryEx[]>([])
   const [loading, setLoading] = useState(true)
   const [notReady, setNotReady] = useState('')
+  const isAdmin = useIsAdmin()
+  const showUnlocks = FEATURES.weekPlan && isAdmin
+  const [unlocks, setUnlocks] = useState<UnlockItem[]>([])
+  const [unlockNotReady, setUnlockNotReady] = useState('')
 
   const load = useCallback(async () => {
     const res = await fetch('/api/coach/change-requests')
     const d = await res.json().catch(() => ({}))
     if (!res.ok) setNotReady(d.error ?? 'Could not load requests')
     else { setRequests(d.requests ?? []); setLibrary(d.exercises ?? []); setNotReady('') }
+    if (showUnlocks) {
+      const ur = await fetch('/api/coach/unlock-requests').catch(() => null)
+      const ud = ur ? await ur.json().catch(() => ({})) : {}
+      if (ur?.ok) { setUnlocks(ud.requests ?? []); setUnlockNotReady('') }
+      else setUnlockNotReady(ud.error ?? 'Could not load unlock requests')
+    }
     setLoading(false)
     window.dispatchEvent(new Event('vx-requests-changed'))   // refresh the nav badge
-  }, [])
+  }, [showUnlocks])
 
   useEffect(() => {
     load()
@@ -239,16 +337,32 @@ export default function CoachRequestsPage() {
   const pending = requests.filter(r => r.kind === 'request' && r.status === 'pending')
   const swaps = requests.filter(r => r.kind === 'self_guided_swap' && r.open)
   const answered = requests.filter(r => !r.open)
+  const unlockPending = unlocks.filter(u => u.status === 'pending')
+  const unlockAnswered = unlocks.filter(u => u.status !== 'pending')
 
   return (
     <div style={{ padding: '2rem', maxWidth: 820 }}>
       <div style={{ marginBottom: '1.5rem' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '0.2rem' }}>Requests</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Players asking to change an exercise, and easier options self-guided players picked.</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem' }}>Players asking to change an exercise, and easier options self-guided players picked.{showUnlocks ? ' Also players asking to start their next workout today.' : ''}</p>
       </div>
 
       {notReady && (
         <div className="card" style={{ padding: '1rem', borderColor: '#f59e0b', color: '#b45309', fontSize: '0.88rem', marginBottom: '1.5rem' }}>{notReady}</div>
+      )}
+
+      {/* Unlock requests (lacrosse week plans, admins) */}
+      {showUnlocks && (unlockPending.length > 0 || unlockNotReady) && (
+        <section style={{ marginBottom: '2rem' }}>
+          <h2 style={{ ...sectionTitle, color: '#b45309' }}>Unlock a workout ({unlockPending.length})</h2>
+          {unlockNotReady ? (
+            <div className="card" style={{ padding: '1rem', borderColor: '#f59e0b', color: '#b45309', fontSize: '0.88rem' }}>{unlockNotReady}</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.875rem' }}>
+              {unlockPending.map(u => <UnlockCard key={u.id} u={u} onDone={load} />)}
+            </div>
+          )}
+        </section>
       )}
 
       {/* Waiting for you */}
@@ -286,6 +400,28 @@ export default function CoachRequestsPage() {
                   </div>
                 </div>
                 <button className="btn-ghost" onClick={() => markSeen(r.id)} style={{ padding: '0.35rem 0.75rem', fontSize: '0.8rem' }}>Seen</button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Answered unlocks */}
+      {showUnlocks && unlockAnswered.length > 0 && (
+        <section style={{ marginBottom: '2rem' }}>
+          <h2 style={sectionTitle}>Unlocks · last 14 days</h2>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            {unlockAnswered.map((u, i) => (
+              <div key={u.id} style={{ padding: '0.625rem 0.875rem', borderTop: i ? '1px solid var(--gray-border)' : 'none', fontSize: '0.82rem', display: 'flex', gap: '0.75rem', alignItems: 'baseline' }}>
+                <span style={{ minWidth: 72, fontSize: '0.72rem', color: 'var(--text-muted)' }}>{new Date(u.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <strong>{u.player.name}</strong> · Day {u.slot}{u.slotName ? ` (${u.slotName})` : ''}
+                  {u.resolvedBy && <span style={{ color: 'var(--text-muted)' }}> · {u.resolvedBy}</span>}
+                </span>
+                <span style={{ fontSize: '0.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', whiteSpace: 'nowrap',
+                  color: u.status === 'declined' ? 'var(--text-muted)' : 'var(--success)' }}>
+                  {u.status === 'declined' ? 'Waited' : 'Unlocked'}
+                </span>
               </div>
             ))}
           </div>

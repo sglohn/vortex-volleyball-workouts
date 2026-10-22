@@ -12,13 +12,19 @@
 //   - A started but unfinished workout is picked back up (same session, so
 //     logged sets stay) the next time she signs in that week.
 //   - "Finished" means she tapped Finish (sessions.completed_at).
+//   - Unlock: if she finishes a workout today that she started on an
+//     earlier day (did the sets, forgot to tap Finish), she can ask an admin
+//     to unlock the next Day today (day_unlock_requests,
+//     app/api/player/day-unlock, Coach -> Requests). Once approved, that Day
+//     is ready even though she finished one today.
 //   - Every Monday starts over at Day 1, whatever happened last week.
 //   - A week with no plan of its own uses the most recent earlier week that
 //     has workouts (it rolls forward). A plan saved with no workouts is an
 //     off week; it doesn't roll forward.
 //
 // Tables: week_plans, week_plan_slots, and sessions.template_id /
-// week_start / week_slot (supabase/migrations/2026-10-14_week_plans.sql).
+// week_start / week_slot (supabase/migrations/2026-10-14_week_plans.sql);
+// day_unlock_requests (2026-10-22_day_unlock_requests.sql).
 
 import type { createServerClient } from '@/lib/supabase'
 import { clubDateOf } from '@/lib/clubTime'
@@ -136,6 +142,8 @@ export type WeekStatus =
   /** No workouts this week */
   | 'no_plan'
 
+export type UnlockStatus = 'pending' | 'approved' | 'declined'
+
 export interface PlayerWeek {
   weekStart: string
   status: WeekStatus
@@ -147,6 +155,16 @@ export interface PlayerWeek {
   /** Unfinished session to pick back up (ready only) */
   resumeSessionId: string | null
   days: PlayerDay[]
+  /** done_today only: the workout she finished today but started on an
+   *  earlier day (forgot to tap Finish). Lets her ask for an unlock. */
+  lateFinish: { sessionId: string; slot: number; startedOn: string } | null
+  /** Her unlock request for the next Day this week, if any */
+  unlock: UnlockStatus | null
+}
+
+export interface UnlockRow {
+  week_slot: number
+  status: string
 }
 
 export interface WeekSessionRow {
@@ -169,11 +187,22 @@ export async function loadWeekSessions(db: Db, playerId: string, weekStart: stri
   return (data ?? []) as WeekSessionRow[]
 }
 
+/** This week's unlock requests for a player. Empty if the table isn't there yet. */
+export async function loadWeekUnlocks(db: Db, playerId: string, weekStart: string): Promise<UnlockRow[]> {
+  const { data, error } = await db
+    .from('day_unlock_requests')
+    .select('week_slot, status')
+    .eq('player_id', playerId)
+    .eq('week_start', weekStart)
+  if (error) return []
+  return (data ?? []) as UnlockRow[]
+}
+
 /**
  * Where a player is in her week. Pure, so it can be tested without a database.
  * `today` is the club date (YYYY-MM-DD).
  */
-export function playerWeekFrom(plan: WeekPlan, sessions: WeekSessionRow[], today: string): PlayerWeek {
+export function playerWeekFrom(plan: WeekPlan, sessions: WeekSessionRow[], today: string, unlocks: UnlockRow[] = []): PlayerWeek {
   const total = plan.slots.length
   const finished = sessions.filter(s => !!s.completed_at)
   // In order, so the highest finished Day is where she's up to
@@ -186,11 +215,26 @@ export function playerWeekFrom(plan: WeekPlan, sessions: WeekSessionRow[], today
         .sort((a, b) => b.checked_in_at.localeCompare(a.checked_in_at))[0] ?? null
     : null
 
+  const unlockRow = nextSlot ? unlocks.find(u => u.week_slot === nextSlot) : undefined
+  const unlock = unlockRow && ['pending', 'approved', 'declined'].includes(unlockRow.status)
+    ? unlockRow.status as UnlockStatus
+    : null
+
   let status: WeekStatus
   if (total === 0) status = 'no_plan'
   else if (!nextSlot) status = 'week_done'
-  else if (doneToday && !open) status = 'done_today'
+  else if (doneToday && !open && unlock !== 'approved') status = 'done_today'
   else status = 'ready'
+
+  // The latest workout she finished today, if she started it on an earlier
+  // day. Only the latest counts, so a Day unlocked and done today can't be
+  // used to ask for the one after it too.
+  const latestToday = status === 'done_today'
+    ? finished
+        .filter(s => clubDateOf(s.completed_at as string) === today)
+        .sort((a, b) => b.week_slot - a.week_slot)[0] ?? null
+    : null
+  const late = latestToday && clubDateOf(latestToday.checked_in_at) < today ? latestToday : null
 
   const days: PlayerDay[] = plan.slots.map(s => {
     const done = finished.find(f => f.week_slot === s.slot)
@@ -219,17 +263,20 @@ export function playerWeekFrom(plan: WeekPlan, sessions: WeekSessionRow[], today
     templateId: ready ? (open?.template_id ?? plan.slots[(nextSlot as number) - 1].templateId) : null,
     resumeSessionId: ready ? open?.id ?? null : null,
     days,
+    lateFinish: late ? { sessionId: late.id, slot: late.week_slot, startedOn: clubDateOf(late.checked_in_at) } : null,
+    unlock,
   }
 }
 
 /** Where a player is in this week's plan for her team */
 export async function loadPlayerWeek(db: Db, playerId: string, teamId: string, today: string): Promise<PlayerWeek> {
   const weekStart = weekStartOf(today)
-  const [plan, sessions] = await Promise.all([
+  const [plan, sessions, unlocks] = await Promise.all([
     loadWeekPlan(db, teamId, weekStart),
     loadWeekSessions(db, playerId, weekStart),
+    loadWeekUnlocks(db, playerId, weekStart),
   ])
-  return playerWeekFrom(plan, sessions, today)
+  return playerWeekFrom(plan, sessions, today, unlocks)
 }
 
 /** What the sign-in screen shows (no ids it doesn't need) */
@@ -241,5 +288,8 @@ export function publicWeek(w: PlayerWeek) {
     nextSlot: w.nextSlot,
     resumed: !!w.resumeSessionId,
     days: w.days,
+    // done_today: she may ask an admin to unlock the next Day
+    lateFinish: w.lateFinish ? { slot: w.lateFinish.slot, startedOn: w.lateFinish.startedOn } : null,
+    unlock: w.unlock,
   }
 }
