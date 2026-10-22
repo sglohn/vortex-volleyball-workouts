@@ -12,6 +12,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { profileQualityLabel, profileNeedsRefresh, isProfileTrusted } from '@/lib/vbt'
+import { clubDateString } from '@/lib/clubTime'
 
 // ------------------------------------------------------------
 // TYPES
@@ -70,7 +71,7 @@ function LogTestModal({
   onSaved: () => void
 }) {
   const [exerciseId, setExerciseId] = useState(initialExerciseId ?? exercises[0]?.id ?? '')
-  const [testedAt, setTestedAt]     = useState(new Date().toISOString().slice(0, 10))
+  const [testedAt, setTestedAt]     = useState(clubDateString())
   const [notes, setNotes]           = useState('')
   const [mvt, setMvt]               = useState('')
   const [points, setPoints]         = useState<DataPoint[]>([

@@ -12,6 +12,7 @@ import { getPlayerRecommendation } from '@/lib/suggestions'
 import { PhaseType } from '@/lib/types'
 import { canAccessSession, signInAgain } from '@/lib/playerAuth'
 import { asBand, asEquipment, skipsWeightSuggestion } from '@/lib/loads'
+import { clubDateString } from '@/lib/clubTime'
 
 export async function POST(req: NextRequest) {
   const {
@@ -97,7 +98,7 @@ export async function POST(req: NextRequest) {
   // Get current phase for recommendation
   let phaseType: PhaseType = 'general'
   if (session?.team_id) {
-    const today = new Date().toISOString().split('T')[0]
+    const today = clubDateString()
     const { data: phases } = await db
       .from('training_phases')
       .select('phase_type')

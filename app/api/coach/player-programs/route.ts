@@ -3,6 +3,7 @@ import { createServerClient } from '@/lib/supabase'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { getCoach } from '@/lib/coachAuth'
 import { adminsOnly, canSeePlayer, notYourTeam, signInRequired } from '@/lib/coachScope'
+import { clubDateString } from '@/lib/clubTime'
 
 export async function GET(req: NextRequest) {
   const playerId  = req.nextUrl.searchParams.get('playerId')
@@ -45,7 +46,7 @@ function getCurrentPhase(program: {
   const today = new Date()
 
   if (program.periodization_mode === 'manual' && program.manual_phases?.length) {
-    const todayStr = today.toISOString().split('T')[0]
+    const todayStr = clubDateString(today)
     const match = program.manual_phases.find((p: { phase: string; from: string; to: string }) =>
       p.from <= todayStr && p.to >= todayStr
     )
@@ -108,7 +109,7 @@ export async function POST(req: NextRequest) {
         { phase: 'recovery', weeks: 1 },
       ],
       manual_phases: manualPhases ?? [],
-      started_on: startedOn ?? new Date().toISOString().split('T')[0],
+      started_on: startedOn ?? clubDateString(),
       notes,
       is_active: true,
     })

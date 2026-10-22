@@ -8,6 +8,7 @@ import { createServerClient } from '@/lib/supabase'
 import { requestSummary } from '@/lib/exerciseLevels'
 import { getCoach } from '@/lib/coachAuth'
 import { inList, signInRequired, visiblePlayerIds, visibleTeamIds } from '@/lib/coachScope'
+import { clubDateString, clubDayBounds } from '@/lib/clubTime'
 
 export async function GET(req: NextRequest) {
   const coach = await getCoach(req)
@@ -18,16 +19,16 @@ export async function GET(req: NextRequest) {
   const visibleTeams = visibleTeamIds(coach)
   // For .in('player_id', …) on every player query; admins get everyone
   const pids = visible ? inList(visible) : null
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const todayStr = today.toISOString().split('T')[0]
+  // Today in the club's timezone (the server runs in UTC)
+  const todayStr = clubDateString()
+  const { start: todayStart } = clubDayBounds(todayStr)
   const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7)
 
   // Today's sessions with player/team info
   let sessionsQuery = db
     .from('sessions')
     .select('id, player_id, checked_in_at, completed_at')
-    .gte('checked_in_at', today.toISOString())
+    .gte('checked_in_at', todayStart)
   if (pids) sessionsQuery = sessionsQuery.in('player_id', pids)
   const { data: sessions } = await sessionsQuery.order('checked_in_at', { ascending: false })
 

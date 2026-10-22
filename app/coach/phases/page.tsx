@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
+import { clubDateString } from '@/lib/clubTime'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface Phase { id: string; team_id: string; phase_type: string; name: string; description?: string; intensity_target?: string; starts_on: string; ends_on: string; teams?: Team }
@@ -41,7 +42,7 @@ export default function PhasesPage() {
     setPhases(prev => prev.filter(p => p.id !== id))
   }
 
-  const today = new Date().toISOString().split('T')[0]
+  const today = clubDateString()
   const active = phases.filter(p => p.starts_on <= today && p.ends_on >= today)
   const upcoming = phases.filter(p => p.starts_on > today)
   const past = phases.filter(p => p.ends_on < today)
