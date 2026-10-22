@@ -1,9 +1,9 @@
-// FILE: app/api/coach/coaches/route.ts   (new file)
+// FILE: app/api/coach/coaches/route.ts
 //
 // Coach → Coaches: add and manage coach and admin accounts. Admins only
 // (middleware.ts: not in COACH_ROUTES).
 //
-//   GET                                          → { coaches, teams }
+//   GET                                          → { coaches, teams, meId }
 //   POST   { name, role, pin, teamIds }          add an account
 //   PATCH  { id, name?, role?, pin?, teamIds?, isActive? }
 //                                                change an account. A new PIN
@@ -11,13 +11,17 @@
 //                                                person out everywhere.
 //   DELETE { id }                                remove an account for good
 //
+// A protected account (coaches.is_protected, Steve's "Admin" account; set
+// only with SQL, 2026-10-22_protected_admin.sql) can be edited, turned off
+// or removed only by that same account. Other admins get a 403.
+//
 // The last active admin can't be turned off, removed or made a coach, so
 // there's always someone who can get in. (If it ever happens anyway, the old
 // shared COACH_PIN opens the coach side again for first-time setup.)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { PIN_RE, hashPin } from '@/lib/coachAuth'
+import { PIN_RE, getCoach, hashPin } from '@/lib/coachAuth'
 
 export const dynamic = 'force-dynamic'
 
@@ -48,6 +52,17 @@ async function setTeams(db: Db, coachId: string, teamIds: string[]) {
   return error?.message ?? null
 }
 
+/**
+ * Protected accounts answer only to themselves. select('*') keeps this
+ * working before the migration adds the column (it's then just missing).
+ */
+async function protectedFromMe(req: NextRequest, target: { id: string; name: string; is_protected?: boolean | null }) {
+  if (!target.is_protected) return null
+  const me = await getCoach(req)
+  if (me?.id === target.id) return null
+  return NextResponse.json({ error: `Only ${target.name} can change this account.` }, { status: 403 })
+}
+
 async function otherActiveAdmins(db: Db, notId: string): Promise<number> {
   const { count } = await db
     .from('coaches')
@@ -56,11 +71,11 @@ async function otherActiveAdmins(db: Db, notId: string): Promise<number> {
   return count ?? 0
 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const db = createServerClient()
   const { data, error } = await db
     .from('coaches')
-    .select('id, name, role, is_active, last_signin_at, created_at, coach_teams(team_id)')
+    .select('*, coach_teams(team_id)')
     .order('name')
   if (error) return notReady()
 
@@ -79,9 +94,11 @@ export async function GET() {
       isActive: c.is_active,
       lastSigninAt: c.last_signin_at,
       teamIds: links.map(l => l.team_id),
+      isProtected: c.is_protected === true,
     }
   })
-  return NextResponse.json({ coaches, teams: teams ?? [] })
+  const me = await getCoach(req)
+  return NextResponse.json({ coaches, teams: teams ?? [], meId: me?.id ?? null })
 }
 
 export async function POST(req: NextRequest) {
@@ -116,9 +133,11 @@ export async function PATCH(req: NextRequest) {
 
   const db = createServerClient()
   const { data: current, error: loadErr } = await db
-    .from('coaches').select('id, name, role, is_active, session_version').eq('id', id).maybeSingle()
+    .from('coaches').select('*').eq('id', id).maybeSingle()
   if (loadErr) return notReady()
   if (!current) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+  const blocked = await protectedFromMe(req, current)
+  if (blocked) return blocked
 
   const updates: Record<string, unknown> = { updated_at: new Date().toISOString() }
   let signOut = false
@@ -167,8 +186,10 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const db = createServerClient()
-  const { data: current } = await db.from('coaches').select('role, is_active').eq('id', id).maybeSingle()
+  const { data: current } = await db.from('coaches').select('*').eq('id', id).maybeSingle()
   if (!current) return NextResponse.json({ error: 'Account not found' }, { status: 404 })
+  const blocked = await protectedFromMe(req, current)
+  if (blocked) return blocked
   if (current.role === 'admin' && current.is_active && (await otherActiveAdmins(db, id)) === 0) {
     return NextResponse.json({ error: 'This is the only admin. Add or turn on another admin first.' }, { status: 409 })
   }

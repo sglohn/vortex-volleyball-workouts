@@ -1,4 +1,4 @@
-// FILE: app/coach/coaches/page.tsx   (new file)
+// FILE: app/coach/coaches/page.tsx
 //
 // Coach → Coaches (admins only). Add and manage coach and admin accounts.
 //   Coach  signs in from the main screen under their team; sees only their
@@ -6,6 +6,8 @@
 //          can approve requests and add injuries / health notes.
 //   Admin  signs in with the Admin link at the bottom of the main screen;
 //          sees and changes everything.
+// A protected account (Steve's "Admin") shows "Protected"; only that account
+// sees its Edit / Turn off / Remove. The server enforces the same rule.
 // API: app/api/coach/coaches/route.ts
 
 'use client'
@@ -13,7 +15,7 @@ import { useEffect, useState } from 'react'
 import { useCoach } from '@/components/CoachContext'
 
 interface Team { id: string; name: string; color: string; age_group?: string | null }
-interface Account { id: string; name: string; role: 'admin' | 'coach'; isActive: boolean; lastSigninAt: string | null; teamIds: string[] }
+interface Account { id: string; name: string; role: 'admin' | 'coach'; isActive: boolean; lastSigninAt: string | null; teamIds: string[]; isProtected?: boolean }
 interface Form { name: string; role: 'admin' | 'coach'; pin: string; teamIds: string[] }
 
 const BLANK: Form = { name: '', role: 'coach', pin: '', teamIds: [] }
@@ -35,8 +37,12 @@ function RoleTag({ role }: { role: 'admin' | 'coach' }) {
   )
 }
 
-function AccountCard({ a, teams, onEdit, onToggle, onRemove, busy }: {
+function AccountCard({ a, teams, onEdit, onToggle, onRemove, busy, locked, mineAccount }: {
   a: Account; teams: Team[]; busy: boolean
+  /** protected and not the signed-in person: no buttons */
+  locked?: boolean
+  /** this is the signed-in person's own protected account */
+  mineAccount?: boolean
   onEdit: () => void; onToggle: () => void; onRemove: () => void
 }) {
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -50,15 +56,25 @@ function AccountCard({ a, teams, onEdit, onToggle, onRemove, busy }: {
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 700 }}>{a.name}</span>
           <RoleTag role={a.role} />
+          {a.isProtected && (
+            <span title="Only this account can change itself" style={{ fontSize: '0.65rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', padding: '0.15rem 0.5rem', borderRadius: 6, border: '1px solid var(--gray-border)', color: 'var(--text-secondary)' }}>
+              🔒 Protected
+            </span>
+          )}
           {!a.isActive && <span style={{ fontSize: '0.7rem', color: 'var(--danger)', fontWeight: 700 }}>OFF</span>}
         </div>
         <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>
           {a.role === 'admin' ? 'Sees the whole club' : mine.length ? mine.map(t => t.name).join(', ') : 'No team yet — can’t see any players'}
           {' · '}{lastSeen(a.lastSigninAt)}
         </div>
+        {mineAccount && (
+          <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.2rem' }}>Your account. Only you can edit, turn off or remove it.</div>
+        )}
       </div>
       <div style={{ display: 'flex', gap: '0.625rem', alignItems: 'center', flexShrink: 0 }}>
-        {!confirmRemove ? (
+        {locked ? (
+          <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Only {a.name} can change this</span>
+        ) : !confirmRemove ? (
           <>
             <button className="tap-phone" onClick={onEdit} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 600, padding: 0 }}>Edit</button>
             <span style={{ color: 'var(--gray-border)' }}>|</span>
@@ -81,6 +97,7 @@ function AccountCard({ a, teams, onEdit, onToggle, onRemove, busy }: {
 export default function CoachesPage() {
   const me = useCoach()
   const [accounts, setAccounts] = useState<Account[]>([])
+  const [meId, setMeId] = useState<string | null>(null)
   const [teams, setTeams] = useState<Team[]>([])
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState<{ text: string; error: boolean } | null>(null)
@@ -95,7 +112,7 @@ export default function CoachesPage() {
     const res = await fetch('/api/coach/coaches', { cache: 'no-store' })
     const d = await res.json().catch(() => ({}))
     if (!res.ok) { setNotice({ text: d.error ?? `Couldn’t load accounts (${res.status})`, error: true }); setLoading(false); return }
-    setAccounts(d.coaches ?? []); setTeams(d.teams ?? []); setLoading(false)
+    setAccounts(d.coaches ?? []); setTeams(d.teams ?? []); setMeId(d.meId ?? null); setLoading(false)
   }
   useEffect(() => { load() }, [])
 
@@ -195,6 +212,7 @@ export default function CoachesPage() {
         {admins.length === 0 && <div className="card" style={{ padding: '1.25rem', color: 'var(--text-muted)', textAlign: 'center' }}>No admin accounts yet.</div>}
         {admins.map(a => (
           <AccountCard key={a.id} a={a} teams={teams} busy={busyId === a.id}
+            locked={a.isProtected && a.id !== meId} mineAccount={a.isProtected && a.id === meId}
             onEdit={() => openEdit(a)}
             onToggle={() => patch(a, { isActive: !a.isActive }, a.isActive ? `${a.name} turned off` : `${a.name} turned on`)}
             onRemove={() => remove(a)} />
@@ -210,6 +228,7 @@ export default function CoachesPage() {
         {coaches.length === 0 && <div className="card" style={{ padding: '1.25rem', color: 'var(--text-muted)', textAlign: 'center' }}>No team coaches yet.</div>}
         {coaches.map(a => (
           <AccountCard key={a.id} a={a} teams={teams} busy={busyId === a.id}
+            locked={a.isProtected && a.id !== meId} mineAccount={a.isProtected && a.id === meId}
             onEdit={() => openEdit(a)}
             onToggle={() => patch(a, { isActive: !a.isActive }, a.isActive ? `${a.name} turned off` : `${a.name} turned on`)}
             onRemove={() => remove(a)} />
