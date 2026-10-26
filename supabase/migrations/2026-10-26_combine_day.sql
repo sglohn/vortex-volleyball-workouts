@@ -4,9 +4,10 @@
 --
 -- A workout template can be marked as a Combine Day. When a team has one on
 -- the schedule, players don't lift: their phone shows the Volleyball
--- Performance Index tests (height, standing reach, block touch, approach
--- touch, acceleration, pro-agility, swing velocity) and they enter their own
--- numbers, in any order.
+-- Performance Index tests (height, wingspan, standing reach, block touch,
+-- approach touch, acceleration, pro-agility, swing velocity) and they enter
+-- their own numbers, in any order. The live combine leaderboard on the TVs
+-- reads the same tries (lib/combineLeaderboard.ts, app/api/leaderboard).
 --
 --   workout_templates.is_combine       true = Combine Day
 --   workout_templates.combine_metrics  which tests this combine includes
@@ -37,7 +38,7 @@ create table if not exists public.combine_attempts (
   "value" numeric not null,
   "created_at" timestamp with time zone default now() not null,
   constraint combine_attempts_metric_check check (metric in (
-    'height_in', 'standing_reach_in', 'standing_vertical_in', 'approach_vertical_in',
+    'height_in', 'wingspan_in', 'standing_reach_in', 'standing_vertical_in', 'approach_vertical_in',
     'acceleration_sec', 'pro_agility_sec', 'swing_velocity_mph'
   )),
   constraint combine_attempts_value_check check (value > 0)

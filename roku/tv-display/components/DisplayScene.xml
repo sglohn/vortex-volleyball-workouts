@@ -46,5 +46,7 @@
     <Timer id="teamChangeTimer" repeat="false" duration="1.2" />
     <Timer id="statusTimer" repeat="false" duration="6" />
     <Timer id="clipTimer" repeat="false" duration="8" />
+    <!-- Checks today's teams again (a Combine Day opens the leaderboard) -->
+    <Timer id="teamsTimer" repeat="true" duration="600" />
   </children>
 </component>

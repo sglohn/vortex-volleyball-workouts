@@ -10,13 +10,19 @@
 // player page). Standing vertical and max vertical are still worked out at
 // display time (touch minus standing reach), as everywhere else.
 //
-// Volleyball only (FEATURES.measurements). Wingspan is a measurement but
-// not part of the score (lib/athleticism.ts), so it isn't a combine test.
+// Wingspan is a combine test too, though it isn't part of the athleticism
+// score (lib/athleticism.ts).
+//
+// The live combine leaderboard on the TVs (lib/combineLeaderboard.ts,
+// app/api/leaderboard) uses the same tests, with tvText() for the Roku,
+// which can only draw plain ASCII.
+//
+// Volleyball only (FEATURES.measurements).
 //
 // Shared by the browser and the server, so no server-only imports here.
 
 export type CombineMetricKey =
-  | 'height_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in'
+  | 'height_in' | 'wingspan_in' | 'standing_reach_in' | 'standing_vertical_in' | 'approach_vertical_in'
   | 'acceleration_sec' | 'pro_agility_sec' | 'swing_velocity_mph'
 
 export type CombineUnit = 'ft-in' | 'sec' | 'mph'
@@ -49,6 +55,11 @@ export const COMBINE_METRICS: CombineMetric[] = [
     key: 'height_in', label: 'Height', short: 'Shoes off', unit: 'ft-in',
     howTo: 'Shoes off. Heels, back and head against the wall, looking straight ahead. Have a partner read it.',
     maxAttempts: 1, better: 'higher', usual: [54, 84], limits: [36, 96], bigChange: 3, step: 0.5,
+  },
+  {
+    key: 'wingspan_in', label: 'Wingspan', short: 'Fingertip to fingertip', unit: 'ft-in',
+    howTo: 'Back against the wall, arms straight out to the sides at shoulder height, palms forward. Have a partner measure from fingertip to fingertip.',
+    maxAttempts: 1, better: 'higher', usual: [54, 92], limits: [36, 104], bigChange: 3, step: 0.5,
   },
   {
     key: 'standing_reach_in', label: 'Standing Reach', short: 'Flat-footed, one hand', unit: 'ft-in',
@@ -133,6 +144,42 @@ export function combineText(metric: CombineMetric, value: number | null | undefi
   if (metric.unit === 'ft-in') return feetInchesText(value)
   if (metric.unit === 'sec') return `${value.toFixed(2)} sec`
   return `${Number.isInteger(value) ? value : value.toFixed(1)} mph`
+}
+
+// ── TV text (plain ASCII for the Roku) ──────────────────────────────────
+
+function trimNum(n: number, places: number): string {
+  const s = n.toFixed(places)
+  return s.includes('.') ? s.replace(/0+$/, '').replace(/\.$/, '') : s
+}
+
+/** 112.5 → 9' 4.5" */
+export function feetInchesTv(inches: number): string {
+  const rounded = Math.round(inches * 2) / 2
+  let ft = Math.floor(rounded / 12)
+  let rest = Math.round((rounded - ft * 12) * 2) / 2
+  if (rest >= 12) { ft += 1; rest -= 12 }
+  return `${ft}' ${trimNum(rest, 1)}"`
+}
+
+/** How a value reads on the TV: 9' 4.5", 1.12 s, 48.5 mph */
+export function tvText(metric: CombineMetric, value: number): string {
+  if (metric.unit === 'ft-in') return feetInchesTv(value)
+  if (metric.unit === 'sec') return `${value.toFixed(2)} s`
+  return `${trimNum(value, 1)} mph`
+}
+
+/** A change for the TV: +1.5", -0.12 s, +3 mph (always shown as the better direction) */
+export function tvGain(metric: CombineMetric, gain: number): string {
+  const g = Math.abs(gain)
+  if (metric.unit === 'ft-in') return `+${trimNum(g, 1)}"`
+  if (metric.unit === 'sec') return `-${g.toFixed(2)} s`
+  return `+${trimNum(g, 1)} mph`
+}
+
+/** True when `value` beats `previous` for this test */
+export function isBetter(metric: CombineMetric, value: number, previous: number): boolean {
+  return metric.better === 'lower' ? value < previous : value > previous
 }
 
 /** Vertical in inches from a touch height and standing reach (null if it doesn't make sense) */

@@ -6,11 +6,12 @@ in one place. **Whenever a Roku app changes, update its folder here.**
 
 | Folder | Install on | App |
 |---|---|---|
-| `tv-display/` | **Weight Room Roku**, http://10.1.10.219/ | **Vortex TV Display** v1.0.5: picture of today's workout with demo clips, OK flips to the live leaderboard |
-| `scoreboard-leaderboard/` | **Scoreboard Roku**, http://10.1.10.95/ | **Vortex Scoreboard + Leaderboard** v2.1.0: menu to pick the scoreboard or the live leaderboard |
+| `tv-display/` | **Weight Room Roku**, http://10.1.10.219/ | **Vortex TV Display** v1.1.0: picture of today's workout with demo clips, OK flips to the live leaderboard. Opens the leaderboard by itself on a Combine Day |
+| `scoreboard-leaderboard/` | **Scoreboard Roku**, http://10.1.10.95/ | **Vortex Scoreboard + Leaderboard** v2.2.0: menu to pick the scoreboard or the live leaderboard |
 | `scoreboard-original/` | (not installed) | The original plain **Volleyball Scoreboard**, kept to go back to |
 
-Last installed on both Rokus: Oct 13, 2026 (the versions above).
+Last installed on both Rokus: Oct 13, 2026 (TV Display v1.0.5, Scoreboard +
+Leaderboard v2.1.0). **v1.1.0 / v2.2.0 (Combine Day header) not installed yet.**
 
 The addresses only work on the club's Wi-Fi. If one stops loading, the
 Roku may have been given a new address: on that Roku go to
@@ -29,6 +30,13 @@ The version is in each app's `manifest` (`major_version`, `minor_version`,
 Which boards make up each page is decided by the website
 (`app/api/leaderboard/route.ts` and `lib/leaderboardBoards.ts`), so board
 changes don't need a Roku update.
+
+**Combine Day** (`lib/combineLeaderboard.ts`): when a team has a Combine Day
+today, the combine pages come first (Combine Score, Approach Jump, Block
+Jump, Speed, Swing Velocity, Length) with New Bests Today in the third
+column. From v1.1.0 / v2.2.0 the header shows the site's `title`
+(COMBINE DAY LEADERBOARD) and `summaryText`; older versions show the combine
+boards too, under their usual WEIGHT ROOM LEADERBOARD header.
 
 `LeaderboardView.*` and `LeaderboardTask.*` are the same in both apps.
 Change them in both folders together.
