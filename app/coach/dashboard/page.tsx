@@ -27,6 +27,8 @@ export default function CoachDashboardPage() {
   const [loading, setLoading] = useState(true)
   const [sessionModal, setSessionModal] = useState<SessionDetail | null>(null)
   const [loadingSession, setLoadingSession] = useState(false)
+  // Teams section starts collapsed; tap the header to open it
+  const [teamsOpen, setTeamsOpen] = useState(false)
 
   const checkinsRef = useRef<HTMLDivElement>(null)
   const healthRef = useRef<HTMLDivElement>(null)
@@ -156,11 +158,24 @@ export default function CoachDashboardPage() {
       {/* Teams section */}
       {data?.teamsActive && data.teamsActive.length > 0 && (
         <div ref={teamsRef} className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Teams</h2>
-            <Link href="/coach/teams" style={{ fontSize: '0.8rem', color: 'var(--volt)', textDecoration: 'none' }}>Manage teams →</Link>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.75rem', marginBottom: teamsOpen ? '1rem' : 0 }}>
+            <button
+              type="button"
+              onClick={() => setTeamsOpen(o => !o)}
+              aria-expanded={teamsOpen}
+              style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'inherit', textAlign: 'left', flex: 1, minWidth: 0 }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--carolina-dark)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"
+                style={{ flexShrink: 0, transform: teamsOpen ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.15s' }}>
+                <polyline points="9 6 15 12 9 18" />
+              </svg>
+              <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Teams</h2>
+              <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{data.teamsActive.length}</span>
+              <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginLeft: '0.25rem' }}>{teamsOpen ? 'Hide' : 'Show'}</span>
+            </button>
+            <Link href="/coach/teams" style={{ fontSize: '0.8rem', color: 'var(--volt)', textDecoration: 'none', flexShrink: 0 }}>Manage teams →</Link>
           </div>
-          <div className="grid-cards">
+          {teamsOpen && <div className="grid-cards">
             {data.teamsActive.map(team => {
               const phase = team.phase
               const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
@@ -192,7 +207,7 @@ export default function CoachDashboardPage() {
                 </Link>
               )
             })}
-          </div>
+          </div>}
         </div>
       )}
 
