@@ -13,6 +13,11 @@
 //      easier option before any set of it is logged.
 //   3. legacy active workout
 //
+// Combine Day templates (workout_templates.is_combine, lib/combine.ts) come
+// back as source: 'combine' with just the name, description and warm-up:
+// players enter their test numbers on the Combine Day screen
+// (components/CombineDay.tsx, app/api/player/combine) instead of logging sets.
+//
 // Every template/generated exercise also gets:
 //   originalExerciseId  what the workout calls for (before any replacement)
 //   level               { family, level, count } when the exercise has
@@ -48,6 +53,7 @@ import { clubDateString } from '@/lib/clubTime'
 import { isWarmupLabel } from '@/lib/warmup'
 import { asBand, asEquipment, isBandEquipment, skipsWeightSuggestion } from '@/lib/loads'
 import { lastBandUsed } from '@/lib/bandHistory'
+import { FEATURES } from '@/lib/features'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -308,13 +314,21 @@ export async function GET(req: NextRequest) {
   // Week plan sessions carry their own workout (never set on Vortex)
   const useTemplateId: string | null = (session.template_id as string | null | undefined) ?? templateId
   if (useTemplateId) {
-    const { data: template } = await db
+    // '*' so this still works before the Combine Day migration (is_combine)
+    const { data: templateRow } = await db
       .from('workout_templates')
-      .select('id, name, description, warmup_notes, phase_type')
+      .select('*')
       .eq('id', useTemplateId)
       .single()
 
-    if (template) {
+    if (templateRow) {
+      const template = {
+        id: templateRow.id as string,
+        name: templateRow.name as string,
+        description: (templateRow.description ?? null) as string | null,
+        warmup_notes: (templateRow.warmup_notes ?? null) as string | null,
+        phase_type: (templateRow.phase_type ?? null) as string | null,
+      }
       const { data: blocks } = await db
         .from('template_blocks')
         .select('id, block_label, sets, sort_order')
@@ -326,6 +340,16 @@ export async function GET(req: NextRequest) {
       const warmupBlocks = (blocks ?? []).filter(b => isWarmupLabel(b.block_label))
       const liftingBlocks = (blocks ?? []).filter(b => !isWarmupLabel(b.block_label))
       const warmup = await buildWarmup(db, warmupBlocks)
+
+      // Combine Day: no lifting, the player enters her test numbers
+      if (FEATURES.measurements && templateRow.is_combine === true) {
+        return NextResponse.json({
+          source: 'combine',
+          template: { ...template, warmup, blocks: [] },
+          phase,
+          phaseType,
+        })
+      }
 
       const enrichedBlocks = await Promise.all(liftingBlocks.map(async (block) => {
         const { data: blockExercises } = await db

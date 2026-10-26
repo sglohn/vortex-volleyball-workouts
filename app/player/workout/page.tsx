@@ -15,6 +15,10 @@
 // to tap, with the coach's recommended band; the band is saved instead of a
 // weight. Med ball exercises start on the 10 lb ball with a switch to the
 // site's other balls. Neither gets a weight suggestion.
+//
+// Combine Day (lib/combine.ts): when today's template is a Combine Day the
+// workout API answers source: 'combine' and this page shows the combine
+// test screen (components/CombineDay.tsx) instead of lifting blocks.
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
@@ -30,6 +34,7 @@ import WarmupCard, { type Warmup } from '@/components/WarmupCard'
 import FixSetsSheet, { type FixSetValues } from '@/components/FixSetsSheet'
 import ChangeRequestSheet, { type ChangeRequestInput } from '@/components/ChangeRequestSheet'
 import { BODY_AREAS, CHANGE_REASONS, reasonLabel, wantsLabel } from '@/lib/exerciseLevels'
+import CombineDay from '@/components/CombineDay'
 
 interface SetLog { id?: string; set_number: number; reps_completed?: number; weight_lbs?: number; band?: string | null; velocity_ms?: number; completed: boolean }
 interface Exercise {
@@ -78,6 +83,8 @@ export default function PlayerWorkoutPage() {
   const router = useRouter()
   const [session, setSession] = useState<{ sessionId: string; playerName: string; templateId?: string; checkedInAt?: string; teamMode?: boolean; teamModeUrl?: string } | null>(null)
   const [workout, setWorkout] = useState<WorkoutData | null>(null)
+  // Combine Day: name, description and warm-up (no lifting blocks)
+  const [combine, setCombine] = useState<WorkoutData | null>(null)
   const [phase, setPhase] = useState<{ phase_type: string; name: string; description?: string } | null>(null)
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<WorkoutView>('blocks')
@@ -121,6 +128,7 @@ export default function PlayerWorkoutPage() {
     if (s.templateId) params.set('templateId', s.templateId)
     const data = await playerFetch(`/api/workout?${params}`).then(r => r.json())
     let next: WorkoutData | null = null
+    setCombine(data.source === 'combine' && data.template ? data.template : null)
     if (data.source === 'template') next = data.template
     else if (data.source === 'legacy' && data.workout) {
       next = { id: data.workout.id, name: data.workout.title, description: data.workout.description, warmup_notes: undefined, blocks: [{ id: 'legacy', block_label: 'Workout', sets: 3, exercises: data.workout.exercises.map((ex: Record<string, unknown>) => ({ ...ex, logs_weight: true, logs_velocity: false, skipped: false, setLogs: ex.setLogs })) }] }
@@ -442,6 +450,11 @@ export default function PlayerWorkoutPage() {
   }
 
   if (loading) return <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>Loading workout…</div>
+
+  if (combine && session) return (
+    <CombineDay session={session} name={combine.name} description={combine.description}
+      warmup={combine.warmup} warmupNotes={combine.warmup_notes} />
+  )
 
   if (!workout) return (
     <div style={{ padding: '2rem', textAlign: 'center' }}>

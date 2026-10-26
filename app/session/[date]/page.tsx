@@ -118,6 +118,11 @@ export default function SessionPage({ params }: { params: Promise<{ date: string
       return
     }
     const d = await res.json()
+    if (d.source === 'combine') {
+      // Combine Day (lib/combine.ts): numbers are entered on each player's own phone
+      alert('Today is Combine Day. Sign in on your own phone to enter your numbers.')
+      return
+    }
     if (d.source === 'template' && d.template) {
       const logsRes = await fetch(`/api/sets?sessionId=${player.sessionId}`, withPass(pass))
       const logsData = logsRes.ok ? await logsRes.json() : { logs: [] }

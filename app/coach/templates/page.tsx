@@ -3,16 +3,27 @@
 // Workout templates. Band exercises (Large band / Hip band in Coach →
 // Exercises) get a "Recommended band" pick; players see it as the coach
 // pick when they log the set (components/WeightPicker.tsx).
+//
+// Combine Day (volleyball, lib/combine.ts): tick "Combine Day" and pick the
+// tests. Players then enter their Volleyball Performance Index numbers on
+// their phones instead of lifting (components/CombineDay.tsx). A combine
+// can still have a warm-up; it has no lifting blocks.
 'use client'
 import { useState, useEffect } from 'react'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { isWarmupLabel, WARMUP_LABEL } from '@/lib/warmup'
 import { asEquipment, bandInfo, bandsFor, isBandEquipment } from '@/lib/loads'
+import { FEATURES } from '@/lib/features'
+import { COMBINE_KEYS, COMBINE_METRICS } from '@/lib/combine'
 
 interface ExerciseLib { id: string; name: string; category?: string; default_sets: number; default_reps?: string; logs_weight: boolean; logs_velocity?: boolean; equipment?: string | null }
 interface BlockExercise { exercise_id: string; custom_reps: string; custom_notes: string; target_velocity_min: string; target_velocity_max: string; recommended_band: string; exercise?: ExerciseLib }
 interface Block { block_label: string; sets: number; exercises: BlockExercise[] }
-interface Template { id?: string; name: string; description: string; phase_type: string; warmup_notes: string; blocks: Block[] }
+interface Template {
+  id?: string; name: string; description: string; phase_type: string; warmup_notes: string; blocks: Block[]
+  is_combine?: boolean
+  combine_metrics?: string[] | null   // tests in this combine; null = all
+}
 
 const PHASE_TYPES = Object.entries(PHASE_CONFIG).map(([k, v]) => ({ value: k, label: v.label, color: v.color }))
 // Lifting block labels. The warm-up has its own section (lib/warmup.ts).
@@ -52,7 +63,28 @@ export default function TemplatesPage() {
     ]).then(([t, e]) => { setTemplates(t.templates ?? []); setExercises(e.exercises ?? []); setLoading(false) })
   }, [])
 
-  const blank = (): Template => ({ name: '', description: '', phase_type: 'general', warmup_notes: '', blocks: [{ block_label: 'A', sets: 3, exercises: [] }] })
+  const blank = (): Template => ({ name: '', description: '', phase_type: 'general', warmup_notes: '', blocks: [{ block_label: 'A', sets: 3, exercises: [] }], is_combine: false, combine_metrics: null })
+
+  // Combine Day on/off. Turning it off with no lifting blocks adds Block A back.
+  function setCombine(on: boolean) {
+    setEditing(p => {
+      if (!p) return p
+      if (on) return { ...p, is_combine: true, combine_metrics: p.combine_metrics ?? null }
+      const hasLifting = p.blocks.some(b => !isWarmupLabel(b.block_label))
+      return { ...p, is_combine: false, blocks: hasLifting ? p.blocks : [...p.blocks, { block_label: 'A', sets: 3, exercises: [] }] }
+    })
+  }
+
+  // Tick or untick one combine test (all ticked is saved as "all")
+  function toggleCombineMetric(key: string) {
+    setEditing(p => {
+      if (!p) return p
+      const current = new Set<string>(p.combine_metrics ?? COMBINE_KEYS)
+      if (current.has(key)) current.delete(key); else current.add(key)
+      const list = COMBINE_KEYS.filter(k => current.has(k))
+      return { ...p, combine_metrics: list }
+    })
+  }
 
   function addBlock() {
     setEditing(p => {
@@ -147,6 +179,8 @@ export default function TemplatesPage() {
 
   async function save() {
     if (!editing?.name) return
+    const isCombine = FEATURES.measurements && editing.is_combine === true
+    if (isCombine && editing.combine_metrics && editing.combine_metrics.length === 0) { setMsg('Pick at least one combine test.'); return }
     const badSpeed = editing.blocks.some(b => b.exercises.some(e => {
       const lo = parseFloat(e.target_velocity_min), hi = parseFloat(e.target_velocity_max)
       return lo > 0 && hi > 0 && hi <= lo
@@ -154,7 +188,9 @@ export default function TemplatesPage() {
     if (badSpeed) { setMsg('Fix the target bar speed: max must be higher than min.'); return }
     setSaving(true)
     const method = editing.id ? 'PUT' : 'POST'
-    const res = await fetch('/api/coach/templates', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editing, blocks: warmupFirst(editing.blocks) }) })
+    // A Combine Day keeps only its warm-up (players enter test numbers instead of lifting)
+    const blocks = warmupFirst(isCombine ? editing.blocks.filter(b => isWarmupLabel(b.block_label)) : editing.blocks)
+    const res = await fetch('/api/coach/templates', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...editing, is_combine: isCombine, blocks }) })
     const data = await res.json()
     if (res.ok) {
       setTemplates(prev => editing.id ? prev.map(t => t.id === data.template.id ? data.template : t) : [...prev, data.template])
@@ -233,6 +269,46 @@ export default function TemplatesPage() {
             <textarea className="input" rows={2} placeholder="e.g. 5 min row / bike, dynamic mobility…" value={editing.warmup_notes} onChange={e => setEditing(p => p ? { ...p, warmup_notes: e.target.value } : p)} style={{ resize: 'vertical' }} />
           </div>
 
+          {/* Combine Day (volleyball only) */}
+          {FEATURES.measurements && (() => {
+            const picked = new Set<string>(editing.combine_metrics ?? COMBINE_KEYS)
+            const nonePicked = !!editing.combine_metrics && editing.combine_metrics.length === 0
+            const droppedBlocks = editing.blocks.filter(b => !isWarmupLabel(b.block_label) && b.exercises.length > 0).length
+            return (
+              <div className="card-raised" style={{ padding: '0.875rem 1rem', marginBottom: '1rem', borderLeft: editing.is_combine ? '3px solid var(--volt)' : undefined }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={editing.is_combine === true} onChange={e => setCombine(e.target.checked)} style={{ width: 20, height: 20, accentColor: 'var(--carolina)', flexShrink: 0 }} />
+                  <span>
+                    <span style={{ display: 'block', fontWeight: 700, fontSize: '0.95rem' }}>Combine Day</span>
+                    <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Players enter their Volleyball Performance Index numbers on their phones instead of lifting.</span>
+                  </span>
+                </label>
+                {editing.is_combine && (
+                  <div style={{ marginTop: '0.75rem' }}>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Tests in this combine</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {COMBINE_METRICS.map(m => {
+                        const on = picked.has(m.key)
+                        return (
+                          <button key={m.key} type="button" onClick={() => toggleCombineMetric(m.key)}
+                            style={{ padding: '0.35rem 0.7rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${on ? 'var(--carolina)' : 'var(--gray-border)'}`, background: on ? 'var(--carolina)' : 'transparent', color: on ? '#fff' : 'var(--text-secondary)' }}>
+                            {on ? '✓ ' : ''}{m.label}
+                          </button>
+                        )
+                      })}
+                    </div>
+                    {nonePicked && <p style={{ fontSize: '0.75rem', color: 'var(--danger)', marginTop: '0.4rem' }}>Pick at least one test.</p>}
+                    {droppedBlocks > 0 && (
+                      <p style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '0.5rem', fontWeight: 600 }}>
+                        The lifting blocks below will be removed when you save. The warm-up stays.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           {/* Warm-up section (players see the clips on their phones; TV shows names only) */}
           {!editing.blocks.some(b => isWarmupLabel(b.block_label)) && (
             <button className="btn-ghost" onClick={addWarmup} style={{ width: '100%', padding: '0.625rem', marginBottom: '0.75rem', fontSize: '0.9rem' }}>+ Add Warm-Up</button>
@@ -241,6 +317,7 @@ export default function TemplatesPage() {
           {/* Blocks */}
           {editing.blocks.map((block, bi) => {
             const isWarmup = isWarmupLabel(block.block_label)
+            if (FEATURES.measurements && editing.is_combine && !isWarmup) return null
             const hasWarmup = editing.blocks.some(b => isWarmupLabel(b.block_label))
             const canUp = !isWarmup && bi > 0 && !isWarmupLabel(editing.blocks[bi - 1].block_label)
             const canDown = !isWarmup && bi < editing.blocks.length - 1
@@ -342,7 +419,9 @@ export default function TemplatesPage() {
             )
           })}
 
-          <button className="btn-ghost" onClick={addBlock} style={{ width: '100%', padding: '0.625rem', marginBottom: '1.25rem', fontSize: '0.9rem' }}>+ Add Block</button>
+          {FEATURES.measurements && editing.is_combine
+            ? <div style={{ marginBottom: '1.25rem' }} />
+            : <button className="btn-ghost" onClick={addBlock} style={{ width: '100%', padding: '0.625rem', marginBottom: '1.25rem', fontSize: '0.9rem' }}>+ Add Block</button>}
 
           <div style={{ display: 'flex', gap: '0.75rem' }}>
             <button className="btn-ghost" onClick={() => setEditing(null)} style={{ flex: 1, padding: '0.75rem' }}>Cancel</button>
@@ -365,6 +444,7 @@ export default function TemplatesPage() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem', marginBottom: '0.2rem' }}>
                   <span style={{ fontWeight: 600 }}>{t.name}</span>
                   {phaseConfig && <span style={{ fontSize: '0.7rem', color: phaseConfig.color, background: `${phaseConfig.color}20`, padding: '0.15rem 0.5rem', borderRadius: 4, fontWeight: 600 }}>{phaseConfig.label}</span>}
+                  {FEATURES.measurements && t.is_combine && <span style={{ fontSize: '0.7rem', color: 'var(--carolina-dark)', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', padding: '0.1rem 0.5rem', borderRadius: 4, fontWeight: 700 }}>Combine Day</span>}
                 </div>
                 {t.description && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{t.description}</div>}
               </div>
