@@ -1,7 +1,16 @@
 // FILE: app/api/coach/templates/route.ts
+//
+// Workout templates. A Combine Day template (is_combine, lib/combine.ts)
+// keeps only its warm-up block: players enter their test numbers instead of
+// lifting. combine_metrics lists the tests it includes (null = all).
+// Combine Day is volleyball only (FEATURES.measurements); on lacrosse the
+// two fields are left alone.
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { asBand } from '@/lib/loads'
+import { FEATURES } from '@/lib/features'
+import { cleanCombineMetrics } from '@/lib/combine'
+import { isWarmupLabel } from '@/lib/warmup'
 
 // Target bar speed from the builder: blank → null, otherwise a number in m/s
 function toSpeed(v: unknown): number | null {
@@ -16,6 +25,22 @@ function toSpeed(v: unknown): number | null {
 function bandField(v: unknown): { recommended_band?: string } {
   const band = asBand(v)
   return band ? { recommended_band: band } : {}
+}
+
+// A block as the template builder sends it
+interface BlockInput { block_label: string; sets: number; exercises?: Record<string, unknown>[] }
+
+// Combine Day fields to save (volleyball only)
+function combineFields(isCombine: unknown, metrics: unknown): { is_combine?: boolean; combine_metrics?: string[] | null } {
+  if (!FEATURES.measurements) return {}
+  const on = isCombine === true
+  return { is_combine: on, combine_metrics: on ? cleanCombineMetrics(metrics) : null }
+}
+
+// A Combine Day has no lifting, so only its warm-up block is kept
+function blocksToSave(isCombine: unknown, blocks: BlockInput[] | undefined): BlockInput[] | undefined {
+  if (!blocks || !FEATURES.measurements || isCombine !== true) return blocks
+  return blocks.filter(b => isWarmupLabel(b.block_label))
 }
 
 export async function GET(req: NextRequest) {
@@ -61,14 +86,16 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, description, phase_type, warmup_notes, blocks } = await req.json()
+  const body = await req.json()
+  const { name, description, phase_type, warmup_notes } = body
+  const blocks = blocksToSave(body.is_combine, body.blocks)
   if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
   const db = createServerClient()
 
   const { data: template, error } = await db
     .from('workout_templates')
-    .insert({ name, description, phase_type, warmup_notes })
+    .insert({ name, description, phase_type, warmup_notes, ...combineFields(body.is_combine, body.combine_metrics) })
     .select()
     .single()
 
@@ -112,15 +139,19 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const { id, name, description, phase_type, warmup_notes, blocks } = await req.json()
+  const body = await req.json()
+  const { id, name, description, phase_type, warmup_notes } = body
+  const blocks = blocksToSave(body.is_combine, body.blocks)
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const db = createServerClient()
 
-  await db.from('workout_templates').update({
+  const { error: updateError } = await db.from('workout_templates').update({
     name, description, phase_type, warmup_notes,
+    ...combineFields(body.is_combine, body.combine_metrics),
     updated_at: new Date().toISOString(),
   }).eq('id', id)
+  if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
 
   // Replace blocks entirely
   if (blocks !== undefined) {

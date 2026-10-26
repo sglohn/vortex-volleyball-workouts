@@ -9,6 +9,12 @@
 ' each, then the next one starts. A Roku can only play one video at a time.
 ' The site says where each clip sits (X-Clips header, see SnapshotTask.brs).
 '
+' Combine Day: when any team has a Combine Day scheduled today
+' (/api/display-teams says combineToday), the live leaderboard opens by itself
+' so players can watch the combine boards. It happens once per day; OK goes
+' back to the workout picture as usual. The team list is checked again every
+' 10 minutes, so a combine scheduled while the app is running is picked up.
+'
 ' Buttons (workout display):
 '   Left / Right - previous / next team with a workout today (picture
 '                  updates after a short pause). If no team has a workout
@@ -46,6 +52,11 @@ sub init()
     m.teamChangeTimer.ObserveField("fire", "onTeamChangeTimer")
     m.statusTimer = m.top.findNode("statusTimer")
     m.statusTimer.ObserveField("fire", "onStatusTimer")
+    ' Checks today's teams again every 10 minutes (picks up a Combine Day)
+    m.teamsTimer = m.top.findNode("teamsTimer")
+    m.teamsTimer.ObserveField("fire", "onTeamsTimer")
+    m.teamsTimer.control = "start"
+    m.combineOpenedFor = ""   ' date the combine leaderboard last opened by itself
 
     for each p in m.posters
         p.ObserveField("loadStatus", "onPosterLoadStatus")
@@ -135,6 +146,27 @@ sub onTeamsLoaded(event as object)
         m.snapshotAfterTeams = false
         requestSnapshot()
     end if
+
+    ' Combine Day: open the live leaderboard by itself, once per day
+    if task.status = "ok" and data <> invalid
+        if data.combineToday <> invalid and data.date <> invalid
+            if data.combineToday = true and data.date <> m.combineOpenedFor
+                m.combineOpenedFor = data.date
+                openLeaderboard()
+            end if
+        end if
+    end if
+end sub
+
+sub onTeamsTimer()
+    ' Quiet check: no new picture, no status note
+    if m.teamsTask <> invalid and m.teamsTask.status = "" then return
+    m.snapshotAfterTeams = false
+    task = CreateObject("roSGNode", "JsonFetchTask")
+    task.url = m.siteUrl + "/api/display-teams"
+    task.ObserveField("status", "onTeamsLoaded")
+    task.control = "RUN"
+    m.teamsTask = task
 end sub
 
 sub changeTeam(delta as integer)

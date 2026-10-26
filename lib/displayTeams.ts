@@ -5,16 +5,22 @@
 // order as the TV Display page's team pills (by age group, Open Gym last).
 // If no team has a workout today, every active team is returned instead so
 // the display can still be browsed.
+//
+// combineToday is true when any team has a Combine Day (lib/combine.ts)
+// scheduled today: the Roku TV Display app then opens the live combine
+// leaderboard on its own (roku/tv-display/components/DisplayScene.brs).
 
 import { createServerClient } from '@/lib/supabase'
 import { clubDateString } from '@/lib/clubTime'
+import { FEATURES } from '@/lib/features'
 
 type TeamRow = { id: string; name: string; age_group: string | null; is_open_gym: boolean | null }
 
 export type DisplayTeams = {
   date: string
   todayOnly: boolean
-  teams: { id: string; name: string }[]
+  combineToday: boolean
+  teams: { id: string; name: string; combine: boolean }[]
 }
 
 export async function displayTeamsForToday(): Promise<DisplayTeams> {
@@ -37,12 +43,23 @@ export async function displayTeamsForToday(): Promise<DisplayTeams> {
     return (a.age_group ?? '').localeCompare(b.age_group ?? '')
   })
 
+  // Which of today's workouts are Combine Days ('*' so this works before the migration)
+  const templateIds = [...new Set((scheduled ?? []).map(s => s.template_id as string | null).filter((id): id is string => !!id))]
+  const combineTemplates = new Set<string>()
+  if (FEATURES.measurements && templateIds.length) {
+    const { data: tmpl } = await db.from('workout_templates').select('*').in('id', templateIds)
+    for (const t of tmpl ?? []) if (t.is_combine === true) combineTemplates.add(t.id as string)
+  }
+  const combineTeams = new Set(
+    (scheduled ?? []).filter(s => s.template_id && combineTemplates.has(s.template_id)).map(s => s.team_id as string))
+
   const today = ordered.filter(t => withWorkout.has(t.id))
   const list = today.length ? today : ordered
 
   return {
     date,
     todayOnly: today.length > 0,
-    teams: list.map(t => ({ id: t.id, name: t.name })),
+    combineToday: combineTeams.size > 0,
+    teams: list.map(t => ({ id: t.id, name: t.name, combine: combineTeams.has(t.id) })),
   }
 }

@@ -5,6 +5,10 @@
 // its demo link if it has one, otherwise an empty box. ?still=1 shows each clip's still picture instead; the
 // Roku snapshot (app/api/display-snapshot/route.ts) uses that, since the
 // Roku can only show a picture.
+//
+// Combine Day (lib/combine.ts): instead of blocks, the tests in the combine
+// as big tiles, with a note to enter numbers on phones. The Roku TV Display
+// app opens the live combine leaderboard by itself on those days.
 'use client'
 import { useState, useEffect, Suspense } from 'react'
 import { isWarmupLabel } from '@/lib/warmup'
@@ -12,6 +16,7 @@ import { useSearchParams } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { BRAND } from '@/lib/brand'
 import ExerciseClip from '@/components/ExerciseClip'
+import { combineMetricsFor } from '@/lib/combine'
 
 interface Exercise {
   id: string
@@ -31,7 +36,10 @@ interface Exercise {
   }
 }
 interface Block { id: string; block_label: string; sets: number; exercises: Exercise[] }
-interface WorkoutData { id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[] }
+interface WorkoutData {
+  id: string; name: string; description?: string; warmup_notes?: string; blocks: Block[]
+  is_combine?: boolean; combine_metrics?: string[] | null
+}
 interface Team { id: string; name: string; age_group?: string; color: string; is_open_gym?: boolean }
 
 const BG      = '#0d1117'
@@ -199,8 +207,38 @@ function DisplayContent() {
         </div>
       )}
 
+      {/* ── COMBINE DAY — the tests, big ── */}
+      {workout?.is_combine && !loading && (() => {
+        const tests = combineMetricsFor(workout.combine_metrics)
+        const tileCols = tests.length > 4 ? 4 : tests.length
+        return (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '2vh 2vw', gap: '2vh', minHeight: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'baseline', gap: '2vw', flexWrap: 'wrap' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 900, fontSize: '8vh', color: YELLOW, letterSpacing: '0.06em', lineHeight: 1 }}>COMBINE DAY</div>
+              <div style={{ fontSize: '3vh', color: 'rgba(255,255,255,0.75)', fontWeight: 600 }}>Enter your numbers on your phone, in any order</div>
+            </div>
+            <div style={{ flex: 1, display: 'grid', gridTemplateColumns: `repeat(${tileCols}, 1fr)`, gridAutoRows: '1fr', gap: '1.2vh', minHeight: 0 }}>
+              {tests.map((t, i) => (
+                <div key={t.key} style={{ background: CARD, border: `2px solid ${YELLOW}30`, borderRadius: '1vh', padding: '2vh 1.5vw', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1vh', minHeight: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1vw' }}>
+                    <div style={{ flexShrink: 0, background: CAROLINA, borderRadius: '0.6vh', width: '5vh', height: '5vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '3vh', color: '#fff' }}>{i + 1}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '5vh', color: '#fff', lineHeight: 1.05 }}>{t.label}</div>
+                  </div>
+                  <div style={{ fontSize: '2.6vh', color: YELLOW, fontWeight: 700 }}>
+                    {t.short}{t.maxAttempts > 1 ? ` · best of ${t.maxAttempts}` : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ fontSize: '2.4vh', color: 'rgba(255,255,255,0.5)', fontWeight: 600, textAlign: 'center' }}>
+              Live combine leaderboard: press OK on the remote
+            </div>
+          </div>
+        )
+      })()}
+
       {/* ── BLOCKS GRID — fills all remaining space ── */}
-      {workout && blocks.length > 0 && (
+      {workout && !workout.is_combine && blocks.length > 0 && (
         <div style={{
           flex: 1,
           display: 'grid',

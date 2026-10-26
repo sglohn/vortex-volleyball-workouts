@@ -4,7 +4,8 @@
 //
 //   measurements  height/reach/verticals/sprint/agility, the Comparisons
 //                 (net) page, the athleticism score, and the player
-//                 Profile tab (which only shows measurements)
+//                 Profile tab (which only shows measurements), and Combine
+//                 Day workouts (lib/combine.ts)
 //   vbt           bar speed (velocity) fields and VBT testing
 //   tvDisplay     the weight room TV / Roku display
 //
@@ -37,7 +38,7 @@ const FEATURE_PATHS: { on: boolean; pages: string[]; apis: string[] }[] = [
   {
     on: FEATURES.measurements,
     pages: ['/coach/comparisons', '/player/profile'],
-    apis: ['/api/coach/comparisons', '/api/player/measurements'],
+    apis: ['/api/coach/comparisons', '/api/player/measurements', '/api/player/combine'],
   },
   {
     on: FEATURES.vbt,

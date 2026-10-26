@@ -15,6 +15,15 @@
 //     team, on the boys board for a boys team and the girls board otherwise.
 // The rules for each board live in lib/leaderboardBoards.ts.
 //
+// Combine Day (lib/combine.ts): when a team on the board has a Combine Day
+// template today, the combine pages come first (Combine Score, Approach
+// Jump, Block Jump, Speed, Swing Velocity, Length; lib/combineLeaderboard.ts)
+// with New Bests Today as their third column. Teams lifting the same day
+// still get the usual pages after them, and players on a combine team are
+// left off the lifting boards (Today, Team Battle). `title` and
+// `summaryText` tell the Roku what to print in the header for each page;
+// older Roku versions ignore them and keep their own header.
+//
 // Optional query params:
 //   ?teams=<id>,<id>   only these teams
 //   ?gender=F | M      girls or boys only (each player's Girl / Boy setting)
@@ -37,6 +46,8 @@ import {
   makeBoard, mostImproved, weekStart, weekStreak, weightText, withLabel,
   type Board, type Gender, type LiftSet, type Section,
 } from '@/lib/leaderboardBoards'
+import { buildCombineBoards, type CombineBoards } from '@/lib/combineLeaderboard'
+import { FEATURES } from '@/lib/features'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -331,6 +342,15 @@ export async function GET(req: NextRequest) {
   for (const s of schedules ?? []) if (s.template_id) templateByTeam[s.team_id] = s.template_id
 
   const templateIds = [...new Set(Object.values(templateByTeam))]
+
+  // Combine Day teams ('*' so this works before the Combine Day migration)
+  const combineTemplateIds = new Set<string>()
+  if (FEATURES.measurements && templateIds.length) {
+    const { data: tmpl } = await db.from('workout_templates').select('*').in('id', templateIds)
+    for (const t of tmpl ?? []) if (t.is_combine === true) combineTemplateIds.add(t.id as string)
+  }
+  const combineTeamIds = new Set(
+    Object.entries(templateByTeam).filter(([, t]) => combineTemplateIds.has(t)).map(([team]) => team))
   const totalSetsByTemplate: Record<string, number> = {}
   const mainLiftIds: string[] = []   // first exercise of each block, in block order
 
@@ -409,6 +429,8 @@ export async function GET(req: NextRequest) {
     }
   })
   const athleteById = new Map(athletes.map(a => [a.id, a]))
+  // Players lifting today (not testing at a combine)
+  const lifters = combineTeamIds.size ? athletes.filter(a => !combineTeamIds.has(a.team.id)) : athletes
   const doneOf = (id: string) => athleteById.get(id)?.completed ?? false
 
   const sections: Section[] = []
@@ -421,7 +443,7 @@ export async function GET(req: NextRequest) {
   // ── Page: Today ──
   {
     const boards: Board[] = []
-    for (const g of byGender(athletes, a => a.gender)) {
+    for (const g of byGender(lifters, a => a.gender)) {
       boards.push(makeBoard({
         ...common, key: 'weight', title: 'Most Weight Moved', sub: withLabel(g.label, 'Total lbs lifted today'),
         items: g.items, keepZero: true,
@@ -429,7 +451,7 @@ export async function GET(req: NextRequest) {
         team: a => a.team.name, done: a => a.completed,
       }))
     }
-    for (const g of byGender(athletes, a => a.gender)) {
+    for (const g of byGender(lifters, a => a.gender)) {
       boards.push(makeBoard({
         ...common, key: 'pct', title: '% Complete', sub: withLabel(g.label, 'Furthest through the workout'),
         items: g.items, keepZero: true, barIsPct: true,
@@ -495,7 +517,7 @@ export async function GET(req: NextRequest) {
   // ── Page: Team Battle (only when 2+ teams of the same group are lifting) ──
   {
     const boards: Board[] = []
-    for (const g of byGender(athletes, a => a.gender)) {
+    for (const g of byGender(lifters, a => a.gender)) {
       const teams = new Map<string, Athlete[]>()
       for (const a of g.items) {
         if (!teams.has(a.team.id)) teams.set(a.team.id, [])
@@ -646,13 +668,35 @@ export async function GET(req: NextRequest) {
     }),
   }
 
+  // ── Combine Day pages (come first) ──
+  let combine: CombineBoards | null = null
+  let combinePages: { name: string; boards: Board[] }[] = []
+  if (combineTeamIds.size) {
+    const combineAthletes = athletes.filter(a => combineTeamIds.has(a.team.id))
+    const combineIds = new Set(combineAthletes.map(a => a.id))
+    combine = await buildCombineBoards(db, {
+      date,
+      athletes: combineAthletes.map(a => ({ id: a.id, name: a.name, team: { id: a.team.id, name: a.team.name }, gender: a.gender, teamColor: a.teamColor, completed: a.completed })),
+      sessionIds: shownSessions.filter(s => combineIds.has(s.player_id)).map(s => s.id),
+      limit,
+    })
+    combinePages = buildPages(combine.sections)
+    if (!combinePages.length) combinePages = [{ name: 'COMBINE DAY', boards: [combine.waiting] }]
+  }
+
   // ── Pick the page to show ──
-  const pages = buildPages(sections)
+  // Lifting pages only when someone is lifting (or it isn't a combine day)
+  const liftPages = lifters.length || !combine ? buildPages(sections) : []
+  const pages = [
+    ...combinePages.map(p => ({ ...p, combine: true })),
+    ...liftPages.map(p => ({ ...p, combine: false })),
+  ]
   const pageIndex = pages.length
     ? (pinnedPage > 0 ? Math.min(pinnedPage, pages.length) - 1 : Math.floor(now.getTime() / (PAGE_SECONDS * 1000)) % pages.length)
     : 0
-  const page = pages[pageIndex] ?? { name: 'TODAY', boards: [] }
-  const categories = [...page.boards.slice(0, 2), prBoard]
+  const page = pages[pageIndex] ?? { name: 'TODAY', boards: [], combine: false }
+  const onCombinePage = page.combine && !!combine
+  const categories = [...page.boards.slice(0, 2), onCombinePage ? combine!.bests : prBoard]
 
   const totalLbs = athletes.reduce((sum, a) => sum + a.totalWeightLbs, 0)
 
@@ -664,6 +708,18 @@ export async function GET(req: NextRequest) {
     {
       date,
       dayLabel: `${page.name}   |   ${prNote}`,
+      // Header text for this page (Roku apps from Oct 26, 2026 on)
+      title: onCombinePage ? 'COMBINE DAY LEADERBOARD' : 'WEIGHT ROOM LEADERBOARD',
+      summaryText: onCombinePage && combine
+        ? [
+            page.name,
+            `${combine.testing} testing`,
+            ...(combine.finished > 0 ? [`${combine.finished} finished`] : []),
+            ...(combine.newBests > 0 ? [`${combine.newBests} new ${combine.newBests === 1 ? 'best' : 'bests'}`] : []),
+            ...(lifters.length ? [`${lifters.filter(a => !a.completed).length} lifting`] : []),
+          ].join('   |   ')
+        : null,
+      combineToday: !!combine,
       asOf: clubTimeLabel(now),
       page: { index: pageIndex + 1, count: pages.length, name: page.name, seconds: PAGE_SECONDS },
       summary: {

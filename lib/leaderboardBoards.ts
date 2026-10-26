@@ -34,6 +34,13 @@ export const ACCENTS = {
   streak:   '0xf59e0bff', // amber
   improved: '0x22c55eff', // green
   pr:       '0xfbbf24ff', // gold
+  // Combine Day boards (lib/combineLeaderboard.ts)
+  vpi:      '0xfbbf24ff', // gold
+  jump:     '0xc6f432ff', // volt
+  sprint:   '0xf97316ff', // orange
+  swing:    '0xef4444ff', // red
+  length:   '0x8b5cf6ff', // purple
+  best:     '0x22c55eff', // green
 } as const
 
 export type Gender = 'F' | 'M'

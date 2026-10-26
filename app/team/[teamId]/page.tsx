@@ -180,6 +180,12 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
       return
     }
     const d = await res.json()
+    if (d.source === 'combine') {
+      // Combine Day (lib/combine.ts): numbers are entered on each player's own phone
+      alert('Today is Combine Day. Sign in on your own phone to enter your numbers.')
+      setScreen('main')
+      return
+    }
     if (d.source !== 'template' || !d.template) {
       alert('No workout scheduled today for this team.')
       setScreen('main')

@@ -6,6 +6,10 @@
 ' every 15 seconds. Left/Right (or Rewind/Fast-forward) asks the site for a
 ' particular page instead and holds it there. 60 seconds after the last
 ' press (hold_seconds in manifest) it goes back to turning by itself.
+'
+' Header: the site can send `title` (e.g. COMBINE DAY LEADERBOARD on a
+' Combine Day page) and `summaryText` (the whole line under it). Without
+' them it shows WEIGHT ROOM LEADERBOARD and builds the line itself.
 
 sub init()
     m.MAX_ROWS = 8
@@ -26,6 +30,7 @@ sub init()
 
     m.boardsGroup = m.top.findNode("boards")
     m.emptyState = m.top.findNode("emptyState")
+    m.title = m.top.findNode("title")
     m.summary = m.top.findNode("summary")
     m.status = m.top.findNode("status")
     m.pageLabel = m.top.findNode("pageLabel")
@@ -235,12 +240,19 @@ sub onData()
     s = d.summary
     if s = invalid or d.categories = invalid then return
 
-    parts = []
-    if d.dayLabel <> invalid then parts.Push(plainText(d.dayLabel))
-    parts.Push(Int(s.lifting).ToStr() + " lifting")
-    if Int(s.finished) > 0 then parts.Push(Int(s.finished).ToStr() + " finished")
-    if s.totalLbsLabel <> invalid then parts.Push(s.totalLbsLabel + " lbs moved")
-    m.summary.text = joinParts(parts, "   |   ")
+    m.title.text = textOr(d.title, "WEIGHT ROOM LEADERBOARD")
+
+    summaryText = textOr(d.summaryText, "")
+    if summaryText <> ""
+        m.summary.text = summaryText
+    else
+        parts = []
+        if d.dayLabel <> invalid then parts.Push(plainText(d.dayLabel))
+        parts.Push(Int(s.lifting).ToStr() + " lifting")
+        if Int(s.finished) > 0 then parts.Push(Int(s.finished).ToStr() + " finished")
+        if s.totalLbsLabel <> invalid then parts.Push(s.totalLbsLabel + " lbs moved")
+        m.summary.text = joinParts(parts, "   |   ")
+    end if
 
     if Int(s.checkedIn) = 0
         m.boardsGroup.visible = false
@@ -336,6 +348,14 @@ function plainText(v as dynamic) as string
     s = s.Replace(Chr(8216), "'")
     s = s.Replace(Chr(183), "|")
     return s
+end function
+
+' The site's text, or `fallback` when it sent none (null, missing or empty)
+function textOr(v as dynamic, fallback as string) as string
+    if v = invalid then return fallback
+    if type(v) <> "roString" and type(v) <> "String" then return fallback
+    if v = "" then return fallback
+    return plainText(v)
 end function
 
 function clampPct(v as dynamic) as integer
