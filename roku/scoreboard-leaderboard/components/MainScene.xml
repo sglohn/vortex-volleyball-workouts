@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8" ?>
-<!-- FILE: components/MainScene.xml  (Volleyball Scoreboard) -->
+<!-- FILE: roku/scoreboard-leaderboard/components/MainScene.xml  (Volleyball Scoreboard) -->
 <!-- Combined-app change: extends Group instead of Scene so AppScene can host it.
-     Nothing else in the scoreboard is changed. -->
+     v2.3.0: serve arrow between the panels, a message box (toast) for
+     "press Back again" / undo messages, and an updated control legend. -->
 <component name="MainScene" extends="Group">
     <script type="text/brightscript" uri="pkg:/components/MainScene.brs" />
 
@@ -26,6 +27,13 @@
         <Poster id="scoreBOnes" translation="[720,295]" width="191" height="275" />
         <Label id="labelTeamBSets" text="SETS WON: 0" translation="[720,585]" width="520" height="40" horizAlign="center" vertAlign="center" color="0xAAB4C8FF" font="font:SmallBoldSystemFont" />
 
+        <!-- Serve arrow (center gap between the panels), points at the team that won the last point.
+             Hidden until the first point of a game. -->
+        <Group id="serveGroup" visible="false">
+            <Poster id="serveArrow" translation="[590,330]" width="100" height="130" uri="pkg:/images/serve_left.png" />
+            <Label id="serveLabel" text="SERVE" translation="[560,470]" width="160" height="36" horizAlign="center" vertAlign="center" color="0xFFD166FF" font="font:SmallBoldSystemFont" />
+        </Group>
+
         <!-- Timer panel (center) - image-based digits, much larger than any available font -->
         <Rectangle id="panelTimer" translation="[430,5]" width="420" height="150" color="0x1F2A44FF" />
         <Poster id="timerMinTens" translation="[447,25]" width="80" height="110" />
@@ -36,12 +44,20 @@
         <Poster id="timerSecOnes" translation="[753,25]" width="80" height="110" />
 
         <!-- Control legend - plain text only (arrow symbols don't render on this hardware), split across lines so nothing runs off-screen -->
-        <Label id="labelLegend1" text="Left/Right: Select spot     Up/Down: Adjust score, sets, or timer" translation="[40,636]" width="1200" height="24" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
-        <Label id="labelLegend2" text="OK: Rename team     Play/Pause: Start or pause timer     Replay: Reset timer" translation="[40,660]" width="1200" height="24" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
-        <Label id="labelLegend3" text="Rewind/Fast Fwd: +1 point Left/Right     Star: Add set (Timer focus: reset all)     Back: Reset scores" translation="[40,684]" width="1200" height="24" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
+        <Label id="labelLegend1" text="Left/Right: Select spot     Up/Down: Adjust score, sets, or timer (5 sec)     OK: Rename team" translation="[40,636]" width="1200" height="24" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
+        <Label id="labelLegend2" text="Play/Pause: Start or pause timer     On the timer: OK resets it, OK again picks next length, Star resets all" translation="[40,660]" width="1200" height="24" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
+        <Label id="labelLegend3" text="Rewind/Fast Fwd: +1 point Left/Right     Star: Add set     Replay: Undo     Back twice: Reset scores" translation="[40,684]" width="1200" height="24" horizAlign="center" vertAlign="center" color="0x8895ADFF" font="font:SmallSystemFont" />
 
         <Timer id="countdownTimer" repeat="true" duration="1" />
+        <Timer id="toastTimer" repeat="false" duration="3" />
         <Audio id="hornAudio" />
+
+        <!-- Message box (toast): "Press Back again to reset scores", "Undone", etc. Hidden after 3 seconds. -->
+        <Group id="toastGroup" visible="false">
+            <Rectangle id="toastFrame" translation="[286,296]" width="708" height="108" color="0x2A9D8FFF" />
+            <Rectangle id="toastBg" translation="[290,300]" width="700" height="100" color="0x0F1830FF" />
+            <Label id="toastLabel" text="" translation="[290,300]" width="700" height="100" horizAlign="center" vertAlign="center" color="0xFFD166FF" font="font:MediumBoldSystemFont" />
+        </Group>
 
         <!-- On-screen keyboard overlay for renaming a team, hidden until OK is pressed on a team panel -->
         <Group id="keyboardOverlay" visible="false">
