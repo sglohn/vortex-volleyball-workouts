@@ -24,7 +24,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import {
-  bandInfo, entryLogFields, entryPayload, entryText, entryValue, isBandEquipment,
+  bandInfo, entryLogFields, entryPayload, entryText, entryValue, isBandEquipment, isDumbbell,
   loadLabel, plateText, previousEntry, setPoundsMoved, skipsWeightSuggestion, type Equipment,
 } from '@/lib/loads'
 import WeightPicker from '@/components/WeightPicker'
@@ -749,7 +749,7 @@ export default function PlayerWorkoutPage() {
           </div>
 
           {/* Same as last set */}
-          {ex.logs_weight && !skipsWeightSuggestion(ex.equipment) && lastWeight && currentSet > 1 && !weightInput && (
+          {ex.logs_weight && !skipsWeightSuggestion(ex.equipment) && lastWeight !== null && (lastWeight > 0 || isDumbbell(ex.equipment)) && currentSet > 1 && !weightInput && (
             <button onClick={() => { setWeightInput(String(lastWeight)); if (lastReps) setRepsInput(lastReps) }}
               style={{ width: '100%', padding: '0.5rem', marginBottom: '0.5rem', background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600 }}>
               Same as last set ({loadLabel(lastWeight, ex.equipment)}{lastReps ? ` × ${lastReps}` : ''}) →
