@@ -4,7 +4,7 @@
 //
 // Each site has its own dumbbells and large bands (lib/brand.ts):
 //   Vortex            dumbbells 5–50 by 5s; large bands Yellow, Red, Black, Purple
-//   Bruisers Lacrosse dumbbells 2.5, 5, 7.5, 10, 12.5, 15, then 20–50 by 5s;
+//   Bruisers Lacrosse dumbbells 2.5, 5, 7.5, 10, 12.5, 15, 17.5, then 20–50 by 5s;
 //                     large bands Orange (extra light), Red (light),
 //                     Green (medium), Orange (heavy, the thicker one),
 //                     White (extra heavy)
@@ -65,8 +65,13 @@ export const BAR_LBS = 45
 export const PLATES_LBS = [45, 35, 25, 10, 5, 2.5]   // per side, used in pairs
 // The dumbbells on the rack, lightest first (the number on one dumbbell)
 export const DUMBBELLS_LBS = LACROSSE
-  ? [2.5, 5, 7.5, 10, 12.5, 15, 20, 25, 30, 35, 40, 45, 50]
+  ? [2.5, 5, 7.5, 10, 12.5, 15, 17.5, 20, 25, 30, 35, 40, 45, 50]
   : [5, 10, 15, 20, 25, 30, 35, 40, 45, 50]
+
+/** The dumbbell range in words, for coach notes: "5–50 by 5s" */
+export const DUMBBELLS_TEXT = LACROSSE
+  ? '2.5–17.5 by 2.5s, then 20–50 by 5s'
+  : '5–50 by 5s'
 
 // A 45 lb bar with one end in a landmine pivot. Lifted at the free end, the
 // lifter carries about half the bar (~22.5 lbs) at any angle; 25 also

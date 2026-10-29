@@ -17,7 +17,7 @@
 // request, and what self-guided players are offered first when sore.
 'use client'
 import { useState, useEffect } from 'react'
-import { EQUIPMENT_OPTIONS, MEDBALL_COACH_NOTE, asEquipment } from '@/lib/loads'
+import { DUMBBELLS_TEXT, EQUIPMENT_OPTIONS, MEDBALL_COACH_NOTE, asEquipment } from '@/lib/loads'
 import { FEATURES } from '@/lib/features'
 import ExerciseImport from '@/components/ExerciseImport'
 import ExerciseSync from '@/components/ExerciseSync'
@@ -545,7 +545,7 @@ export default function ExercisesPage() {
                     {EQUIPMENT_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}: {o.hint}</option>)}
                   </select>
                   <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.35rem 0 0' }}>
-                    Dumbbell exercises: players enter the number on the dumbbell and suggestions are given the same way (5–50 by 5s). With 2 dumbbells, pounds moved count both. Barbell suggestions are always loadable on a 45 lb bar.
+                    Dumbbell exercises: players enter the number on the dumbbell and suggestions are given the same way ({DUMBBELLS_TEXT}). With 2 dumbbells, pounds moved count both. Barbell suggestions are always loadable on a 45 lb bar.
                   </p>
                   {(form.equipment === 'large_band' || form.equipment === 'hip_band') && (
                     <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.35rem 0 0' }}>
