@@ -11,6 +11,8 @@
 //                 (the bar's felt weight is added in pounds-moved math).
 //   1 dumbbell  - Tap the number printed on the dumbbell.
 //   2 dumbbells - Tap the number on ONE dumbbell; shows "2 × 30 = 60 lbs".
+//   Dumbbells   - Both kinds also have a "Bodyweight" button for players doing
+//                 the exercise with no dumbbell (saved as 0, lib/loads.ts).
 //   Med ball    - One button per ball this site has (lib/loads.ts MEDBALLS_LBS);
 //                 the 10 lb ball is picked to start. Vortex: 10 or the one 14.
 //   Large band /
@@ -33,7 +35,7 @@
 
 import { useEffect, useState } from 'react'
 import {
-  BAR_LBS, DUMBBELLS_LBS, PLATES_LBS, LANDMINE_BAR_LBS, MEDBALLS_LBS, MEDBALL_DEFAULT_LBS, MEDBALL_PLAYER_HELP,
+  BAR_LBS, BODYWEIGHT_LBS, DUMBBELLS_LBS, PLATES_LBS, LANDMINE_BAR_LBS, MEDBALLS_LBS, MEDBALL_DEFAULT_LBS, MEDBALL_PLAYER_HELP,
   asBand, bandInfo, bandLabel, bandLongLabel, bandsFor, isBandEquipment,
   loadLabel, platesPerSide, type BandInfo, type Equipment,
 } from '@/lib/loads'
@@ -201,6 +203,19 @@ function BandButton({ band, on, coachPick, big, onTap }: { band: BandInfo; on: b
   )
 }
 
+/** Dumbbell exercises: done with no dumbbell (saved as 0). */
+function BodyweightButton({ on, big, onTap }: { on: boolean; big?: boolean; onTap: () => void }) {
+  return (
+    <button type="button" onClick={onTap} aria-pressed={on}
+      style={{ width: '100%', padding: big ? '0.8rem 0' : '0.6rem 0', borderRadius: 10, cursor: 'pointer',
+        border: `2px ${on ? 'solid var(--carolina)' : 'dashed var(--carolina-border)'}`,
+        background: on ? 'var(--carolina)' : 'var(--carolina-light)', color: on ? '#fff' : 'var(--carolina-dark)',
+        fontWeight: 700, fontSize: big ? '1.05rem' : '0.92rem' }}>
+      {on ? '✓ ' : ''}Bodyweight (no dumbbell)
+    </button>
+  )
+}
+
 // Two balls (Vortex) get a word under the number; a full rack doesn't need it.
 function MedballButton({ lbs, on, big, compact, onTap }: { lbs: number; on: boolean; big?: boolean; compact?: boolean; onTap: () => void }) {
   return (
@@ -268,8 +283,8 @@ export default function WeightPicker({ equipment, value, onChange, suggested, bi
   let help = 'Enter the weight you used.'
   if (isBar) { title = 'Barbell'; help = `The bar is ${BAR_LBS} lbs and already counted. Tap each plate ONCE: it goes on both sides.` }
   if (isLandmine) { title = 'Landmine'; help = 'Tap the plates on the end of the bar. Nothing on it? Tap "Empty bar".' }
-  if (equipment === 'dumbbell_1') { title = '1 dumbbell'; help = 'Tap the number printed on the dumbbell.' }
-  if (equipment === 'dumbbell_2') { title = '2 dumbbells'; help = 'Holding two? Tap the number on ONE of them. We add both up for you.' }
+  if (equipment === 'dumbbell_1') { title = '1 dumbbell'; help = 'Tap the number printed on the dumbbell. No dumbbell? Tap Bodyweight.' }
+  if (equipment === 'dumbbell_2') { title = '2 dumbbells'; help = 'Holding two? Tap the number on ONE of them. We add both up for you. No dumbbells? Tap Bodyweight.' }
   if (isMedball) { title = 'Med ball'; help = MEDBALL_PLAYER_HELP }
   if (equipment === 'large_band') { title = 'Large band'; help = 'Tap the color of the band you used.' }
   if (equipment === 'hip_band') { title = 'Hip band'; help = 'Tap the color of the band you used.' }
@@ -328,6 +343,9 @@ export default function WeightPicker({ equipment, value, onChange, suggested, bi
               )
             })}
           </div>
+          <BodyweightButton big={big} on={num === BODYWEIGHT_LBS}
+            onTap={() => onChange(num === BODYWEIGHT_LBS ? '' : String(BODYWEIGHT_LBS))} />
+          {num === BODYWEIGHT_LBS && <TotalBox main="Bodyweight" sub="No dumbbell" />}
           {num !== null && !Number.isNaN(num) && num > 0 && (
             equipment === 'dumbbell_2'
               ? <TotalBox main={`Two ${fmt(num)}s`} sub={`2 × ${fmt(num)} = ${fmt(num * 2)} lbs total`} />

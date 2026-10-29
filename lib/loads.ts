@@ -16,6 +16,9 @@
 //   Barbell        - the total on the bar (bar + plates), e.g. 135
 //   1 dumbbell     - the number on the dumbbell, e.g. 30
 //   2 dumbbells    - the number on ONE dumbbell, e.g. 30 (holding two 30s)
+//   Bodyweight     - any dumbbell exercise can be done with no dumbbell:
+//                    saved as 0 and shown as "Bodyweight". 0 never counts
+//                    toward suggestions, PRs, leaderboards or pounds moved.
 //   Landmine       - the plates on the bar's free end, e.g. 25 (0 = empty bar)
 //                    Used for Landmine and Viking Press exercises. Pounds
 //                    moved adds the bar's felt weight (LANDMINE_BAR_LBS).
@@ -137,6 +140,15 @@ export function asEquipment(value: unknown): Equipment | null {
     ? value
     : null
 }
+
+/** 1 or 2 dumbbells */
+export function isDumbbell(equipment: Equipment | null | undefined): equipment is 'dumbbell_1' | 'dumbbell_2' {
+  return equipment === 'dumbbell_1' || equipment === 'dumbbell_2'
+}
+
+/** A dumbbell exercise done with no dumbbell is saved as 0 lbs. */
+export const BODYWEIGHT_LBS = 0
+export const BODYWEIGHT_LABEL = 'Bodyweight'
 
 export function isBandEquipment(equipment: Equipment | null | undefined): equipment is 'large_band' | 'hip_band' {
   return equipment === 'large_band' || equipment === 'hip_band'
@@ -285,6 +297,7 @@ export function platesPerSide(total: number): number[] {
 
 /** Short label for a weight in entered units: "135 lbs", "30# DB", "30# DBs". */
 export function loadLabel(weight: number, equipment: Equipment | null | undefined): string {
+  if (isDumbbell(equipment) && weight === BODYWEIGHT_LBS) return BODYWEIGHT_LABEL
   if (equipment === 'landmine') return weight > 0 ? `${weight} lbs of plates` : 'Empty bar'
   if (equipment === 'dumbbell_2') return `${weight}# DBs`
   if (equipment === 'dumbbell_1') return `${weight}# DB`
@@ -354,10 +367,11 @@ export function entryValue(log: LoggedEntry | null | undefined, equipment: Equip
   return log.weight_lbs === null || log.weight_lbs === undefined ? '' : String(log.weight_lbs)
 }
 
-/** Short label for a saved set's load: "Blue band", "30# DBs", "10 lb ball"; '' when none. */
+/** Short label for a saved set's load: "Blue band", "30# DBs", "Bodyweight", "10 lb ball"; '' when none. */
 export function entryText(log: LoggedEntry | null | undefined, equipment: Equipment | null | undefined): string {
   if (!log) return ''
   if (isBandEquipment(equipment)) return bandLabel(log.band)
+  if (isDumbbell(equipment) && log.weight_lbs !== null && log.weight_lbs !== undefined && Number(log.weight_lbs) === BODYWEIGHT_LBS) return BODYWEIGHT_LABEL
   return log.weight_lbs ? loadLabel(Number(log.weight_lbs), equipment) : ''
 }
 
