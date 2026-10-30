@@ -41,6 +41,7 @@ const PUBLIC_GET = new Set([
 const COACH_ROUTES: Record<string, string[]> = {
   '/api/coach/dashboard':       ['GET'],
   '/api/coach/health':          ['GET', 'POST'],              // view, add an injury / health note
+  '/api/coach/health-watch':    ['GET', 'POST', 'DELETE'],    // Watch tab patterns (own teams/players), mark seen / undo
   '/api/coach/team-detail':     ['GET'],
   '/api/coach/players':         ['GET'],
   '/api/coach/logs':            ['GET'],

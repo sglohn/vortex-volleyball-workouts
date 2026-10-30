@@ -5,12 +5,17 @@
 // Modified, Out, Return to Play — and a timeline of changes, so a big
 // injury can be followed from Out → Return to Play → Cleared
 // (lib/availability.ts).
+// Watch tab: patterns in body checks, reports and workout ratings for
+// players, teams and the club (lib/healthPatterns.ts, /api/coach/health-watch).
 import { useState, useEffect, type CSSProperties } from 'react'
 import { painLevelColor } from '@/lib/fitness'
 import {
   AVAILABILITY_LEVELS, BOARD_ORDER, CLEARED, availabilityLevel, describeUpdate, formatDays,
   daysBetween, isAvailability, stageTotals, type Availability, type HealthUpdate,
 } from '@/lib/availability'
+import type { FlagLevel, WatchFlag, WatchResult } from '@/lib/healthPatterns'
+
+type WatchData = WatchResult
 
 type ReportType = 'major_injury' | 'nagging_pain' | 'soreness'
 
@@ -266,8 +271,194 @@ function MiniBar({ label, value, max, color }: { label: string; value: number; m
 
 const SECTION_H2: CSSProperties = { fontFamily: 'var(--font-display)', fontSize: '0.9rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }
 
+
+// ── Watch tab (lib/healthPatterns.ts) ──
+
+const LEVEL_STYLE: Record<FlagLevel, { label: string; color: string; bg: string; border: string }> = {
+  concern: { label: 'Act on it', color: '#f87171', bg: 'rgba(248,113,113,0.10)', border: 'rgba(248,113,113,0.45)' },
+  watch:   { label: 'Watch',     color: '#facc15', bg: 'rgba(250,204,21,0.10)',  border: 'rgba(250,204,21,0.45)' },
+}
+const SCOPE_LABEL: Record<string, string> = { player: 'Player', team: 'Team', club: 'Club' }
+
+function FlagCard({ f, busy, onOpenReport, onStartTracking, onSeen, onUndo }: {
+  f: WatchFlag
+  busy: boolean
+  onOpenReport: (reportId: string) => void
+  onStartTracking: (f: WatchFlag) => void
+  onSeen: (f: WatchFlag, note: string) => void
+  onUndo: (f: WatchFlag) => void
+}) {
+  const [noting, setNoting] = useState(false)
+  const [note, setNote] = useState('')
+  const lv = LEVEL_STYLE[f.level]
+  const seen = !!f.seen
+  return (
+    <div className="card" style={{ padding: '0.9rem 1rem', marginBottom: '0.625rem', borderLeft: `4px solid ${seen ? 'var(--court-border)' : lv.color}`, opacity: seen ? 0.75 : 1 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', flexWrap: 'wrap', marginBottom: '0.3rem' }}>
+        {!seen && <span style={{ fontSize: '0.66rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: lv.color, background: lv.bg, border: `1px solid ${lv.border}`, borderRadius: 4, padding: '0.1rem 0.4rem' }}>{lv.label}</span>}
+        <span style={{ fontSize: '0.66rem', fontWeight: 700, color: 'var(--text-muted)', border: '1px solid var(--court-border)', borderRadius: 4, padding: '0.1rem 0.4rem' }}>{SCOPE_LABEL[f.scope]}</span>
+        {f.scope === 'player' && <span style={{ fontWeight: 700, fontSize: '0.92rem' }}>{f.playerName}</span>}
+        {f.scope === 'player' && f.teamName && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{f.teamName}</span>}
+      </div>
+      <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.2rem' }}>{f.title}</div>
+      <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>{f.detail}</div>
+
+      {f.workouts && f.workouts.length > 0 && (
+        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', background: 'var(--court-raised)', borderRadius: 8, padding: '0.45rem 0.6rem', marginBottom: '0.4rem' }}>
+          <div style={{ fontWeight: 700, color: 'var(--text-muted)', fontSize: '0.66rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem' }}>Workout done just before</div>
+          {f.workouts.map(w => (
+            <div key={w.name}>
+              <strong>{w.name}</strong> <span style={{ color: 'var(--text-muted)' }}>×{w.count}</span>
+              {w.exercises.length > 0 && <span> — {w.exercises.join(', ')}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {!seen && f.suggestions.length > 0 && (
+        <ul style={{ margin: '0 0 0.5rem', paddingLeft: '1.1rem', listStyle: 'disc', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+          {f.suggestions.map((s, i) => <li key={i} style={{ marginBottom: '0.1rem' }}>{s}</li>)}
+        </ul>
+      )}
+
+      {seen ? (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+          <span>✓ Seen {new Date(f.seen!.at).toLocaleDateString()}{f.seen!.by ? ` by ${f.seen!.by}` : ''}{f.seen!.note ? ` — ${f.seen!.note}` : ''}</span>
+          <button onClick={() => onUndo(f)} disabled={busy} style={{ background: 'none', border: 'none', color: 'var(--carolina)', cursor: 'pointer', fontSize: '0.74rem', fontWeight: 600, padding: 0 }}>Undo</button>
+        </div>
+      ) : noting ? (
+        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+          <input className="input" autoFocus value={note} onChange={e => setNote(e.target.value)} placeholder="What was done? (optional) e.g. Talked to her, lighter Block B"
+            style={{ flex: '1 1 220px', fontSize: '0.8rem', padding: '0.45rem 0.6rem' }} />
+          <button className="btn-volt" disabled={busy} onClick={() => onSeen(f, note)} style={{ padding: '0.4rem 0.8rem', fontSize: '0.78rem' }}>Mark Seen</button>
+          <button className="btn-ghost" disabled={busy} onClick={() => { setNoting(false); setNote('') }} style={{ padding: '0.4rem 0.7rem', fontSize: '0.78rem' }}>Cancel</button>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+          {f.reportId && (
+            <button className="btn-ghost" disabled={busy} onClick={() => onOpenReport(f.reportId!)} style={{ padding: '0.35rem 0.7rem', fontSize: '0.76rem' }}>Open Report</button>
+          )}
+          {f.scope === 'player' && !f.reportId && f.bodyPart && (
+            <button className="btn-ghost" disabled={busy} onClick={() => onStartTracking(f)} style={{ padding: '0.35rem 0.7rem', fontSize: '0.76rem', borderColor: 'var(--carolina)', color: 'var(--carolina)' }}>Start Tracking</button>
+          )}
+          <button className="btn-ghost" disabled={busy} onClick={() => setNoting(true)} style={{ padding: '0.35rem 0.7rem', fontSize: '0.76rem' }}>Mark Seen…</button>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ClubPicture({ club }: { club: NonNullable<WatchData['club']> }) {
+  const maxRate = Math.max(0.01, ...club.weeks.map(w => w.soreRate ?? 0))
+  return (
+    <div className="card" style={{ padding: '1.1rem', marginBottom: '1.25rem' }}>
+      <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.85rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.2rem', color: 'var(--text-secondary)' }}>Club Picture</h3>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.9rem' }}>
+        Sign-ins reporting soreness: <strong style={{ color: 'var(--text-primary)' }}>{club.soreRate7 != null ? `${Math.round(club.soreRate7 * 100)}%` : '—'}</strong> this week
+        {club.soreRateBase != null && <> (4 weeks before: {Math.round(club.soreRateBase * 100)}%)</>} · {club.playersChecked14} players signed in, last 2 weeks
+      </p>
+
+      {/* Weekly soreness rate */}
+      <div style={{ display: 'flex', alignItems: 'flex-end', gap: '0.4rem', height: 90, marginBottom: '0.3rem' }}>
+        {club.weeks.map(w => (
+          <div key={w.weekStart} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', height: '100%' }}>
+            <div style={{ fontSize: '0.64rem', color: 'var(--text-muted)', marginBottom: 2 }}>{w.soreRate != null ? `${Math.round(w.soreRate * 100)}%` : ''}</div>
+            <div title={`${w.checks} sign-ins`} style={{ width: '100%', maxWidth: 38, height: `${((w.soreRate ?? 0) / maxRate) * 60}px`, minHeight: w.checks ? 2 : 0, background: '#f97316', borderRadius: '4px 4px 0 0', opacity: w.checks ? 1 : 0.2 }} />
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.9rem' }}>
+        {club.weeks.map(w => {
+          const d = new Date(w.weekStart + 'T12:00:00')
+          return (
+            <div key={w.weekStart} style={{ flex: 1, textAlign: 'center', fontSize: '0.62rem', color: 'var(--text-muted)', lineHeight: 1.3 }}>
+              {d.getMonth() + 1}/{d.getDate()}
+              {w.newInjuries > 0 && <div style={{ color: '#f87171', fontWeight: 700 }}>{w.newInjuries} inj</div>}
+            </div>
+          )
+        })}
+      </div>
+
+      {club.topAreas.length > 0 && (
+        <>
+          <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.4rem' }}>Most-flagged areas, last 2 weeks (players)</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem' }}>
+            {club.topAreas.map(a => {
+              const up = a.players > a.prevPlayers, down = a.players < a.prevPlayers
+              return (
+                <span key={a.area} style={{ fontSize: '0.74rem', padding: '0.2rem 0.55rem', borderRadius: 20, border: '1px solid var(--court-border)', background: 'var(--court-raised)' }}>
+                  {a.label} <strong>{a.players}</strong>
+                  <span style={{ color: up ? '#f87171' : down ? '#4ade80' : 'var(--text-muted)', marginLeft: 4, fontWeight: 700 }}>{up ? '▲' : down ? '▼' : '='}{a.prevPlayers !== a.players ? Math.abs(a.players - a.prevPlayers) : ''}</span>
+                </span>
+              )
+            })}
+          </div>
+        </>
+      )}
+    </div>
+  )
+}
+
+function WatchTab({ data, error, busy, onOpenReport, onStartTracking, onSeen, onUndo }: {
+  data: WatchData | null
+  error: string
+  busy: boolean
+  onOpenReport: (reportId: string) => void
+  onStartTracking: (f: WatchFlag) => void
+  onSeen: (f: WatchFlag, note: string) => void
+  onUndo: (f: WatchFlag) => void
+}) {
+  const [showSeen, setShowSeen] = useState(false)
+  if (error) return <div className="card" style={{ padding: '1.5rem', color: '#f87171' }}>{error}</div>
+  if (!data) return <div style={{ color: 'var(--text-muted)', padding: '2rem' }}>Looking for patterns…</div>
+
+  const open = data.flags.filter(f => !f.seen)
+  const seen = data.flags.filter(f => f.seen)
+  const card = (f: WatchFlag) => <FlagCard key={f.key} f={f} busy={busy} onOpenReport={onOpenReport} onStartTracking={onStartTracking} onSeen={onSeen} onUndo={onUndo} />
+  const groups: [string, WatchFlag[]][] = [
+    ['Club', open.filter(f => f.scope === 'club')],
+    ['Teams', open.filter(f => f.scope === 'team')],
+    ['Players', open.filter(f => f.scope === 'player')],
+  ]
+
+  return (
+    <div>
+      <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '1.1rem' }}>
+        Patterns from the body check at every sign-in, health reports and workout ratings over the last 6 weeks — things that keep coming up even if nobody says it out loud.
+      </p>
+
+      {data.club && <ClubPicture club={data.club} />}
+
+      {open.length === 0 && (
+        <div className="card" style={{ padding: '1.75rem', textAlign: 'center', color: 'var(--text-muted)', marginBottom: '1rem' }}>
+          Nothing to watch right now. ✓
+        </div>
+      )}
+
+      {groups.map(([label, list]) => list.length > 0 && (
+        <div key={label} style={{ marginBottom: '1.5rem' }}>
+          <h2 style={{ ...SECTION_H2, color: 'var(--text-secondary)' }}>{label} ({list.length})</h2>
+          {list.map(card)}
+        </div>
+      ))}
+
+      {seen.length > 0 && (
+        <div>
+          <button onClick={() => setShowSeen(s => !s)} style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', color: 'var(--text-muted)', fontWeight: 700, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '0.6rem' }}>
+            {showSeen ? '▲' : '▼'} Seen ({seen.length})
+          </button>
+          {showSeen && seen.map(card)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function CoachHealthPage() {
-  const [tab, setTab] = useState<'active' | 'history' | 'trends'>('active')
+  const [tab, setTab] = useState<'active' | 'watch' | 'history' | 'trends'>('active')
+  const [watch, setWatch] = useState<WatchData | null>(null)
+  const [watchError, setWatchError] = useState('')
+  const [watchBusy, setWatchBusy] = useState(false)
   const [unconfirmed, setUnconfirmed] = useState<HealthReport[]>([])
   const [active, setActive] = useState<HealthReport[]>([])
   const [history, setHistory] = useState<HealthReport[]>([])
@@ -286,7 +477,7 @@ export default function CoachHealthPage() {
   const [savingNew, setSavingNew] = useState(false)
   const [playerSearch, setPlayerSearch] = useState('')
 
-  useEffect(() => { loadActive() }, [])
+  useEffect(() => { loadActive(); loadWatch() }, [])
   useEffect(() => {
     if (tab === 'history' && !history.length) loadHistory()
     if (tab === 'trends' && !trends) loadTrends()
@@ -298,6 +489,65 @@ export default function CoachHealthPage() {
     setUnconfirmed(data.unconfirmed ?? [])
     setActive(data.active ?? [])
     setLoading(false)
+  }
+
+  async function loadWatch() {
+    setWatchError('')
+    try {
+      const res = await fetch('/api/coach/health-watch')
+      const data = await res.json()
+      if (!res.ok) { setWatchError(data.error ?? 'Could not load patterns'); return }
+      setWatch(data)
+    } catch {
+      setWatchError('Could not load patterns')
+    }
+  }
+
+  async function markSeen(f: WatchFlag, note: string) {
+    setWatchBusy(true)
+    await fetch('/api/coach/health-watch', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: f.key, evidence: f.evidence, note }),
+    })
+    await loadWatch()
+    setWatchBusy(false)
+  }
+
+  async function undoSeen(f: WatchFlag) {
+    setWatchBusy(true)
+    await fetch('/api/coach/health-watch', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: f.key }),
+    })
+    await loadWatch()
+    setWatchBusy(false)
+  }
+
+  /** Put a player's recurring area on the board as Aches & Pains, then mark the flag seen */
+  async function startTracking(f: WatchFlag) {
+    if (!f.playerId || !f.bodyPart) return
+    setWatchBusy(true)
+    const res = await fetch('/api/coach/health', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        playerId: f.playerId, bodyPart: f.bodyPart, reportType: 'nagging_pain', availability: 'full',
+        description: `From Watch: ${f.title.toLowerCase()}`, coachNotes: f.detail,
+      }),
+    })
+    if (res.ok) {
+      await fetch('/api/coach/health-watch', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: f.key, evidence: f.evidence, note: 'Started tracking on the board' }),
+      })
+    }
+    await Promise.all([loadActive(), loadWatch()])
+    setTrends(null)
+    setWatchBusy(false)
+  }
+
+  function openReportById(id: string) {
+    const r = [...unconfirmed, ...active].find(x => x.id === id)
+    if (r) openReport(r)
   }
 
   async function loadHistory() {
@@ -350,6 +600,7 @@ export default function CoachHealthPage() {
     }
     setSelected(null)
     loadActive()
+    loadWatch()
     setHistory([])
     if (tab === 'history') loadHistory()
     setTrends(null)
@@ -418,9 +669,9 @@ export default function CoachHealthPage() {
       </div>
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', background: 'var(--court-raised)', borderRadius: 10, padding: '0.25rem', width: 'fit-content' }}>
-        {([['active', `Active${totalActive ? ` (${totalActive})` : ''}`], ['history', 'History'], ['trends', 'Trends']] as const).map(([t, label]) => (
-          <button key={t} onClick={() => setTab(t)} style={{ padding: '0.4rem 1.1rem', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, background: tab === t ? 'var(--surface)' : 'transparent', color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)', boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,0.12)' : 'none', transition: 'all 0.12s' }}>
+      <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', background: 'var(--court-raised)', borderRadius: 10, padding: '0.25rem', width: 'fit-content', maxWidth: '100%', overflowX: 'auto' }}>
+        {([['active', `Active${totalActive ? ` (${totalActive})` : ''}`], ['watch', `Watch${watch?.openCount ? ` (${watch.openCount})` : ''}`], ['history', 'History'], ['trends', 'Trends']] as const).map(([t, label]) => (
+          <button key={t} onClick={() => setTab(t)} style={{ padding: '0.4rem 0.8rem', whiteSpace: 'nowrap', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, background: tab === t ? 'var(--surface)' : 'transparent', color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)', boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,0.12)' : 'none', transition: 'all 0.12s' }}>
             {label}
           </button>
         ))}
@@ -429,6 +680,20 @@ export default function CoachHealthPage() {
       {/* ── ACTIVE TAB ── */}
       {tab === 'active' && (
         <>
+          {/* Patterns waiting on the Watch tab */}
+          {watch && watch.openCount > 0 && (() => {
+            const concern = watch.flags.filter(f => !f.seen && f.level === 'concern').length
+            return (
+              <button onClick={() => setTab('watch')} className="card"
+                style={{ width: '100%', textAlign: 'left', cursor: 'pointer', padding: '0.75rem 1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.75rem', borderLeft: `4px solid ${concern ? '#f87171' : '#facc15'}` }}>
+                <span style={{ fontSize: '0.85rem' }}>
+                  <strong>{watch.openCount} {watch.openCount === 1 ? 'pattern' : 'patterns'} to look at</strong>
+                  <span style={{ color: 'var(--text-muted)' }}> — recurring soreness or injuries{concern ? ` · ${concern} to act on` : ''}</span>
+                </span>
+                <span style={{ color: 'var(--carolina)', fontWeight: 700, fontSize: '0.85rem', flexShrink: 0 }}>Watch →</span>
+              </button>
+            )
+          })()}
           {/* Counts by level */}
           {active.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem', marginBottom: '1.5rem' }}>
@@ -475,6 +740,12 @@ export default function CoachHealthPage() {
               })
           }
         </>
+      )}
+
+      {/* ── WATCH TAB ── */}
+      {tab === 'watch' && (
+        <WatchTab data={watch} error={watchError} busy={watchBusy}
+          onOpenReport={openReportById} onStartTracking={startTracking} onSeen={markSeen} onUndo={undoSeen} />
       )}
 
       {/* ── HISTORY TAB ── */}

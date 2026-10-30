@@ -72,10 +72,17 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString()
 
   // ── 1. Save the raw body check (source of truth for the body map history)
+  // "Sore" / "Injured" with no area marked is kept as { general: ... } so the
+  // Health Board's Watch tab (lib/healthPatterns.ts) counts it; an empty map
+  // still means "feeling good".
+  const savedRegions: Record<string, string> =
+    Object.keys(regions).length === 0 && (quickStatus === 'sore' || quickStatus === 'injured')
+      ? { general: quickStatus }
+      : regions
   const { error: checkError } = await db.from('body_checks').insert({
     session_id: sessionId,
     player_id: playerId,
-    regions,
+    regions: savedRegions,
   })
   if (checkError) return NextResponse.json({ error: checkError.message }, { status: 500 })
 
