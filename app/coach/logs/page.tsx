@@ -5,6 +5,10 @@
 // (lib/outliers.ts). Fixes save straight to the player's log, so totals,
 // leaderboards and suggestions pick them up on their next refresh.
 //
+// A flagged set that's actually correct can be marked "Looks right" by an
+// admin or the player's team coach (app/api/coach/logs/check). It then stops
+// counting as "to check". If the set is changed later, the flag comes back.
+//
 // Address options: /coach/logs?date=YYYY-MM-DD&session=<session id>
 'use client'
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
@@ -23,6 +27,8 @@ interface LogSet {
   completed: boolean
   loggedAt: string | null
   flags: string[]
+  /** flagged set someone marked "Looks right" */
+  checked: { by: string; at: string } | null
 }
 interface LogExercise {
   exerciseId: string
@@ -46,7 +52,8 @@ interface LogSession {
   ratingNote: string | null
   setsCompleted: number
   totalLbs: number
-  flagCount: number
+  flagCount: number       // flagged sets still to check
+  checkedCount: number    // flagged sets marked "Looks right"
   exercises: LogExercise[]
 }
 
@@ -107,6 +114,7 @@ function WorkoutLogsInner() {
   const [onlyFlagged, setOnlyFlagged] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [checkingId, setCheckingId] = useState<string | null>(null)   // set id, or 'all'
   const [notice, setNotice] = useState('')
 
   const load = useCallback(async (keepDrafts = false) => {
@@ -155,6 +163,7 @@ function WorkoutLogsInner() {
 
   const selected = sessions.find(s => s.id === selectedId) ?? null
   const flaggedPlayers = sessions.filter(s => s.flagCount > 0).length
+  const checkedPlayers = sessions.filter(s => s.checkedCount > 0).length
 
   function changeDate(next: string) {
     if (next > today) return
@@ -196,6 +205,28 @@ function WorkoutLogsInner() {
     }
     setDrafts(prev => { const n = { ...prev }; delete n[s.id]; return n })
     setNotice('Set saved')
+    load(true)
+  }
+
+  // "Looks right" (or undo) for one set, or every flagged set for the player
+  async function markChecked(ids: string[], checked: boolean, busyKey: string) {
+    if (!ids.length) return
+    setCheckingId(busyKey)
+    setNotice('')
+    const res = await fetch('/api/coach/logs/check', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids, checked }),
+    })
+    setCheckingId(null)
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}))
+      setNotice(`Set not ${checked ? 'marked' : 'changed'}: ${e.error ?? 'try again'}`)
+      return
+    }
+    setNotice(checked
+      ? (ids.length === 1 ? 'Marked as looks right' : `${ids.length} sets marked as looks right`)
+      : 'Back on the to-check list')
     load(true)
   }
 
@@ -255,6 +286,11 @@ function WorkoutLogsInner() {
           <div className="card" style={{ padding: '0.75rem', position: 'sticky', top: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.25rem 0.375rem 0.625rem' }}>
               <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{sessions.length} player{sessions.length === 1 ? '' : 's'}</span>
+              {flaggedPlayers === 0 && checkedPlayers > 0 && (
+                <span style={{ padding: '0.2rem 0.6rem', borderRadius: 20, border: '1.5px solid var(--success)', background: 'var(--success-light)', color: 'var(--success)', fontSize: '0.75rem', fontWeight: 700 }}>
+                  ✓ All checked
+                </span>
+              )}
               {flaggedPlayers > 0 && (
                 <button onClick={() => setOnlyFlagged(v => !v)}
                   style={{ padding: '0.2rem 0.6rem', borderRadius: 20, border: '1.5px solid var(--warning)', background: onlyFlagged ? 'var(--warning)' : 'var(--warning-light)', color: onlyFlagged ? '#fff' : 'var(--warning)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}>
@@ -281,6 +317,10 @@ function WorkoutLogsInner() {
                       {s.flagCount > 0 && (
                         <span title={`${s.flagCount} set${s.flagCount === 1 ? '' : 's'} to check`}
                           style={{ minWidth: 22, height: 22, borderRadius: 11, background: 'var(--warning)', color: '#fff', fontSize: '0.72rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px' }}>{s.flagCount}</span>
+                      )}
+                      {s.flagCount === 0 && s.checkedCount > 0 && (
+                        <span title={`${s.checkedCount} flagged set${s.checkedCount === 1 ? '' : 's'} checked`}
+                          style={{ width: 22, height: 22, borderRadius: 11, background: 'var(--success-light)', color: 'var(--success)', border: '1.5px solid var(--success)', fontSize: '0.75rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>✓</span>
                       )}
                     </button>
                   )
@@ -313,6 +353,26 @@ function WorkoutLogsInner() {
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{selected.setsCompleted} sets done</div>
                   </div>
                 </div>
+
+                {(selected.flagCount > 0 || selected.checkedCount > 0) && (() => {
+                  const open = selected.exercises.flatMap(ex => ex.sets.filter(st => st.flags.length > 0 && !st.checked && !(st.id in drafts)).map(st => st.id))
+                  return (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', padding: '0.6rem 0.875rem', borderRadius: 8, marginBottom: '0.75rem',
+                      background: selected.flagCount > 0 ? 'var(--warning-light)' : 'var(--success-light)', border: `1.5px solid ${selected.flagCount > 0 ? 'var(--warning)' : 'var(--success)'}` }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 700, color: selected.flagCount > 0 ? 'var(--warning)' : 'var(--success)' }}>
+                        {selected.flagCount > 0
+                          ? `${selected.flagCount} set${selected.flagCount === 1 ? '' : 's'} to check${selected.checkedCount ? `, ${selected.checkedCount} checked` : ''}`
+                          : `✓ All ${selected.checkedCount} flagged set${selected.checkedCount === 1 ? '' : 's'} checked`}
+                      </span>
+                      {open.length > 1 && (
+                        <button onClick={() => markChecked(open, true, 'all')} disabled={checkingId !== null}
+                          style={{ padding: '0.35rem 0.8rem', borderRadius: 6, border: '1.5px solid var(--success)', background: 'var(--white)', color: 'var(--success)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>
+                          {checkingId === 'all' ? 'Saving…' : `✓ All ${open.length} look right`}
+                        </button>
+                      )}
+                    </div>
+                  )
+                })()}
 
                 {notice && (
                   <div role="status" style={{ padding: '0.5rem 0.875rem', borderRadius: 8, marginBottom: '0.75rem', fontSize: '0.85rem', fontWeight: 600,
@@ -355,13 +415,13 @@ function WorkoutLogsInner() {
                             {ex.logsWeight && !isBandEquipment(ex.equipment) && (
                               <input disabled={!isAdmin} aria-label={`Set ${s.setNumber} weight`} type="number" inputMode="decimal" value={d.weight}
                                 onChange={e => edit(s, { weight: e.target.value })}
-                                style={{ ...cellInput, borderColor: s.flags.length ? 'var(--warning)' : cellInput.borderColor as string }} />
+                                style={{ ...cellInput, borderColor: s.flags.length && !s.checked ? 'var(--warning)' : cellInput.borderColor as string }} />
                             )}
                             {ex.logsWeight && isBandEquipment(ex.equipment) && (
                               <select disabled={!isAdmin} aria-label={`Set ${s.setNumber} band`} value={d.band}
                                 onChange={e => edit(s, { band: e.target.value })}
                                 style={{ ...cellInput, padding: '0.4rem 0.25rem', fontSize: '0.85rem',
-                                  borderColor: s.flags.length ? 'var(--warning)' : cellInput.borderColor as string,
+                                  borderColor: s.flags.length && !s.checked ? 'var(--warning)' : cellInput.borderColor as string,
                                   boxShadow: bandInfo(d.band) ? `inset 6px 0 0 ${bandInfo(d.band)!.swatch}` : 'none' }}>
                                 <option value="">No band</option>
                                 {bandsFor(ex.equipment).map(b => <option key={b.key} value={b.key}>{bandName(b)}</option>)}
@@ -393,8 +453,26 @@ function WorkoutLogsInner() {
                             </div>
                           </div>
                           {s.flags.length > 0 && !changed && (
-                            <div className="log-flags" style={{ marginTop: '0.35rem', marginLeft: 52, fontSize: '0.8rem', color: 'var(--warning)', fontWeight: 600 }}>
-                              {s.flags.map((f, i) => <div key={i}>{f}</div>)}
+                            <div className="log-flags" style={{ marginTop: '0.35rem', marginLeft: 52, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.375rem 0.75rem' }}>
+                              <div style={{ fontSize: '0.8rem', fontWeight: 600, color: s.checked ? 'var(--text-muted)' : 'var(--warning)' }}>
+                                {s.flags.map((f, i) => <div key={i}>{f}</div>)}
+                                {s.checked && (
+                                  <div style={{ color: 'var(--success)', marginTop: '0.15rem' }}>
+                                    ✓ Looks right. Checked by {s.checked.by}, {clock(s.checked.at)}
+                                  </div>
+                                )}
+                              </div>
+                              {s.checked ? (
+                                <button onClick={() => markChecked([s.id], false, s.id)} disabled={checkingId !== null}
+                                  style={{ padding: '0.3rem 0.6rem', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>
+                                  {checkingId === s.id ? 'Saving…' : 'Undo check'}
+                                </button>
+                              ) : (
+                                <button onClick={() => markChecked([s.id], true, s.id)} disabled={checkingId !== null}
+                                  style={{ padding: '0.3rem 0.75rem', borderRadius: 6, border: '1.5px solid var(--success)', background: 'var(--success-light)', color: 'var(--success)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>
+                                  {checkingId === s.id ? 'Saving…' : '✓ Looks right'}
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>

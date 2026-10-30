@@ -10,6 +10,10 @@
 //          (band: band exercises only, e.g. 'hip_blue' — lib/loads.ts BANDS)
 //   DELETE { id }                                                       remove a set
 //
+// Flagged sets a coach marked "Looks right" (app/api/coach/logs/check) come
+// back with `checked` and don't count in flagCount. A check only counts while
+// the set still has the values it had when checked (lib/setChecks.ts).
+//
 // Leaderboards, totals and suggestions all read set_logs, so a fix here
 // shows up everywhere on their next refresh.
 
@@ -18,6 +22,7 @@ import { createServerClient } from '@/lib/supabase'
 import { clubDateString, clubDayBounds, isDateString } from '@/lib/clubTime'
 import { asBand, asEquipment, isBandEquipment, setPoundsMoved, type Equipment } from '@/lib/loads'
 import { flagExerciseSets } from '@/lib/outliers'
+import { setFingerprint } from '@/lib/setChecks'
 import { getCoach } from '@/lib/coachAuth'
 import { signInRequired, visiblePlayerIds } from '@/lib/coachScope'
 
@@ -30,6 +35,10 @@ type LogRow = {
   weight_lbs: number | null; reps_completed: number | null; velocity_ms: number | null
   completed: boolean; logged_at: string | null
   band?: string | null   // after the bands migration
+  // after the 2026-10-30_set_log_checks migration
+  checked_at?: string | null
+  checked_by_name?: string | null
+  checked_values?: string | null
 }
 type PlayerJoin = { id: string; name: string; jersey_number?: string | null }
 type TeamJoin = { id: string; name: string; color?: string | null; age_group?: string | null }
@@ -185,7 +194,8 @@ export async function GET(req: NextRequest) {
       byExercise[l.exercise_id].push(l)
     }
 
-    let flagCount = 0
+    let flagCount = 0      // flagged sets no one has checked yet
+    let checkedCount = 0   // flagged sets marked "Looks right"
     let totalLbs = 0
     let setsCompleted = 0
 
@@ -216,7 +226,13 @@ export async function GET(req: NextRequest) {
           : null,
         sets: sets.map(l => {
           const notes = flags[l.id] ?? []
-          flagCount += notes.length ? 1 : 0
+          const checked = notes.length && l.checked_at && l.checked_values === setFingerprint(l)
+            ? { by: l.checked_by_name || 'A coach', at: l.checked_at }
+            : null
+          if (notes.length) {
+            if (checked) checkedCount++
+            else flagCount++
+          }
           if (l.completed) {
             setsCompleted++
             if (info.logsWeight) totalLbs += setPoundsMoved(l.weight_lbs === null ? null : Number(l.weight_lbs), l.reps_completed, info.equipment)
@@ -231,6 +247,7 @@ export async function GET(req: NextRequest) {
             completed: l.completed,
             loggedAt: l.logged_at,
             flags: notes,
+            checked,
           }
         }),
       }
@@ -250,6 +267,7 @@ export async function GET(req: NextRequest) {
       setsCompleted,
       totalLbs: Math.round(totalLbs),
       flagCount,
+      checkedCount,
       exercises,
     }
   })
