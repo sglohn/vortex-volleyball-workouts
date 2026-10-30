@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
     const { data: player } = await db.from('players').select('*').eq('id', playerId).single()
     const { data: sessions } = await db.from('sessions').select('*').eq('player_id', playerId).order('checked_in_at', { ascending: false }).limit(20)
     const { data: measurements } = await db.from('measurements').select('*').eq('player_id', playerId).order('measured_at', { ascending: false })
-    const { data: healthReports } = await db.from('health_reports').select('*').eq('player_id', playerId).order('reported_at', { ascending: false })
+    const { data: healthReports } = await db.from('health_reports').select('*, health_report_updates(id, report_id, kind, from_availability, to_availability, note, coach_name, created_at)').eq('player_id', playerId).order('reported_at', { ascending: false })
     const { data: playerTeam } = await db.from('player_teams').select('*, teams(*)').eq('player_id', playerId).eq('is_primary', true).single()
 
     const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString()
