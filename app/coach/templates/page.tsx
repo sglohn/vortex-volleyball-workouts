@@ -234,7 +234,7 @@ export default function TemplatesPage() {
         <button className="btn-volt" onClick={() => setEditing(blank())} style={{ padding: '0.625rem 1.25rem' }}>+ New Template</button>
       </div>
 
-      {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--volt)', fontSize: '0.9rem' }}>{msg}</div>}
+      {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--success)', fontSize: '0.9rem' }}>{msg}</div>}
 
       {/* Editor — modal overlay */}
       {editing && (
@@ -325,7 +325,7 @@ export default function TemplatesPage() {
             return (
             <div key={bi} className="card-raised" style={{ padding: '1rem', marginBottom: '0.75rem', borderLeft: isWarmup ? '3px solid var(--carolina)' : undefined }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: isWarmup ? '0.4rem' : '0.75rem' }}>
-                <div style={{ background: isWarmup ? 'var(--carolina)' : 'var(--volt)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 32, height: 32, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ background: isWarmup ? 'var(--carolina)' : 'var(--yellow)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 32, height: 32, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {block.block_label.charAt(0)}
                 </div>
                 <select className="input" value={isWarmup ? WARMUP_LABEL : block.block_label} onChange={e => changeLabel(bi, e.target.value)} style={{ width: 140 }}>

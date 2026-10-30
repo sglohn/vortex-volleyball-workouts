@@ -61,9 +61,9 @@ export default function PlayerHistoryPage() {
       <div className="card" style={{ marginBottom: '0.625rem', overflow: 'hidden', borderColor: isToday ? 'rgba(74,222,128,0.4)' : isComplete ? 'var(--court-border)' : 'rgba(250,204,21,0.3)' }}>
         <div onClick={() => setExpanded(isOpen ? null : s.id)} style={{ padding: '1rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '0.875rem' }}>
           {/* Status icon */}
-          <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isComplete ? 'rgba(74,222,128,0.15)' : 'rgba(250,204,21,0.1)', border: `2px solid ${isComplete ? 'var(--volt)' : '#facc15'}` }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: isComplete ? 'rgba(74,222,128,0.15)' : 'rgba(250,204,21,0.1)', border: `2px solid ${isComplete ? 'var(--success)' : '#facc15'}` }}>
             {isComplete
-              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--volt)" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+              ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--success)" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
               : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#facc15" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
             }
           </div>
@@ -81,7 +81,7 @@ export default function PlayerHistoryPage() {
               <div className="progress-bar" style={{ flex: 1, height: 3 }}>
                 <div className="progress-fill" style={{ width: `${pct}%` }} />
               </div>
-              <span style={{ fontSize: '0.75rem', color: isComplete ? 'var(--volt)' : '#facc15', fontWeight: 600, flexShrink: 0 }}>
+              <span style={{ fontSize: '0.75rem', color: isComplete ? 'var(--success)' : '#b45309', fontWeight: 600, flexShrink: 0 }}>
                 {isComplete ? `${pct}% · ${s.duration ? `${s.duration}min` : 'Done'}` : `${pct}% · In progress`}
               </span>
             </div>

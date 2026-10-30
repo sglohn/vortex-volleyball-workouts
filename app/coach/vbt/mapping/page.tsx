@@ -318,7 +318,7 @@ export default function VbtMappingPage() {
                     padding: '0.35rem 0.625rem',
                     borderRadius: 7,
                     border: 'none',
-                    background: saved[ex.id] ? 'rgba(22,163,74,0.12)' : isDirty ? 'var(--volt)' : 'var(--carolina-light)',
+                    background: saved[ex.id] ? 'rgba(22,163,74,0.12)' : isDirty ? 'var(--yellow)' : 'var(--carolina-light)',
                     color: saved[ex.id] ? 'var(--success)' : isDirty ? '#000' : 'var(--text-muted)',
                     fontFamily: 'var(--font-display)',
                     fontWeight: 700,

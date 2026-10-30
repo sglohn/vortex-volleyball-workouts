@@ -135,7 +135,7 @@ export default function CoachLoginPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0.5rem' }}>
               {KEYS.map(k => (
                 <button key={k} className="pin-key" onClick={() => k === '✓' ? handleLogin() : handleKey(k)}
-                  style={{ width: '100%', background: k === '✓' ? 'var(--volt)' : undefined, color: k === '✓' ? '#0a0f0d' : undefined, fontWeight: k === '✓' ? 700 : undefined, opacity: k === '✓' && pin.length !== 4 ? 0.4 : 1 }}
+                  style={{ width: '100%', background: k === '✓' ? 'var(--yellow)' : undefined, color: k === '✓' ? '#0a0f0d' : undefined, fontWeight: k === '✓' ? 700 : undefined, opacity: k === '✓' && pin.length !== 4 ? 0.4 : 1 }}
                   disabled={loading}>{k}</button>
               ))}
             </div>

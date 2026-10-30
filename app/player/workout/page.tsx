@@ -542,7 +542,7 @@ export default function PlayerWorkoutPage() {
         {/* Block header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
           <button onClick={() => setView('blocks')} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.1rem', padding: '0.25rem' }}>←</button>
-          <div style={{ background: 'var(--volt)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 32, height: 32, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <div style={{ background: 'var(--yellow)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 32, height: 32, borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
             {block.block_label.charAt(0)}
           </div>
           <div style={{ flex: 1 }}>
@@ -569,8 +569,8 @@ export default function PlayerWorkoutPage() {
                   <div key={`${si}-${ei}`} style={{
                     minWidth: isThis ? 52 : 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
                     fontSize: isThis ? '0.72rem' : '0.65rem', fontWeight: 700, flexShrink: 0,
-                    background: isDone ? 'rgba(74,222,128,0.15)' : isThis ? 'var(--volt)' : 'var(--court-raised)',
-                    color: isDone ? 'var(--volt)' : isThis ? '#0a0f0d' : 'var(--text-muted)',
+                    background: isDone ? 'rgba(74,222,128,0.15)' : isThis ? 'var(--yellow)' : 'var(--court-raised)',
+                    color: isDone ? 'var(--success)' : isThis ? '#0a0f0d' : 'var(--text-muted)',
                     border: isThis ? 'none' : isDone ? '1px solid rgba(74,222,128,0.3)' : '1px solid var(--court-border)',
                     transition: 'all 0.2s',
                     boxShadow: isThis ? '0 2px 8px rgba(0,0,0,0.2)' : 'none',
@@ -629,7 +629,7 @@ export default function PlayerWorkoutPage() {
           {/* ── SET BADGE + EXERCISE NAME ── */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.75rem' }}>
             {/* Big set number badge */}
-            <div style={{ flexShrink: 0, background: 'var(--volt)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 900, borderRadius: 10, minWidth: 56, height: 56, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
+            <div style={{ flexShrink: 0, background: 'var(--yellow)', color: '#0a0f0d', fontFamily: 'var(--font-display)', fontWeight: 900, borderRadius: 10, minWidth: 56, height: 56, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', lineHeight: 1 }}>
               <span style={{ fontSize: '1.6rem', fontWeight: 900 }}>{currentSet}</span>
               <span style={{ fontSize: '0.55rem', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, opacity: 0.7 }}>of {block.sets}</span>
             </div>
@@ -903,7 +903,7 @@ export default function PlayerWorkoutPage() {
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
               {ex.setLogs.filter(l => l.completed).map((log, i) => (
                 <button key={i} onClick={() => setFixFor({ blockIdx: activeBlockIdx, start: { exerciseId: ex.id, setNumber: log.set_number } })}
-                  style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 6, padding: '0.3rem 0.625rem', fontSize: '0.8rem', color: 'var(--volt)', cursor: 'pointer', fontFamily: 'inherit' }}>
+                  style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.25)', borderRadius: 6, padding: '0.3rem 0.625rem', fontSize: '0.8rem', color: 'var(--success)', cursor: 'pointer', fontFamily: 'inherit' }}>
                   Set {log.set_number}: {entryText(log, ex.equipment) ? `${entryText(log, ex.equipment)} × ` : ''}{log.reps_completed} reps{ex.logs_velocity && log.velocity_ms ? ` · ${log.velocity_ms} m/s` : ''} ✎
                 </button>
               ))}
@@ -977,15 +977,15 @@ export default function PlayerWorkoutPage() {
           return (
             <div key={block.id}>
             <button onClick={() => !done && startBlock(idx)}
-              style={{ background: done ? 'rgba(74,222,128,0.06)' : 'var(--court-surface)', border: `1px solid ${done ? 'var(--volt)' : inProgress ? 'rgba(74,222,128,0.4)' : 'var(--court-border)'}`, borderRadius: 12, padding: '1rem', cursor: done ? 'default' : 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%' }}>
+              style={{ background: done ? 'rgba(74,222,128,0.06)' : 'var(--court-surface)', border: `1px solid ${done ? 'var(--success)' : inProgress ? 'rgba(74,222,128,0.4)' : 'var(--court-border)'}`, borderRadius: 12, padding: '1rem', cursor: done ? 'default' : 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ background: done ? 'var(--volt)' : 'var(--court-raised)', color: done ? '#0a0f0d' : 'var(--volt)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <div style={{ background: done ? 'var(--success)' : 'var(--court-raised)', color: done ? '#fff' : 'var(--volt)', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem', width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {done ? '✓' : block.block_label.charAt(0)}
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.3rem' }}>
                     <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '1rem' }}>Block {block.block_label}{block.title ? ` · ${block.title}` : ''}</span>
-                    <span style={{ fontSize: '0.8rem', color: done ? 'var(--volt)' : 'var(--text-muted)' }}>{completed}/{total}</span>
+                    <span style={{ fontSize: '0.8rem', color: done ? 'var(--success)' : 'var(--text-muted)' }}>{completed}/{total}</span>
                   </div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.4rem' }}>
                     {block.sets} sets × {block.exercises.filter(e => !e.skipped).map(e => e.name).join(' + ')}

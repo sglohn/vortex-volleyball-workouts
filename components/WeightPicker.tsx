@@ -195,7 +195,7 @@ function BandButton({ band, on, coachPick, big, onTap }: { band: BandInfo; on: b
         boxShadow: on ? '0 0 0 3px var(--carolina-light)' : '0 1px 3px rgba(0,0,0,0.15)',
         opacity: on ? 1 : 0.92, textAlign: 'center' }}>
       {coachPick && (
-        <span style={{ position: 'absolute', top: -9, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', background: 'var(--volt)', color: '#0a0f0d', borderRadius: 4, padding: '0.05rem 0.35rem' }}>Coach pick</span>
+        <span style={{ position: 'absolute', top: -9, left: '50%', transform: 'translateX(-50%)', whiteSpace: 'nowrap', fontSize: '0.58rem', fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', background: 'var(--yellow)', color: '#0a0f0d', borderRadius: 4, padding: '0.05rem 0.35rem' }}>Coach pick</span>
       )}
       <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: big ? '1.25rem' : '1.1rem', lineHeight: 1.1 }}>{on ? '✓ ' : ''}{band.color}</span>
       <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 700, opacity: 0.9, marginTop: '0.15rem' }}>{band.level}</span>
