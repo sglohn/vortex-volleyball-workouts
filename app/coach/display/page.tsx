@@ -14,6 +14,7 @@ import { useState, useEffect, Suspense } from 'react'
 import { isWarmupLabel } from '@/lib/warmup'
 import { useSearchParams } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
+import BrandMark from '@/components/BrandMark'
 import { BRAND } from '@/lib/brand'
 import ExerciseClip from '@/components/ExerciseClip'
 import { combineMetricsFor } from '@/lib/combine'
@@ -129,9 +130,7 @@ function DisplayContent() {
       <div style={{ background: '#111827', borderBottom: `3px solid ${YELLOW}`, padding: '0.3vh 1.25rem', display: 'flex', alignItems: 'center', gap: '1rem', flexShrink: 0 }}>
         {/* Logo */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
-          <div style={{ width: '2.6vh', height: '2.6vh', borderRadius: '50%', background: YELLOW, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="55%" height="55%" viewBox="0 0 24 24" fill="none" stroke="#111827" strokeWidth="2.5" strokeLinecap="round"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
-          </div>
+          <BrandMark size="2.6vh" />
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.7vh', letterSpacing: '0.1em', color: YELLOW }}>{BRAND.appTitle.toUpperCase()}</span>
         </div>
 

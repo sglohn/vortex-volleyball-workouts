@@ -315,10 +315,18 @@ export default function HomePage() {
 
       {/* Header */}
       <div style={{ textAlign: 'center', marginBottom: '2rem' }} className="fade-up">
-        <div style={{ display: 'flex', flexDirection: BRAND.markSrc ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
-          <BrandMark size={BRAND.markSrc ? 88 : 44} tone="dark" />
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: BRAND.markSrc ? 'clamp(1.6rem, 8vw, 2.25rem)' : '2.25rem', whiteSpace: 'nowrap', fontWeight: 800, letterSpacing: '0.06em', color: 'var(--black)' }}>{BRAND.name}</h1>
-        </div>
+        {BRAND.logoSrc ? (
+          <h1 style={{ margin: '0 auto 0.75rem', width: 'min(340px, 86vw)' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={BRAND.logoSrc} alt={BRAND.description} width={1200} height={278}
+              style={{ width: '100%', height: 'auto', display: 'block' }} />
+          </h1>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: BRAND.markSrc ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '0.5rem' }}>
+            <BrandMark size={BRAND.markSrc ? 88 : 44} tone="dark" />
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: BRAND.markSrc ? 'clamp(1.6rem, 8vw, 2.25rem)' : '2.25rem', whiteSpace: 'nowrap', fontWeight: 800, letterSpacing: '0.06em', color: 'var(--black)' }}>{BRAND.name}</h1>
+          </div>
+        )}
         <p style={{ color: 'var(--carolina-dark)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600 }}>Strength & Conditioning</p>
         <div style={{ height: 3, width: 60, background: 'linear-gradient(90deg, var(--black), var(--carolina))', borderRadius: 2, margin: '0.625rem auto 0' }} />
       </div>

@@ -83,10 +83,18 @@ export default function CoachLoginPage() {
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '2rem' }}>
       <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', flexDirection: BRAND.markSrc ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
-          <BrandMark size={BRAND.markSrc ? 88 : 40} tone="dark" />
-          <h1 style={{ fontFamily: 'var(--font-display)', fontSize: BRAND.markSrc ? 'clamp(1.6rem, 8vw, 2rem)' : '2rem', whiteSpace: 'nowrap', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--volt)' }}>{BRAND.name}</h1>
-        </div>
+        {BRAND.logoSrc ? (
+          <h1 style={{ margin: '0 auto 0.625rem', width: 'min(280px, 80vw)' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={BRAND.logoSrc} alt={BRAND.description} width={1200} height={278}
+              style={{ width: '100%', height: 'auto', display: 'block' }} />
+          </h1>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: BRAND.markSrc ? 'column' : 'row', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', marginBottom: '0.25rem' }}>
+            <BrandMark size={BRAND.markSrc ? 88 : 40} tone="dark" />
+            <h1 style={{ fontFamily: 'var(--font-display)', fontSize: BRAND.markSrc ? 'clamp(1.6rem, 8vw, 2rem)' : '2rem', whiteSpace: 'nowrap', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--volt)' }}>{BRAND.name}</h1>
+          </div>
+        )}
         <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', letterSpacing: '0.12em', textTransform: 'uppercase' }}>Strength & Conditioning — Admin</p>
       </div>
 

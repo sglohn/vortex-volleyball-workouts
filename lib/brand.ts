@@ -28,6 +28,10 @@ export interface Brand {
   tagline: string
   /** Round logo shown in headers. null = the lightning-bolt circle. */
   markSrc: string | null
+  /** Full-width club logo for the sign-in screens (player and Admin). It
+   *  replaces the round mark + big name there. null = round mark + name.
+   *  Made for light backgrounds, so it isn't used on the black top bars. */
+  logoSrc: string | null
   /** Home-screen and browser icons. null = none.
    *  maskable: Android version with extra margin (it gets cropped to a circle);
    *  falls back to icon512 when not set. */
@@ -47,7 +51,10 @@ const VORTEX: Brand = {
   shortTitle: 'Vortex S&C',
   description: 'Vortex Volleyball Strength & Conditioning',
   tagline: 'Strength & Conditioning',
-  markSrc: null,
+  // Swirling ball from the logo on a white circle, for the black top bars
+  markSrc: '/brand/vortex/mark.png',
+  // Vortex Volleyball logo (yellow swirl + ball + outlined VORTEX letters)
+  logoSrc: '/brand/vortex/logo.png',
   // WORK logo (public/brand/vortex). Favicon is the swirling ball only.
   icons: {
     favicon: '/brand/vortex/favicon-32.png',
@@ -72,6 +79,7 @@ const LACROSSE: Brand = {
   description: 'Bruisers Lacrosse Strength & Conditioning',
   tagline: 'Strength & Conditioning',
   markSrc: '/brand/lacrosse/mark.png',
+  logoSrc: null,
   // Home-screen icon: GPS Lacrosse logo with "Strength & Conditioning" on
   // white (full logo: /brand/lacrosse/gps-lacrosse-sc-logo.png). New file
   // names so phones don't reuse a cached copy of the old seal icon.
