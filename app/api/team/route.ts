@@ -13,12 +13,16 @@
 //  - Set logs are fetched in one query instead of one per player.
 //  - Supabase joins are guarded with Array.isArray.
 //  - Pounds moved counts both dumbbells on 2-dumbbell exercises (lib/loads.ts).
+//  - Warm-up blocks (lib/warmup.ts) don't count toward % complete: players
+//    watch the warm-up, they don't log it, so counting it kept everyone
+//    under 100%.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { setLoad, setPoundsMoved } from '@/lib/loads'
 import { equipmentByExercise } from '@/lib/equipmentLookup'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
+import { isWarmupLabel } from '@/lib/warmup'
 
 type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
 type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
@@ -62,12 +66,13 @@ export async function GET(req: NextRequest) {
   // ── Total sets in today's workout (for % complete) ──
   let templateTotalSets = 0
   if (templateId) {
-    const { data: blocks } = await db
+    const { data: allBlocks } = await db
       .from('template_blocks')
-      .select('id, sets')
+      .select('id, sets, block_label')
       .eq('template_id', templateId)
+    const blocks = (allBlocks ?? []).filter(b => !isWarmupLabel(b.block_label))
 
-    const blockIds = (blocks ?? []).map(b => b.id)
+    const blockIds = blocks.map(b => b.id)
     const { data: blockExercises } = blockIds.length
       ? await db.from('template_block_exercises').select('block_id').in('block_id', blockIds)
       : { data: [] }
@@ -76,7 +81,7 @@ export async function GET(req: NextRequest) {
     for (const be of blockExercises ?? []) {
       exerciseCountByBlock[be.block_id] = (exerciseCountByBlock[be.block_id] ?? 0) + 1
     }
-    for (const b of blocks ?? []) {
+    for (const b of blocks) {
       templateTotalSets += (exerciseCountByBlock[b.id] ?? 0) * (b.sets ?? 0)
     }
   }

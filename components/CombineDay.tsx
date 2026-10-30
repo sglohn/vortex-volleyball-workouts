@@ -20,10 +20,16 @@
 // Every try is saved right away (app/api/player/combine), and the best try
 // for each test goes to today's measurements, so nothing is lost if the
 // phone locks or the player signs out partway through.
+//
+// Shared device (Team Mode, app/team/[teamId]): pass the player's own sign-in
+// pass in `pass` and an `onExit`. Requests then use that pass instead of the
+// phone's stored sign-in, Finish hands the screen back with onExit('finished')
+// instead of showing the done screen, and an expired pass calls
+// onExit('signin') instead of going to the phone sign-in screen.
 'use client'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { playerFetch } from '@/lib/playerPass'
+import { playerFetch, withPass } from '@/lib/playerPass'
 import WarmupCard, { type Warmup } from '@/components/WarmupCard'
 import {
   bestValue, checkCombineValue, combineMetric, combineText, feetInchesText, verticalFrom,
@@ -53,6 +59,10 @@ interface Props {
   description?: string | null
   warmup?: Warmup | null
   warmupNotes?: string | null
+  /** Shared device: this player's sign-in pass */
+  pass?: string | null
+  /** Shared device: hand the screen back ('finished' after Finish, 'signin' when the pass ran out) */
+  onExit?: (why: 'finished' | 'signin') => void
 }
 
 const labelStyle: React.CSSProperties = {
@@ -115,8 +125,19 @@ function TestCard({ metric, tries, best, onOpen, index }: {
   )
 }
 
-export default function CombineDay({ session, name, description, warmup, warmupNotes }: Props) {
+export default function CombineDay({ session, name, description, warmup, warmupNotes, pass, onExit }: Props) {
   const router = useRouter()
+  // Phone: the stored sign-in. Shared device: this player's own pass.
+  // (kept in a ref so a new onExit each render doesn't reload the combine)
+  const exitRef = useRef(onExit)
+  exitRef.current = onExit
+  const shared = !!onExit
+  const api = useCallback(async (url: string, init: RequestInit = {}): Promise<Response> => {
+    if (!shared) return playerFetch(url, init)
+    const res = await fetch(url, withPass(pass, init))
+    if (res.status === 401) exitRef.current?.('signin')
+    return res
+  }, [pass, shared])
   const [state, setState] = useState<CombineState | null>(null)
   const [loadError, setLoadError] = useState('')
   const [openKey, setOpenKey] = useState<CombineMetricKey | null>(null)
@@ -137,13 +158,13 @@ export default function CombineDay({ session, name, description, warmup, warmupN
     const params = new URLSearchParams({ sessionId: session.sessionId })
     if (session.templateId) params.set('templateId', session.templateId)
     try {
-      const res = await playerFetch(`/api/player/combine?${params}`)
+      const res = await api(`/api/player/combine?${params}`)
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setLoadError(d.error ?? 'Could not load the combine'); return }
       setState(d as CombineState)
       setLoadError('')
     } catch { setLoadError('Could not load the combine. Check your connection.') }
-  }, [session.sessionId, session.templateId])
+  }, [session.sessionId, session.templateId, api])
 
   useEffect(() => { load() }, [load])
 
@@ -187,8 +208,9 @@ export default function CombineDay({ session, name, description, warmup, warmupN
     if (notDone.length > 0 && !finishArmed) { setFinishArmed(true); return }
     setFinishing(true)
     try {
-      await playerFetch('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId }) })
+      await api('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId }) })
     } catch { /* still finish on this phone */ }
+    if (exitRef.current) { exitRef.current('finished'); return }
     const stored = localStorage.getItem('vx_session')
     const s = stored ? JSON.parse(stored) : {}
     localStorage.removeItem('vx_session')
@@ -285,7 +307,7 @@ export default function CombineDay({ session, name, description, warmup, warmupN
       if (needsSecondTap) { setWarningOk(warning); return }
       setSaving(true); setSaveError('')
       try {
-        const res = await playerFetch('/api/player/combine', {
+        const res = await api('/api/player/combine', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId: session.sessionId, templateId: session.templateId ?? null, metric: metric.key, value: entered }),
@@ -303,7 +325,7 @@ export default function CombineDay({ session, name, description, warmup, warmupN
       if (deleteArmed !== id) { setDeleteArmed(id); return }
       setDeleteArmed(null); setJustSaved(null)
       try {
-        const res = await playerFetch('/api/player/combine', {
+        const res = await api('/api/player/combine', {
           method: 'DELETE',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ sessionId: session.sessionId, templateId: session.templateId ?? null, id }),
