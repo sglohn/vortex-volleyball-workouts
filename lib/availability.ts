@@ -5,7 +5,7 @@
 // supabase/migrations/2026-10-30_injury_availability.sql
 //
 //   full            Aches & Pains   full go, keep an eye on it
-//   limited         Work Around It  practicing / lifting with changes
+//   limited         Modified  practicing / lifting with changes
 //   out             Out             no practice, games or workouts
 //   return_to_play  Return to Play  back from Out, working back in
 //   (status 'resolved' = Cleared, full competition)
@@ -27,7 +27,7 @@ export interface AvailabilityLevel {
 /** In the order a coach picks them (least to most serious, then the way back). */
 export const AVAILABILITY_LEVELS: AvailabilityLevel[] = [
   { value: 'full',           label: 'Aches & Pains',  short: 'Aches',    desc: 'Full go — keep an eye on it',          color: '#facc15', bg: 'rgba(250,204,21,0.12)',  border: 'rgba(250,204,21,0.4)' },
-  { value: 'limited',        label: 'Work Around It', short: 'Limited',  desc: 'Practicing / lifting with changes',     color: '#f97316', bg: 'rgba(249,115,22,0.12)',  border: 'rgba(249,115,22,0.4)' },
+  { value: 'limited',        label: 'Modified', short: 'Modified', desc: 'Practicing / lifting with changes',     color: '#f97316', bg: 'rgba(249,115,22,0.12)',  border: 'rgba(249,115,22,0.4)' },
   { value: 'out',            label: 'Out',            short: 'Out',      desc: 'No practice, games or workouts',        color: '#f87171', bg: 'rgba(248,113,113,0.12)', border: 'rgba(248,113,113,0.45)' },
   { value: 'return_to_play', label: 'Return to Play', short: 'RTP',      desc: 'Back from Out — working back in',       color: '#60a5fa', bg: 'rgba(96,165,250,0.12)',  border: 'rgba(96,165,250,0.45)' },
 ]
@@ -44,7 +44,7 @@ export function availabilityLevel(v: string | null | undefined): AvailabilityLev
   return AVAILABILITY_LEVELS.find(l => l.value === v) ?? AVAILABILITY_LEVELS[0]
 }
 
-/** Board order, most serious first: Out, Return to Play, Work Around It, Aches & Pains. */
+/** Board order, most serious first: Out, Return to Play, Modified, Aches & Pains. */
 export const BOARD_ORDER: Availability[] = ['out', 'return_to_play', 'limited', 'full']
 
 /** How much a level limits the player (higher = more). Used for a player's overall status. */

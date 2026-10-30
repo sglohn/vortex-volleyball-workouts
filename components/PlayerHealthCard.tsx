@@ -236,7 +236,7 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
 
   // Classify each current report by its availability level
   // Red    = Out
-  // Orange = Work Around It, Return to Play
+  // Orange = Modified, Return to Play
   // Yellow = Aches & Pains
   function reportColor(r: HealthReport): 'red' | 'orange' | 'yellow' {
     if (r.availability === 'out') return 'red'
@@ -362,7 +362,7 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
         <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
           {[
             { color: '#ef4444', bg: 'rgba(239,68,68,0.4)',    label: 'Out' },
-            { color: '#f97316', bg: 'rgba(249,115,22,0.4)',   label: 'Limited / RTP' },
+            { color: '#f97316', bg: 'rgba(249,115,22,0.4)',   label: 'Modified / RTP' },
             { color: '#facc15', bg: 'rgba(250,204,21,0.35)',  label: 'Aches' },
             { color: 'rgba(250,204,21,0.4)', bg: 'rgba(250,204,21,0.15)', label: 'History' },
           ].map(l => (
