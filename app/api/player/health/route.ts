@@ -5,7 +5,7 @@
 //   Coaches and admins (coach cookie, see lib/coachAuth.ts):
 //             GET ?all=1   PATCH   (team coaches: their own players only)
 //   Admins only:  DELETE
-//   Availability levels + timeline (Aches & Pains / Work Around It / Out /
+//   Availability levels + timeline (Aches & Pains / Modified / Out /
 //   Return to Play / Cleared): lib/availability.ts. Every level change,
 //   progress note, Cleared and Reopen adds a health_report_updates row.
 //   A report only counts as coach-entered (reportedBy: 'coach') when the

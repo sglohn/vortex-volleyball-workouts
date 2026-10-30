@@ -3,7 +3,7 @@
 // Coach Health Board. Admins see the whole club; a team coach sees, and can
 // add reports for, only the players on their teams (lib/coachScope.ts).
 //
-// Each report has an availability level (Aches & Pains / Work Around It /
+// Each report has an availability level (Aches & Pains / Modified /
 // Out / Return to Play) and a timeline in health_report_updates
 // (lib/availability.ts). Active and History include the timeline; Trends
 // adds days-out and return-to-play numbers.

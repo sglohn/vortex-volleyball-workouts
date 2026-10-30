@@ -5,7 +5,7 @@
 --
 --   health_reports.availability   one of
 --       'full'            Aches & Pains   - full go, just keep an eye on it
---       'limited'         Work Around It  - practicing/lifting with changes
+--       'limited'         Modified  - practicing/lifting with changes
 --       'out'             Out             - no practice, games or workouts
 --       'return_to_play'  Return to Play  - back from Out, working back in
 --     Marking a report Resolved ("Cleared - full competition") ends it.

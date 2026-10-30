@@ -2,7 +2,7 @@
 // app/coach/health/page.tsx
 //
 // Health Board. Every report has an availability level — Aches & Pains,
-// Work Around It, Out, Return to Play — and a timeline of changes, so a big
+// Modified, Out, Return to Play — and a timeline of changes, so a big
 // injury can be followed from Out → Return to Play → Cleared
 // (lib/availability.ts).
 import { useState, useEffect, type CSSProperties } from 'react'
