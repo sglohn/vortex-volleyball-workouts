@@ -1,25 +1,32 @@
 // FILE: app/api/team/route.ts
 //
-// Roster + leaderboard data for the single-team kiosk page (/team/[teamId]).
+// Roster + leaderboard data for Team Mode (/team/[teamId]), the shared
+// screen where players without a phone check in and log their sets.
 //
-// Fixes in this version:
+//   GET ?teamId=<id>            one team
+//   GET ?teamId=<id>,<id>,...   several teams lifting together (up to 6)
+//
+// Reply:
+//   teams    [{ id, name, age_group, color, workoutName, templateId }]
+//            in the order asked for (unknown ids are left out)
+//   roster   every active player on those teams (primary team), each with
+//            teamId, checked-in / done state and today's stats
+//   checkedInCount, completedCount   across all the teams
+//   team, workoutName, templateId    the first team's (older screens)
+//
+// Notes:
 //  - "Today" is the club's date (lib/clubTime.ts), not Vercel's UTC date.
-//    Previously, after 8 PM Eastern (7 PM in winter) the kiosk looked up
-//    tomorrow's workout and every checked-in player vanished.
-//  - % complete is measured against the full workout template. Previously it
-//    was completed sets ÷ sets logged so far, which reads ~100% almost always.
+//  - % complete is measured against that team's full workout, without the
+//    warm-up (lib/warmup.ts): players watch the warm-up, they don't log it.
 //  - If a player has more than one session today, all of today's sets count
 //    and the open session is the one used for logging.
-//  - Set logs are fetched in one query instead of one per player.
+//  - Set logs are fetched in one query for everyone.
 //  - Supabase joins are guarded with Array.isArray.
 //  - Pounds moved counts both dumbbells on 2-dumbbell exercises (lib/loads.ts).
-//  - Warm-up blocks (lib/warmup.ts) don't count toward % complete: players
-//    watch the warm-up, they don't log it, so counting it kept everyone
-//    under 100%.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
-import { setLoad, setPoundsMoved } from '@/lib/loads'
+import { setPoundsMoved } from '@/lib/loads'
 import { equipmentByExercise } from '@/lib/equipmentLookup'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
 import { isWarmupLabel } from '@/lib/warmup'
@@ -27,6 +34,10 @@ import { isWarmupLabel } from '@/lib/warmup'
 type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
 type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
 type LogRow = { session_id: string; exercise_id: string; completed: boolean; weight_lbs: number | null; reps_completed: number | null }
+type TeamRow = { id: string; name: string; age_group?: string | null; color: string }
+
+const MAX_TEAMS = 6
+const ID_RE = /^[0-9a-f-]{8,64}$/i
 
 function one<T>(value: T | T[] | null | undefined): T | null {
   if (Array.isArray(value)) return value[0] ?? null
@@ -34,42 +45,50 @@ function one<T>(value: T | T[] | null | undefined): T | null {
 }
 
 export async function GET(req: NextRequest) {
-  const teamId = req.nextUrl.searchParams.get('teamId')
-  if (!teamId) return NextResponse.json({ error: 'Missing teamId' }, { status: 400 })
+  const raw = req.nextUrl.searchParams.get('teamId') ?? ''
+  const teamIds = [...new Set(decodeURIComponent(raw).split(',').map(s => s.trim()).filter(s => ID_RE.test(s)))].slice(0, MAX_TEAMS)
+  if (!teamIds.length) return NextResponse.json({ error: 'Missing teamId' }, { status: 400 })
 
   const db = createServerClient()
   const today = clubDateString()
   const { start, end } = clubDayBounds(today)
 
-  // ── Team ──
-  const { data: team } = await db
+  // ── Teams ──
+  const { data: teamRows } = await db
     .from('teams')
     .select('id, name, age_group, color')
-    .eq('id', teamId)
-    .single()
+    .in('id', teamIds)
 
-  if (!team) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
+  const teamsFound = teamIds
+    .map(id => ((teamRows ?? []) as TeamRow[]).find(t => t.id === id))
+    .filter((t): t is TeamRow => !!t)
+  if (!teamsFound.length) return NextResponse.json({ error: 'Team not found' }, { status: 404 })
+  const ids = teamsFound.map(t => t.id)
 
-  // ── Today's scheduled workout ──
+  // ── Today's scheduled workouts ──
   const { data: schedules } = await db
     .from('team_schedule')
-    .select('template_id, workout_templates(name)')
-    .eq('team_id', teamId)
+    .select('team_id, template_id, workout_templates(name)')
+    .in('team_id', ids)
     .eq('scheduled_date', today)
-    .limit(1)
 
-  const schedule = schedules?.[0] ?? null
-  const templateId: string | null = schedule?.template_id ?? null
-  const workoutName =
-    one(schedule?.workout_templates as unknown as { name: string } | { name: string }[] | null)?.name ?? null
+  const scheduleByTeam: Record<string, { templateId: string | null; workoutName: string | null }> = {}
+  for (const s of schedules ?? []) {
+    if (scheduleByTeam[s.team_id]?.templateId) continue
+    scheduleByTeam[s.team_id] = {
+      templateId: s.template_id ?? null,
+      workoutName: one(s.workout_templates as unknown as { name: string } | { name: string }[] | null)?.name ?? null,
+    }
+  }
 
-  // ── Total sets in today's workout (for % complete) ──
-  let templateTotalSets = 0
-  if (templateId) {
+  // ── Total sets in each of today's workouts (for % complete), warm-up left out ──
+  const templateIds = [...new Set(Object.values(scheduleByTeam).map(s => s.templateId).filter((id): id is string => !!id))]
+  const totalSetsByTemplate: Record<string, number> = {}
+  if (templateIds.length) {
     const { data: allBlocks } = await db
       .from('template_blocks')
-      .select('id, sets, block_label')
-      .eq('template_id', templateId)
+      .select('id, template_id, sets, block_label')
+      .in('template_id', templateIds)
     const blocks = (allBlocks ?? []).filter(b => !isWarmupLabel(b.block_label))
 
     const blockIds = blocks.map(b => b.id)
@@ -82,25 +101,29 @@ export async function GET(req: NextRequest) {
       exerciseCountByBlock[be.block_id] = (exerciseCountByBlock[be.block_id] ?? 0) + 1
     }
     for (const b of blocks) {
-      templateTotalSets += (exerciseCountByBlock[b.id] ?? 0) * (b.sets ?? 0)
+      totalSetsByTemplate[b.template_id] = (totalSetsByTemplate[b.template_id] ?? 0) + (exerciseCountByBlock[b.id] ?? 0) * (b.sets ?? 0)
     }
   }
 
-  // ── Players on this team ──
+  // ── Players on these teams (primary team) ──
   const { data: playerTeams } = await db
     .from('player_teams')
-    .select('player_id, players(id, name, jersey_number, is_active)')
-    .eq('team_id', teamId)
+    .select('team_id, player_id, players(id, name, jersey_number, is_active)')
+    .in('team_id', ids)
     .eq('is_primary', true)
 
-  const players = (playerTeams ?? [])
-    .map(pt => one(pt.players as unknown as PlayerJoin | PlayerJoin[] | null))
-    .filter((p): p is PlayerJoin => !!p && p.is_active)
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const seen = new Set<string>()
+  const players: Array<PlayerJoin & { teamId: string }> = []
+  for (const pt of playerTeams ?? []) {
+    const p = one(pt.players as unknown as PlayerJoin | PlayerJoin[] | null)
+    if (!p || !p.is_active || seen.has(p.id)) continue
+    seen.add(p.id)
+    players.push({ ...p, teamId: pt.team_id as string })
+  }
+  players.sort((a, b) => a.name.localeCompare(b.name))
 
   // ── Today's sessions (club-local day) ──
   const playerIds = players.map(p => p.id)
-
   const { data: sessionsRaw } = playerIds.length
     ? await db
         .from('sessions')
@@ -141,7 +164,7 @@ export async function GET(req: NextRequest) {
     const playerSessions = sessionsByPlayer[p.id] ?? []
     if (!playerSessions.length) {
       return {
-        id: p.id, name: p.name, jerseyNumber: p.jersey_number,
+        id: p.id, name: p.name, jerseyNumber: p.jersey_number, teamId: p.teamId,
         checkedIn: false, completed: false, sessionId: null, stats: null,
       }
     }
@@ -163,10 +186,14 @@ export async function GET(req: NextRequest) {
       ? Math.round((new Date(latestSession.completed_at).getTime() - new Date(firstCheckIn).getTime()) / 60000)
       : null
 
+    const templateId = scheduleByTeam[p.teamId]?.templateId ?? null
+    const templateTotalSets = templateId ? totalSetsByTemplate[templateId] ?? 0 : 0
+
     return {
       id: p.id,
       name: p.name,
       jerseyNumber: p.jersey_number,
+      teamId: p.teamId,
       checkedIn: true,
       completed: !openSession,
       sessionId: activeSession.id,
@@ -180,14 +207,22 @@ export async function GET(req: NextRequest) {
     }
   })
 
+  const teams = teamsFound.map(t => ({
+    ...t,
+    workoutName: scheduleByTeam[t.id]?.workoutName ?? null,
+    templateId: scheduleByTeam[t.id]?.templateId ?? null,
+  }))
+
   return NextResponse.json(
     {
-      team,
+      teams,
       roster,
-      workoutName,
-      templateId,
       checkedInCount: roster.filter(r => r.checkedIn).length,
       completedCount: roster.filter(r => r.completed).length,
+      // First team, for older screens
+      team: teamsFound[0],
+      workoutName: teams[0].workoutName,
+      templateId: teams[0].templateId,
     },
     { headers: { 'Cache-Control': 'no-store' } }
   )

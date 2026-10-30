@@ -1,4 +1,12 @@
 'use client'
+// FILE: app/coach/teams/page.tsx
+//
+// Coach → Teams. "▶ Team Mode" opens one team's shared screen; "Start Weight
+// Room Session" picks every team lifting together (usually two) and opens
+// one shared screen for all of them (/team/<id>,<id>, app/team/[teamId]).
+// The session picker lists every team, not just a team coach's own, since
+// the other team in the room is often someone else's. Teams with a workout
+// scheduled today are marked and listed first.
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useIsAdmin } from '@/components/CoachContext'
@@ -21,11 +29,19 @@ export default function CoachTeamsPage() {
   const [saving, setSaving] = useState(false)
   const [sessionTeams, setSessionTeams] = useState<string[]>([])
   const [sessionUrl, setSessionUrl] = useState('')
+  // Every team for the session picker, and which have a workout today
+  const [allTeams, setAllTeams] = useState<Team[]>([])
+  const [todayIds, setTodayIds] = useState<Set<string>>(new Set())
   // Team coaches see their own teams here; adding, editing and scheduling are admins only
   const isAdmin = useIsAdmin()
 
   useEffect(() => {
     fetch('/api/coach/teams').then(r => r.json()).then(d => { setTeams(d.teams ?? []); setLoading(false) })
+    fetch('/api/coach/teams?all=1').then(r => r.json()).then(d => setAllTeams(((d.teams ?? []) as Team[]).filter(t => !t.is_open_gym))).catch(() => {})
+    // Volleyball only (lib/features.ts); lacrosse just doesn't mark "today"
+    fetch('/api/display-teams').then(r => r.ok ? r.json() : null).then(d => {
+      if (d?.todayOnly) setTodayIds(new Set(((d.teams ?? []) as { id: string }[]).map(t => t.id)))
+    }).catch(() => {})
   }, [])
 
   function openAdd() { setForm({ name:'', age_group:'', color:'#56a0d3' }); setEditTarget(null); setModal('add'); setMsg('') }
@@ -56,10 +72,7 @@ export default function CoachTeamsPage() {
 
   function buildSessionUrl() {
     if (!sessionTeams.length) return
-    const date = new Date()
-    const d = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(date.getDate()).padStart(2,'0')}`
-    const url = `${window.location.origin}/session/${d}?teams=${sessionTeams.join(',')}`
-    setSessionUrl(url)
+    setSessionUrl(`${window.location.origin}/team/${sessionTeams.join(',')}`)
   }
 
   if (loading) return <div style={{ padding:'2rem', color:'var(--text-muted)' }}>Loading…</div>
@@ -130,18 +143,21 @@ export default function CoachTeamsPage() {
       {/* ── SESSION LAUNCHER ── */}
       <div className="card" style={{ padding:'1.25rem', marginTop:'1.5rem', borderLeft:'4px solid var(--carolina)' }}>
         <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.1rem', marginBottom:'0.5rem' }}>Start Weight Room Session</h2>
-        <p style={{ color:'var(--text-muted)', fontSize:'0.82rem', marginBottom:'0.875rem' }}>Pick the teams coming in today. Copy the URL and open it on your wall tablets.</p>
+        <p style={{ color:'var(--text-muted)', fontSize:'0.82rem', marginBottom:'0.875rem' }}>Pick every team lifting together (usually two). It opens one Team Mode screen for all of them, where players without a phone check in, do the body check, log sets and ask Coach for changes. Teams can also be added or removed on that screen.</p>
         <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom:'0.875rem' }}>
-          {teams.map(t => (
-            <button key={t.id} onClick={() => setSessionTeams(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id])}
+          {[...(allTeams.length ? allTeams : teams.filter(t => !t.is_open_gym))]
+            .sort((a, b) => Number(todayIds.has(b.id)) - Number(todayIds.has(a.id)))
+            .map(t => (
+            <button key={t.id} onClick={() => { setSessionUrl(''); setSessionTeams(prev => prev.includes(t.id) ? prev.filter(id => id !== t.id) : [...prev, t.id]) }}
               style={{ padding:'0.35rem 0.875rem', borderRadius:20, border:`2px solid ${sessionTeams.includes(t.id) ? t.color : 'var(--gray-border)'}`, background: sessionTeams.includes(t.id) ? `${t.color}18` : 'transparent', color: sessionTeams.includes(t.id) ? t.color : 'var(--text-muted)', fontSize:'0.82rem', fontWeight:600, cursor:'pointer' }}>
-              {t.name}{t.age_group ? ` ${t.age_group}` : ''}
+              {sessionTeams.includes(t.id) ? '✓ ' : ''}{t.name}{t.age_group && !t.name.startsWith(t.age_group.replace(/\D/g, '')) ? ` ${t.age_group}` : ''}
+              {todayIds.has(t.id) && <span style={{ marginLeft:'0.35rem', fontSize:'0.62rem', fontWeight:800, textTransform:'uppercase', letterSpacing:'0.04em', color:'var(--carolina-dark)' }}>· today</span>}
             </button>
           ))}
         </div>
         <div style={{ display:'flex', gap:'0.625rem', alignItems:'center', flexWrap:'wrap' }}>
           <button className="btn-volt" onClick={buildSessionUrl} disabled={!sessionTeams.length} style={{ padding:'0.5rem 1.25rem', fontSize:'0.85rem' }}>
-            Generate URL
+            Get Link
           </button>
           {sessionUrl && (
             <>
