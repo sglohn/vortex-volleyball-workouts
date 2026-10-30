@@ -28,6 +28,7 @@ import {
   loadLabel, plateText, previousEntry, setPoundsMoved, skipsWeightSuggestion, type Equipment,
 } from '@/lib/loads'
 import WeightPicker from '@/components/WeightPicker'
+import Confetti from '@/components/Confetti'
 import { playerFetch } from '@/lib/playerPass'
 import ExerciseClip from '@/components/ExerciseClip'
 import WarmupCard, { type Warmup } from '@/components/WarmupCard'
@@ -98,6 +99,13 @@ export default function PlayerWorkoutPage() {
   const [velocityInput, setVelocityInput] = useState('')
   const [saving, setSaving] = useState(false)
   const [finished, setFinished] = useState(false)
+  // Finishing: players often did every set but never tapped Finish. When the
+  // last set is logged, an "All sets done" screen pops up with a big Finish
+  // button; the done screen then pops confetti (components/Confetti.tsx).
+  const [finishing, setFinishing] = useState(false)
+  const [finishError, setFinishError] = useState('')
+  const [finishStats, setFinishStats] = useState<{ completedSets: number; totalWeight: number; durationMin: number } | null>(null)
+  const [allDoneDismissed, setAllDoneDismissed] = useState(false)
   const [demoEx, setDemoEx] = useState<Exercise | null>(null)
   // "Fix a set" sheet: which block, and optionally a set to open straight into
   const [fixFor, setFixFor] = useState<{ blockIdx: number; start?: { exerciseId: string; setNumber: number } } | null>(null)
@@ -426,8 +434,19 @@ export default function PlayerWorkoutPage() {
   ) : null
 
   async function handleFinish() {
-    if (!session) return
-    await playerFetch('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId }) })
+    if (!session || finishing) return
+    setFinishing(true)
+    setFinishError('')
+    try {
+      const res = await playerFetch('/api/checkin', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: session.sessionId }) })
+      if (!res.ok) throw new Error('not saved')
+    } catch {
+      // Don't show "done" unless it really saved, or the workout stays unfinished
+      setFinishing(false)
+      setFinishError('Couldn’t finish. Check your connection and tap Finish again.')
+      return
+    }
+    setFinishing(false)
 
     const completedSets = workout?.blocks.reduce((sum, b) => sum + b.exercises.reduce((s, e) => s + e.setLogs.filter(l => l.completed).length, 0), 0) ?? 0
     const totalSets = workout?.blocks.reduce((sum, b) => sum + b.exercises.filter(e => !e.skipped).length * b.sets, 0) ?? 0
@@ -446,6 +465,7 @@ export default function PlayerWorkoutPage() {
       return
     }
     localStorage.removeItem('vx_session')
+    setFinishStats({ completedSets, totalWeight: Math.round(totalWeight), durationMin })
     setFinished(true)
   }
 
@@ -476,17 +496,35 @@ export default function PlayerWorkoutPage() {
   }
 
   if (finished) return (
-    <div style={{ padding: '3rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }} className="fade-up">
-      <div style={{ width: 80, height: 80, borderRadius: '50%', background: 'var(--carolina-light)', border: '2px solid var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="pulse">
-        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--carolina)" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+    <div style={{ padding: '3rem 1.5rem', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1.5rem' }} className="fade-up">
+      <Confetti />
+      <div style={{ width: 96, height: 96, borderRadius: '50%', background: 'var(--carolina-light)', border: '3px solid var(--carolina)', display: 'flex', alignItems: 'center', justifyContent: 'center' }} className="pulse">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--carolina)" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
       </div>
       <div>
-        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, color: 'var(--black)', marginBottom: '0.5rem' }}>WORKOUT DONE</h2>
-        <p style={{ color: 'var(--text-secondary)' }}>Great work, {session?.playerName}!</p>
+        <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '2.4rem', fontWeight: 800, color: 'var(--black)', marginBottom: '0.5rem', lineHeight: 1 }}>WORKOUT DONE! 🎉</h2>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '1.05rem' }}>Great work, {session?.playerName}!</p>
       </div>
+      {finishStats && (
+        <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+          {[
+            { label: 'Sets', value: String(finishStats.completedSets) },
+            ...(finishStats.totalWeight > 0 ? [{ label: 'Lbs moved', value: finishStats.totalWeight.toLocaleString() }] : []),
+            ...(finishStats.durationMin > 0 && finishStats.durationMin < 240 ? [{ label: 'Minutes', value: String(finishStats.durationMin) }] : []),
+          ].map(stat => (
+            <div key={stat.label} className="card" style={{ padding: '0.75rem 1rem', minWidth: 90 }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800, color: 'var(--carolina)' }}>{stat.value}</div>
+              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{stat.label}</div>
+            </div>
+          ))}
+        </div>
+      )}
       <button className="btn-black" onClick={() => router.push('/')} style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>Sign Out</button>
     </div>
   )
+
+  // Every set logged but Finish not tapped yet
+  const showAllDone = allBlocksDone && totalSets > 0 && view === 'blocks' && !fixFor && !allDoneDismissed
 
   // ---- ACTIVE BLOCK VIEW ----
   if (view === 'active_block' && workout) {
@@ -968,10 +1006,40 @@ export default function PlayerWorkoutPage() {
         })}
       </div>
 
-      {allBlocksDone && (
-        <button className="btn-volt" onClick={handleFinish} style={{ width: '100%', padding: '1rem', fontSize: '1.1rem' }}>
-          Finish Workout ✓
-        </button>
+      {allBlocksDone && totalSets > 0 && (
+        // Stays on screen at the bottom, so it can't be missed below the blocks
+        <div style={{ position: 'sticky', bottom: 0, padding: '0.75rem 0 1rem', background: 'linear-gradient(to top, var(--page-bg, var(--white)) 70%, transparent)', zIndex: 20 }}>
+          {finishError && <p role="alert" style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 600, textAlign: 'center', marginBottom: '0.5rem' }}>{finishError}</p>}
+          <button className="btn-volt pulse" onClick={handleFinish} disabled={finishing} style={{ width: '100%', padding: '1.1rem', fontSize: '1.2rem', fontWeight: 800 }}>
+            {finishing ? 'Finishing…' : 'Tap to Finish Workout ✓'}
+          </button>
+          <p style={{ textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>
+            Your workout doesn’t count as done until you tap Finish
+          </p>
+        </div>
+      )}
+
+      {/* All sets done: big Finish prompt */}
+      {showAllDone && (
+        <div role="dialog" aria-modal="true" aria-label="All sets done"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 70, padding: '1.5rem' }}>
+          <div className="card fade-up" style={{ width: '100%', maxWidth: 420, padding: '2rem 1.5rem', borderRadius: 18, textAlign: 'center' }}>
+            <div style={{ fontSize: '3rem', lineHeight: 1, marginBottom: '0.5rem' }}>💪</div>
+            <h2 style={{ fontFamily: 'var(--font-display)', fontSize: '1.9rem', fontWeight: 800, lineHeight: 1.05, marginBottom: '0.5rem' }}>ALL SETS DONE!</h2>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '1.5rem' }}>
+              One more tap. Finish your workout so it counts.
+            </p>
+            {finishError && <p role="alert" style={{ color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 600, marginBottom: '0.75rem' }}>{finishError}</p>}
+            <button className="btn-volt pulse" onClick={handleFinish} disabled={finishing} autoFocus
+              style={{ width: '100%', padding: '1.2rem', fontSize: '1.3rem', fontWeight: 800 }}>
+              {finishing ? 'Finishing…' : 'Finish Workout ✓'}
+            </button>
+            <button onClick={() => setAllDoneDismissed(true)} disabled={finishing}
+              style={{ marginTop: '0.875rem', background: 'none', border: 'none', color: 'var(--text-muted)', textDecoration: 'underline', cursor: 'pointer', fontSize: '0.85rem' }}>
+              Not yet, I need to fix a set
+            </button>
+          </div>
+        </div>
       )}
 
       {fixSheet}
