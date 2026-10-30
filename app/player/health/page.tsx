@@ -71,7 +71,7 @@ export default function PlayerHealthPage() {
       </div>
 
       {msg && (
-        <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--volt)', fontSize: '0.9rem' }}>{msg}</div>
+        <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--success)', fontSize: '0.9rem' }}>{msg}</div>
       )}
 
       {/* If they were routed here due to existing flags */}

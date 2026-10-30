@@ -235,7 +235,7 @@ export default function CoachDashboardPage() {
                         border: `2px solid ${s.teamColor ?? (s.hasHealthFlag ? '#f87171' : 'rgba(74,222,128,0.4)')}`,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         fontSize: '0.72rem', fontWeight: 700,
-                        color: s.teamColor ?? (s.hasHealthFlag ? '#f87171' : 'var(--volt)'),
+                        color: s.teamColor ?? (s.hasHealthFlag ? '#f87171' : 'var(--success)'),
                         flexShrink: 0,
                       }}>
                         {s.jerseyNumber ?? s.playerName.charAt(0)}

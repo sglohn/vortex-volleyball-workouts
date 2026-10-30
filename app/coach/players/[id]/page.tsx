@@ -224,7 +224,7 @@ export default function CoachPlayerDetailPage() {
         {activeHealth.length > 0 && <span className="tag tag-danger">⚠ {activeHealth.length} health flag{activeHealth.length > 1 ? 's' : ''}</span>}
       </div>
 
-      {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--volt)', fontSize: '0.9rem' }}>{msg}</div>}
+      {msg && <div style={{ background: 'rgba(74,222,128,0.1)', border: '1px solid rgba(74,222,128,0.3)', borderRadius: 8, padding: '0.75rem', marginBottom: '1rem', color: 'var(--success)', fontSize: '0.9rem' }}>{msg}</div>}
 
       <div className="one-col-phone" style={{ display: 'grid', gridTemplateColumns: FEATURES.vbt ? 'minmax(0, 3fr) minmax(0, 2fr)' : 'minmax(0, 1fr)', gap: '1.5rem', marginBottom: '1.5rem' }}>
         {/* Left col: health + measurements */}
@@ -328,7 +328,7 @@ export default function CoachPlayerDetailPage() {
               {sessions.map((s: Record<string, unknown>) => (
                 <Link key={s.id as string} href={`/coach/logs?date=${clubDateOf(s.checked_in_at as string)}&session=${s.id as string}`}
                   title="See and fix this workout's sets"
-                  style={{ padding: '0.4rem 0.875rem', borderRadius: 6, background: s.completed_at ? 'rgba(74,222,128,0.1)' : 'var(--court-raised)', border: `1px solid ${s.completed_at ? 'var(--volt)' : 'var(--court-border)'}`, fontSize: '0.8rem', color: s.completed_at ? 'var(--volt)' : 'var(--text-secondary)', textDecoration: 'none' }}>
+                  style={{ padding: '0.4rem 0.875rem', borderRadius: 6, background: s.completed_at ? 'rgba(74,222,128,0.1)' : 'var(--court-raised)', border: `1px solid ${s.completed_at ? 'var(--success)' : 'var(--court-border)'}`, fontSize: '0.8rem', color: s.completed_at ? 'var(--volt)' : 'var(--text-secondary)', textDecoration: 'none' }}>
                   {new Date(s.checked_in_at as string).toLocaleDateString()}
                 </Link>
               ))}

@@ -45,6 +45,20 @@
   --text-primary:  var(--black);
   --text-secondary:var(--gray-mid);
   --text-muted:    #9ca3af;
+
+  /* ── Old dark-theme names ──
+     Until May 2026 the app had a dark green theme with these names. Some
+     pages still use them, and after the switch to this light theme they
+     weren't defined, so those parts showed with no color at all. They now
+     point at today's colors, so they follow the brand on both sites (the
+     lacrosse colors come from lib/brand.ts). For new code use the names
+     above instead: --carolina-dark for accent text, --yellow for a filled
+     accent badge (with --black text), --success for done / saved. */
+  --volt:          var(--carolina-dark);   /* accent text, links, icons, borders */
+  --court-bg:      var(--page-bg);
+  --court-surface: var(--surface);
+  --court-raised:  var(--gray-light);
+  --court-border:  var(--gray-border);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
