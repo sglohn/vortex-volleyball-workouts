@@ -8,6 +8,10 @@
 import { useState } from 'react'
 import { painLevelColor, painLevelLabel } from '@/lib/fitness'
 import { useIsAdmin } from '@/components/CoachContext'
+import {
+  AVAILABILITY_LEVELS, CLEARED, availabilityLevel, daysBetween, describeUpdate, formatDays,
+  isAvailability, stageTotals, worstAvailability, type Availability, type HealthUpdate,
+} from '@/lib/availability'
 
 // ─── Body map data (mirrored from player/bodycheck) ───────────────────────────
 
@@ -125,14 +129,15 @@ interface HealthReport {
   resolved_at?: string
   reported_by: string
   status: string
+  availability?: Availability
+  availability_since?: string
+  health_report_updates?: HealthUpdate[]
 }
 
 interface BodyCheck {
   regions: Record<string, string> // zone_id → 'sore' | 'injured'
   checked_at: string
 }
-
-type PlayerStatus = 'active' | 'adjusted' | 'inactive'
 
 interface Props {
   healthReports: HealthReport[]
@@ -141,24 +146,11 @@ interface Props {
   onUpdate: () => void
 }
 
-// ─── Status helpers ───────────────────────────────────────────────────────────
+// ─── Overall status ───────────────────────────────────────────────────────────
+// The player's status is the most limiting level among her open reports
+// (lib/availability.ts). Nothing open = Full Go.
 
-const STATUS_CONFIG: Record<PlayerStatus, { label: string; color: string; bg: string; border: string; desc: string }> = {
-  active:   { label: 'Active',    color: '#4ade80', bg: 'rgba(74,222,128,0.12)',  border: 'rgba(74,222,128,0.3)',  desc: 'Fully participating' },
-  adjusted: { label: 'Adjusted',  color: '#facc15', bg: 'rgba(250,204,21,0.12)', border: 'rgba(250,204,21,0.35)', desc: 'Modified participation' },
-  inactive: { label: 'Inactive',  color: '#f87171', bg: 'rgba(248,113,113,0.12)',border: 'rgba(248,113,113,0.3)', desc: 'Not participating' },
-}
-
-function deriveStatus(reports: HealthReport[]): PlayerStatus {
-  // Everyday soreness is shown on the map but doesn't change a player's participation status
-  const current = reports.filter(r => (r.status === 'active' || r.status === 'monitoring') && r.report_type !== 'soreness')
-  if (!current.length) return 'active'
-  const hasSevere   = current.some(r => r.severity === 'severe')
-  const hasModerate = current.some(r => r.severity === 'moderate' || r.report_type === 'major_injury')
-  if (hasSevere) return 'inactive'
-  if (hasModerate) return 'adjusted'
-  return 'adjusted' // any current issue = at least adjusted
-}
+const FULL_GO = { label: 'Full Go', color: '#4ade80', bg: 'rgba(74,222,128,0.12)', border: 'rgba(74,222,128,0.3)', desc: 'Nothing open' }
 
 // ─── Figure sub-component ────────────────────────────────────────────────────
 
@@ -208,7 +200,6 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
   const [side, setSide] = useState<'front' | 'back'>('front')
   const [expanded, setExpanded] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
-  const [playerStatus, setPlayerStatus] = useState<PlayerStatus>(() => deriveStatus(healthReports))
 
   const currentReports  = healthReports.filter(r => r.status === 'active' || r.status === 'monitoring')
   const resolvedReports = healthReports.filter(r => r.status === 'resolved')
@@ -243,14 +234,13 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
     return ALL_ZONES.find(z => z.id === zoneId)?.label ?? zoneId
   }
 
-  // Classify each current report into red / orange / yellow
-  // Red    = severe severity
-  // Orange = moderate severity OR major_injury type with no severity set
-  // Yellow = mild severity OR nagging_pain OR monitoring status
+  // Classify each current report by its availability level
+  // Red    = Out
+  // Orange = Work Around It, Return to Play
+  // Yellow = Aches & Pains
   function reportColor(r: HealthReport): 'red' | 'orange' | 'yellow' {
-    if (r.severity === 'severe') return 'red'
-    if (r.severity === 'moderate') return 'orange'
-    if (r.report_type === 'major_injury' && !r.severity) return 'orange'
+    if (r.availability === 'out') return 'red'
+    if (r.availability === 'limited' || r.availability === 'return_to_play') return 'orange'
     return 'yellow'
   }
 
@@ -282,14 +272,23 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
     if (!allCurrentZones.has(zoneId)) yellowZones.add(zoneId)
   }
 
-  const cfg = STATUS_CONFIG[playerStatus]
+  // Everyday soreness shows on the map but doesn't change the player's status
+  const worst = worstAvailability(currentReports.filter(r => r.report_type !== 'soreness'))
+  const cfg = worst ? availabilityLevel(worst) : FULL_GO
+  const worstReport = worst ? currentReports.find(r => r.availability === worst && r.report_type !== 'soreness') : undefined
 
-  async function updateReport(id: string, status: string) {
+  /** Move a report to a level, or 'cleared' to resolve it */
+  async function updateReport(id: string, to: Availability | 'cleared', note?: string) {
     setSaving(true)
     await fetch('/api/player/health', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, confirmedByCoach: true, status }),
+      body: JSON.stringify({
+        id, confirmedByCoach: true,
+        status: to === 'cleared' ? 'resolved' : 'active',
+        ...(to !== 'cleared' ? { availability: to } : {}),
+        progressNote: note?.trim() || null,
+      }),
     })
     onUpdate()
     setSaving(false)
@@ -304,12 +303,6 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
     onUpdate()
   }
 
-  async function savePlayerStatus(s: PlayerStatus) {
-    setPlayerStatus(s)
-    // Persist on player record if you add a player_status column later
-    // For now it's derived + overrideable locally per page load
-  }
-
   return (
     <div className="card" style={{ padding: '1.25rem' }}>
 
@@ -319,16 +312,16 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
           Health {currentReports.length > 0 && <span className="tag tag-danger" style={{ fontSize: '0.65rem' }}>{currentReports.length}</span>}
         </h2>
 
-        {/* Status picker */}
+        {/* Status: the most limiting open report */}
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '0.25rem' }}>
           <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>Status</div>
-          <div style={{ display: 'flex', gap: '0.3rem' }}>
-            {(Object.entries(STATUS_CONFIG) as [PlayerStatus, typeof cfg][]).map(([key, c]) => (
-              <button key={key} onClick={() => savePlayerStatus(key)}
-                style={{ padding: '0.2rem 0.55rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, cursor: 'pointer', border: `1.5px solid ${playerStatus === key ? c.color : 'var(--court-border)'}`, background: playerStatus === key ? c.bg : 'transparent', color: playerStatus === key ? c.color : 'var(--text-muted)', transition: 'all 0.12s', letterSpacing: '0.02em' }}>
-                {c.label}
-              </button>
-            ))}
+          <span style={{ padding: '0.2rem 0.65rem', borderRadius: 20, fontSize: '0.75rem', fontWeight: 700, border: `1.5px solid ${cfg.color}`, background: cfg.bg, color: cfg.color }}>
+            {cfg.label}
+          </span>
+          <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', textAlign: 'right' }}>
+            {worstReport
+              ? `${worstReport.body_part} · ${formatDays(daysBetween(worstReport.availability_since ?? worstReport.reported_at, Date.now()))}`
+              : cfg.desc}
           </div>
         </div>
       </div>
@@ -368,9 +361,9 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
         {/* Legend */}
         <div style={{ display: 'flex', justifyContent: 'center', gap: '0.75rem', marginTop: '0.5rem', flexWrap: 'wrap' }}>
           {[
-            { color: '#ef4444', bg: 'rgba(239,68,68,0.4)',    label: 'Stop' },
-            { color: '#f97316', bg: 'rgba(249,115,22,0.4)',   label: 'Adjust' },
-            { color: '#facc15', bg: 'rgba(250,204,21,0.35)',  label: 'Monitor' },
+            { color: '#ef4444', bg: 'rgba(239,68,68,0.4)',    label: 'Out' },
+            { color: '#f97316', bg: 'rgba(249,115,22,0.4)',   label: 'Limited / RTP' },
+            { color: '#facc15', bg: 'rgba(250,204,21,0.35)',  label: 'Aches' },
             { color: 'rgba(250,204,21,0.4)', bg: 'rgba(250,204,21,0.15)', label: 'History' },
           ].map(l => (
             <div key={l.label} style={{ display: 'flex', alignItems: 'center', gap: '0.3rem', fontSize: '0.68rem', color: 'rgba(255,255,255,0.5)' }}>
@@ -452,28 +445,33 @@ export default function PlayerHealthCard({ healthReports, bodyChecks, playerId, 
 
 // ─── Report row sub-component ─────────────────────────────────────────────────
 
-const SEVERITY_COLOR: Record<string, string> = { mild: '#facc15', moderate: '#f97316', severe: '#f87171' }
-
 function ReportRow({ r, expanded, onToggle, onUpdate, onDelete, saving, resolved }: {
   r: HealthReport
   expanded: boolean
   onToggle: () => void
-  onUpdate: (id: string, status: string) => void
+  onUpdate: (id: string, to: Availability | 'cleared', note?: string) => void
   /** Left out for team coaches: deleting a report is admins only */
   onDelete?: (id: string) => void
   saving: boolean
   resolved?: boolean
 }) {
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [note, setNote] = useState('')
+  const level = availabilityLevel(r.availability)
+  const current: Availability | 'cleared' = resolved ? 'cleared' : (isAvailability(r.availability) ? r.availability : 'full')
+  const t = stageTotals(r, r.health_report_updates)
+  const updates = [...(r.health_report_updates ?? [])].sort((a, b) => a.created_at.localeCompare(b.created_at))
+  const tint = resolved ? 'var(--court-border)' : level.border
 
   return (
-    <div style={{ background: resolved ? 'transparent' : 'rgba(248,113,113,0.06)', border: `1px solid ${resolved ? 'var(--court-border)' : 'rgba(248,113,113,0.18)'}`, borderRadius: 8, marginBottom: '0.4rem', overflow: 'hidden' }}>
+    <div style={{ background: resolved ? 'transparent' : level.bg, border: `1px solid ${tint}`, borderRadius: 8, marginBottom: '0.4rem', overflow: 'hidden' }}>
       <button onClick={onToggle} style={{ width: '100%', background: 'none', border: 'none', padding: '0.6rem 0.75rem', cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '0.5rem', textAlign: 'left' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0 }}>
-          <span style={{ fontWeight: 600, fontSize: '0.85rem', color: resolved ? 'var(--text-secondary)' : '#f87171', flexShrink: 0 }}>{r.body_part}</span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flex: 1, minWidth: 0, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 600, fontSize: '0.85rem', color: resolved ? 'var(--text-secondary)' : level.color, flexShrink: 0 }}>{r.body_part}</span>
           {r.injury_type && <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{r.injury_type}</span>}
-          {r.severity && <span style={{ fontSize: '0.7rem', fontWeight: 700, color: SEVERITY_COLOR[r.severity] ?? 'var(--text-muted)' }}>{r.severity}</span>}
-          {resolved && <span style={{ fontSize: '0.68rem', color: '#4ade80', fontWeight: 600 }}>✓ Resolved</span>}
+          {resolved
+            ? <span style={{ fontSize: '0.68rem', color: CLEARED.color, fontWeight: 600 }}>✓ Cleared{t.days.out > 0 ? ` · out ${formatDays(t.days.out)}` : ''}</span>
+            : <span style={{ fontSize: '0.7rem', fontWeight: 700, color: level.color }}>{level.label} · {formatDays(daysBetween(r.availability_since ?? r.reported_at, Date.now()))}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexShrink: 0 }}>
           <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>{new Date(r.reported_at).toLocaleDateString()}</span>
@@ -486,17 +484,36 @@ function ReportRow({ r, expanded, onToggle, onUpdate, onDelete, saving, resolved
           {r.description && <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic', margin: '0.5rem 0 0.25rem' }}>"{r.description}"</p>}
           {r.pain_level != null && <p style={{ fontSize: '0.78rem', color: painLevelColor(r.pain_level), margin: '0.25rem 0' }}>Pain: {r.pain_level}/10 — {painLevelLabel(r.pain_level)}</p>}
           {r.coach_notes && <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', margin: '0.25rem 0' }}>📋 {r.coach_notes}</p>}
-          {r.expected_return && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0' }}>Est. return: {new Date(r.expected_return + 'T12:00:00').toLocaleDateString()}</p>}
-          {r.resolved_at && <p style={{ fontSize: '0.75rem', color: '#4ade80', margin: '0.25rem 0' }}>Resolved: {new Date(r.resolved_at).toLocaleDateString()}</p>}
+          {r.expected_return && !resolved && <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', margin: '0.25rem 0' }}>Est. return: {new Date(r.expected_return + 'T12:00:00').toLocaleDateString()}</p>}
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.625rem' }}>
-            {!resolved ? (
-              <div style={{ display: 'flex', gap: '0.375rem' }}>
-                <button onClick={() => onUpdate(r.id, 'monitoring')} disabled={saving} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#facc15', color: '#facc15' }}>Monitoring</button>
-                <button onClick={() => onUpdate(r.id, 'resolved')} disabled={saving} className="btn-ghost" style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: '#4ade80', color: '#4ade80' }}>Mark Resolved</button>
-              </div>
-            ) : <div />}
+          {/* Timeline */}
+          {updates.length > 0 && (
+            <div style={{ margin: '0.5rem 0', paddingLeft: '0.6rem', borderLeft: '2px solid var(--court-border)' }}>
+              {updates.map(u => (
+                <div key={u.id} style={{ fontSize: '0.72rem', marginBottom: '0.3rem' }}>
+                  <span style={{ color: u.kind === 'cleared' ? CLEARED.color : u.kind === 'note' ? 'var(--text-secondary)' : availabilityLevel(u.to_availability).color, fontWeight: 600 }}>{describeUpdate(u)}</span>
+                  <span style={{ color: 'var(--text-muted)' }}> · {new Date(u.created_at).toLocaleDateString()}{u.coach_name ? ` · ${u.coach_name}` : ''}</span>
+                  {u.note && <div style={{ color: 'var(--text-secondary)' }}>{u.note}</div>}
+                </div>
+              ))}
+            </div>
+          )}
 
+          {/* Move to a level */}
+          <div style={{ display: 'flex', gap: '0.3rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+            {[...AVAILABILITY_LEVELS.map(l => ({ v: l.value as Availability | 'cleared', label: l.short, color: l.color })), { v: 'cleared' as const, label: '✓ Cleared', color: CLEARED.color }]
+              .filter(o => o.v !== current)
+              .map(o => (
+                <button key={o.v} onClick={() => { onUpdate(r.id, o.v, note); setNote('') }} disabled={saving} className="btn-ghost"
+                  style={{ padding: '0.25rem 0.5rem', fontSize: '0.72rem', borderColor: o.color, color: o.color }}>
+                  {resolved ? 'Reopen: ' : '→ '}{o.label}
+                </button>
+              ))}
+          </div>
+          <input className="input" value={note} onChange={e => setNote(e.target.value)} placeholder="Progress note (optional, saved with the move)"
+            style={{ marginTop: '0.4rem', fontSize: '0.78rem', padding: '0.4rem 0.6rem' }} />
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginTop: '0.625rem' }}>
             {/* Delete (admins only) */}
             {!onDelete ? null : !confirmDelete ? (
               <button onClick={() => setConfirmDelete(true)} style={{ background: 'none', border: 'none', color: 'rgba(248,113,113,0.4)', cursor: 'pointer', fontSize: '0.72rem', padding: '0.25rem 0.375rem', borderRadius: 4, display: 'flex', alignItems: 'center', gap: '0.25rem' }}
