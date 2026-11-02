@@ -15,8 +15,9 @@
 --             MATCHES". Only players not found are added, PIN 1234. Players
 --             already in the app get the roster jersey and birthday. A player
 --             on a roster team in the app but not on its roster is taken off
---             that team (the account and workout history stay). Eli Richardson
---             stays on 18 Havoc Boys as a practice player.
+--             that team (the account and workout history stay). Kept on their
+--             team anyway: Eli Richardson (18 Havoc Boys, practice player),
+--             Zoey Warren (18 Venom) and Lillee Mathis (18 Nova) (joined late).
 --   Birthdays The roster has impossible birthdays for Kandace Morrison
 --             (17 Prime, 2026-10-19) and Rylie Cox (14 Eclipse, 2026-10-25),
 --             the sign-up date by the look of it. Those two are left blank /
@@ -82,10 +83,13 @@ insert into _rt values
 -- No old app names this time: every team already has its roster name.
 create temp table _alias (key int, app_name text);
 
--- Players not on the website roster who stay on their team (practice players)
+-- Players not on the website roster who stay on their team (Eli: practice
+-- player; Zoey and Lillee: joined late, not on the website roster yet)
 create temp table _keep (key int, pname text);
 insert into _keep select key, n from (values
-('18 Havoc Boys', 'Eli Richardson')
+('18 Havoc Boys', 'Eli Richardson'),
+('18 Venom', 'Zoey Warren'),
+('18 Nova', 'Lillee Mathis')
 ) v(tname, n) join _rt on _rt.name = v.tname;
 
 -- App players whose name is changed to the roster name
@@ -555,15 +559,28 @@ where pick = 1
 create temp table _new as
 select r.rid, gen_random_uuid() as pid from _rpx r where r.rid not in (select rid from _pm);
 
--- Coaches: reuse an account that's already there (same name, with or without "Coach")
+-- Coaches: reuse an account that's already there (same name, with or without
+-- "Coach", or renamed in the app but still linked to the team)
 create temp table _cm as
-select c.cname, c.pin_hash,
-       coalesce((select co.id from public.coaches co
-                 where pg_temp.norm(regexp_replace(co.name, '^\s*coach\s+', '', 'i')) = pg_temp.norm(substr(c.cname, 7))
-                 order by co.created_at limit 1), gen_random_uuid()) as coach_id,
-       exists (select 1 from public.coaches co
-               where pg_temp.norm(regexp_replace(co.name, '^\s*coach\s+', '', 'i')) = pg_temp.norm(substr(c.cname, 7))) as already_there
-from (select distinct cname, pin_hash from _rc) c;
+select c.cname, c.pin_hash, coalesce(x.id, gen_random_uuid()) as coach_id,
+       x.id is not null as already_there, x.name as app_name
+from (select distinct cname, pin_hash from _rc) c
+left join lateral (
+  select id, name from (
+    -- same name, with or without "Coach"
+    select co.id, co.name, 1 as pri, co.created_at from public.coaches co
+    where pg_temp.norm(regexp_replace(co.name, '^\s*coach\s+', '', 'i')) = pg_temp.norm(substr(c.cname, 7))
+    union all
+    -- renamed in the app: an account already linked to this coach's team
+    -- with the same first name or the same last name
+    select co.id, co.name, 2, co.created_at from public.coaches co
+    where exists (select 1 from public.coach_teams ct join _rc r on r.cname = c.cname
+                  join _tm tm on tm.key = r.team_key
+                  where ct.coach_id = co.id and ct.team_id = tm.team_id)
+      and (pg_temp.norm(regexp_replace(co.name, '^\s*coach\s+', '', 'i')) like pg_temp.norm(split_part(substr(c.cname, 7), ' ', 1)) || '%'
+           or pg_temp.norm(co.name) like '%' || pg_temp.norm(regexp_replace(substr(c.cname, 7), '^\S+\s+', '')))
+  ) m order by pri, created_at limit 1
+) x on true;
 
 -- ─────────────────────────────────────────────────────────────────────────
 -- 3. Make the changes
@@ -704,10 +721,10 @@ select section, team, name, what_happens from (
   -- Coaches
   union all
   select 3, 0, '3 COACHES', string_agg(rt.name, ', ' order by rt.key), cm.cname,
-         case when cm.already_there then 'Already in the app: linked to team(s), PIN not changed'
+         case when cm.already_there then 'Already in the app' || case when pg_temp.norm(cm.app_name) <> pg_temp.norm(cm.cname) then ' as "' || cm.app_name || '" (name kept)' else '' end || ': linked to team(s), PIN not changed'
               else 'NEW team coach (not admin), PIN 9876' end
   from _cm cm join _rc rc using (cname) join _rt rt on rt.key = rc.team_key
-  group by cm.cname, cm.already_there
+  group by cm.cname, cm.already_there, cm.app_name
 
   -- Players already in the app
   union all
@@ -750,7 +767,7 @@ select section, team, name, what_happens from (
 
   -- Practice players kept on their team
   union all
-  select 7, tm.key, '7 KEPT ON TEAM', rt.name, p.name, 'Practice player (not on the website roster): stays on the team'
+  select 7, tm.key, '7 KEPT ON TEAM', rt.name, p.name, 'Not on the website roster (practice player / joined late): stays on the team'
   from _cur c join _tm tm on tm.team_id = c.team_id and tm.status = 'matched'
   join _rt rt on rt.key = tm.key and rt.include
   join _p p on p.id = c.player_id
