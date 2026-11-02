@@ -214,8 +214,16 @@ export function verticalFrom(touch: number | null | undefined, reach: number | n
  */
 export function parseCombineEntry(
   metric: CombineMetric,
-  typed: { feet?: string; inches?: string; amount?: string },
+  typed: { feet?: string; inches?: string; amount?: string; totalInches?: string; inchMode?: InchMode },
 ): { value: number | null; error: string | null } {
+  if (metric.unit === 'ft-in' && typed.inchMode === 'in') {
+    // Just inches (e.g. a measurer marked in inches): 69.5 → 69.5
+    const total = (typed.totalInches ?? '').trim()
+    if (total === '') return { value: null, error: null }
+    const t = parseFloat(total)
+    if (!Number.isFinite(t) || t <= 0) return { value: null, error: 'Enter the inches, like 69.5.' }
+    return { value: Math.round(t * 2) / 2, error: null }
+  }
   if (metric.unit === 'ft-in') {
     const feet = (typed.feet ?? '').trim(), inches = (typed.inches ?? '').trim()
     if (feet === '' && inches === '') return { value: null, error: null }
@@ -229,6 +237,30 @@ export function parseCombineEntry(
   const a = parseFloat(amount)
   if (!Number.isFinite(a)) return { value: null, error: 'Enter a number.' }
   return { value: roundToStep(metric, a), error: null }
+}
+
+/**
+ * How a feet-and-inches test is typed in: 'ft-in' (two boxes, 5 ft 9 in) or
+ * 'in' (one box, 69 in, for measurers marked in inches). Each test remembers
+ * its own choice on the device (browser only; the server never needs it).
+ */
+export type InchMode = 'ft-in' | 'in'
+const INCH_MODE_KEY = 'vx_combine_inch_mode'
+
+export function readInchMode(key: CombineMetricKey): InchMode {
+  try {
+    if (typeof window === 'undefined') return 'ft-in'
+    const saved = JSON.parse(localStorage.getItem(INCH_MODE_KEY) ?? '{}') as Record<string, string>
+    return saved[key] === 'in' ? 'in' : 'ft-in'
+  } catch { return 'ft-in' }
+}
+
+export function saveInchMode(key: CombineMetricKey, mode: InchMode) {
+  try {
+    const saved = JSON.parse(localStorage.getItem(INCH_MODE_KEY) ?? '{}') as Record<string, string>
+    saved[key] = mode
+    localStorage.setItem(INCH_MODE_KEY, JSON.stringify(saved))
+  } catch { /* private mode: just not remembered */ }
 }
 
 export const isTouchMetric = (key: CombineMetricKey) => key === 'standing_vertical_in' || key === 'approach_vertical_in'

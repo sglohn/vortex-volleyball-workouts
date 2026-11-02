@@ -12,7 +12,9 @@
 //   One test    a drawing of what's measured (components/CombineTestVisual.tsx;
 //               small copies on the test cards too), how to do it, last time's number, the tries so far (best one
 //               starred), and a big entry box in the right units: feet +
-//               inches for heights and touches, seconds, or mph. The number
+//               inches for heights and touches (or just inches, with the
+//               "Feet + inches | Inches" switch, remembered per test; the
+//               read-back shows it in feet and inches), seconds, or mph. The number
 //               is read back in large type before saving, touches also show
 //               the vertical they work out to, and anything unusual (outside
 //               the normal range, a big change from last time, a touch below
@@ -35,8 +37,10 @@ import { useRouter } from 'next/navigation'
 import { playerFetch, withPass } from '@/lib/playerPass'
 import WarmupCard, { type Warmup } from '@/components/WarmupCard'
 import CombineTestVisual from '@/components/CombineTestVisual'
+import InchModeSwitch from '@/components/InchModeSwitch'
 import {
-  bestValue, checkCombineValue, combineMetric, combineText, feetInchesText, parseCombineEntry, verticalFrom,
+  bestValue, checkCombineValue, combineMetric, combineText, feetInchesText, parseCombineEntry, readInchMode, saveInchMode, verticalFrom,
+  type InchMode,
   type CombineMetric, type CombineMetricKey,
 } from '@/lib/combine'
 
@@ -168,6 +172,9 @@ export default function CombineDay({ session, name, description, warmup, warmupN
   const [feet, setFeet] = useState('')
   const [inches, setInches] = useState('')
   const [amount, setAmount] = useState('')
+  // Feet-and-inches tests can also be typed as just inches (remembered per test)
+  const [inchMode, setInchMode] = useState<InchMode>('ft-in')
+  const [totalInches, setTotalInches] = useState('')
   const [warningOk, setWarningOk] = useState<string | null>(null)   // the warning already shown once
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState('')
@@ -211,11 +218,12 @@ export default function CombineDay({ session, name, description, warmup, warmupN
   const reach = reachToday ?? state?.previous.standing_reach_in ?? null
 
   function resetEntry() {
-    setFeet(''); setInches(''); setAmount(''); setWarningOk(null); setSaveError('')
+    setFeet(''); setInches(''); setAmount(''); setTotalInches(''); setWarningOk(null); setSaveError('')
   }
 
   function openTest(key: CombineMetricKey) {
     resetEntry(); setJustSaved(null); setDeleteArmed(null); setFinishArmed(false)
+    setInchMode(readInchMode(key))
     setOpenKey(key)
     window.scrollTo({ top: 0 })
   }
@@ -297,7 +305,7 @@ export default function CombineDay({ session, name, description, warmup, warmupN
     const tryNumber = tries.length + 1
 
     // The number being entered, in the stored units (inches / sec / mph)
-    const parsed = parseCombineEntry(metric, { feet, inches, amount })
+    const parsed = parseCombineEntry(metric, { feet, inches, amount, totalInches, inchMode })
     const entered = parsed.value
     const entryError = parsed.error
     const check = entered != null
@@ -420,7 +428,18 @@ export default function CombineDay({ session, name, description, warmup, warmupN
         {canEnter && (
           <div className="card" style={{ padding: '1.1rem', marginBottom: '1rem' }}>
             <span style={labelStyle}>{single ? (tries.length > 0 ? 'Measure again (replaces it)' : 'Enter your number') : `Try ${tryNumber} of ${metric.maxAttempts}`}</span>
-            {metric.unit === 'ft-in' ? (
+            {metric.unit === 'ft-in' && (
+              <div>
+                <InchModeSwitch mode={inchMode} onChange={m => {
+                  setInchMode(m); saveInchMode(metric.key, m)
+                  setFeet(''); setInches(''); setTotalInches(''); setWarningOk(null)
+                }} />
+              </div>
+            )}
+            {metric.unit === 'ft-in' && inchMode === 'in' ? (
+              <UnitBox key="total" value={totalInches} onChange={v => { setTotalInches(v); setWarningOk(null); setJustSaved(null) }} unit="in" ariaLabel="Total inches"
+                placeholder={previous != null ? String(previous) : '0'} inputMode="decimal" step="0.5" autoFocus />
+            ) : metric.unit === 'ft-in' ? (
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <UnitBox value={feet} onChange={v => { setFeet(v); setWarningOk(null); setJustSaved(null) }} unit="ft" ariaLabel="Feet"
                   placeholder={previous != null ? String(Math.floor(previous / 12)) : '0'} inputMode="numeric" step="1" autoFocus />
@@ -432,7 +451,9 @@ export default function CombineDay({ session, name, description, warmup, warmupN
                 placeholder={metric.unit === 'sec' ? (metric.key === 'acceleration_sec' ? '1.12' : '5.38') : '45'} inputMode="decimal" step={String(metric.step)} autoFocus />
             )}
             {metric.unit === 'ft-in' && (
-              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>Half inches are fine: type 4.5 for 4½″.</div>
+              <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>
+                {inchMode === 'in' ? 'Type the inches on the measurer, like 69 or 69.5.' : 'Half inches are fine: type 4.5 for 4½″.'}
+              </div>
             )}
 
             {/* Read-back: exactly what will be saved */}
@@ -440,14 +461,18 @@ export default function CombineDay({ session, name, description, warmup, warmupN
               <div style={{ textAlign: 'center', marginTop: '0.875rem' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>You&apos;re saving</div>
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2.3rem', lineHeight: 1.1, color: blocking ? 'var(--danger)' : 'var(--text-primary)' }}>{combineText(metric, entered)}</div>
-                {metric.unit === 'ft-in' && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{entered} inches</div>}
+                {metric.unit === 'ft-in' && (
+                  <div style={{ fontSize: inchMode === 'in' ? '0.9rem' : '0.78rem', color: inchMode === 'in' ? 'var(--text-secondary)' : 'var(--text-muted)', fontWeight: inchMode === 'in' ? 700 : 400 }}>
+                    {inchMode === 'in' ? `${entered} inches = ${combineText(metric, entered)}` : `${entered} inches`}
+                  </div>
+                )}
                 {vertical != null && !blocking && (
                   <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--carolina-dark)', marginTop: '0.2rem' }}>= {vertical}″ {metric.key === 'approach_vertical_in' ? 'approach' : 'standing'} vertical</div>
                 )}
               </div>
             )}
 
-            {blocking && (feet !== '' || inches !== '' || amount !== '') && (
+            {blocking && (feet !== '' || inches !== '' || amount !== '' || totalInches !== '') && (
               <div style={{ marginTop: '0.75rem', padding: '0.6rem 0.8rem', borderRadius: 8, background: 'var(--danger-light)', color: 'var(--danger)', fontSize: '0.85rem', fontWeight: 600 }}>{blocking}</div>
             )}
             {warning && (
