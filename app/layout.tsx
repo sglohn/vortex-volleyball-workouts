@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   title: BRAND.appTitle,
   description: BRAND.description,
   applicationName: BRAND.appTitle,
+  // Regular app manifest (app/manifest.webmanifest); Team Mode pages use the
+  // Gym Tablet one instead (app/team/layout.tsx)
+  manifest: '/manifest.webmanifest',
   appleWebApp: { capable: true, title: BRAND.shortTitle, statusBarStyle: 'black' },
   ...(BRAND.icons
     ? { icons: { icon: BRAND.icons.favicon, apple: BRAND.icons.apple } }
