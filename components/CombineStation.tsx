@@ -12,6 +12,8 @@
 //   3. Tap the player in front of you. Her entry sheet opens: last time's
 //      number, her tries today, and the entry box in the right units, with
 //      the same read-back and double-checks as the phones (lib/combine.ts).
+//      Feet-and-inches tests can be typed as just inches (switch above the
+//      box, remembered per test), and the read-back shows feet and inches.
 //      Jumps, sprints and swing stay open for her next try; Enter saves on a
 //      keyboard. Height, wingspan and reach save and close.
 //   4. The list shows "Still to go" (no number yet for this test) on top and
@@ -25,10 +27,12 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  bestValue, checkCombineValue, combineMetric, combineText, feetInchesText, isTouchMetric, parseCombineEntry, verticalFrom,
+  bestValue, checkCombineValue, combineMetric, combineText, feetInchesText, isTouchMetric, parseCombineEntry, readInchMode, saveInchMode, verticalFrom,
+  type InchMode,
   type CombineMetric, type CombineMetricKey,
 } from '@/lib/combine'
 import CombineTestVisual from '@/components/CombineTestVisual'
+import InchModeSwitch from '@/components/InchModeSwitch'
 
 interface Attempt { id: string; metric: CombineMetricKey; value: number; createdAt: string }
 interface StationPlayer {
@@ -138,6 +142,8 @@ export default function CombineStation({ teamIds, onClose }: { teamIds: string[]
   // Entry sheet
   const [feet, setFeet] = useState('')
   const [inches, setInches] = useState('')
+  const [totalInches, setTotalInches] = useState('')
+  const [inchMode, setInchMode] = useState<InchMode>('ft-in')   // remembered per test (lib/combine.ts)
   const [amount, setAmount] = useState('')
   const [warningOk, setWarningOk] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
@@ -244,10 +250,11 @@ export default function CombineStation({ teamIds, onClose }: { teamIds: string[]
     try { localStorage.setItem(TEST_KEY, key) } catch { /* private mode */ }
   }
 
-  function resetEntry() { setFeet(''); setInches(''); setAmount(''); setWarningOk(null); setSaveError('') }
+  function resetEntry() { setFeet(''); setInches(''); setAmount(''); setTotalInches(''); setWarningOk(null); setSaveError('') }
 
   function openPlayer(id: string) {
     resetEntry(); setJustSaved(''); setDeleteArmed(null)
+    if (testKey) setInchMode(readInchMode(testKey))
     setOpenId(id)
   }
 
@@ -450,7 +457,9 @@ export default function CombineStation({ teamIds, onClose }: { teamIds: string[]
         <EntrySheet
           key={`${open.id}-${metric.key}`}
           player={open} metric={metric} team={teamById.get(open.teamId)}
-          feet={feet} inches={inches} amount={amount}
+          feet={feet} inches={inches} amount={amount} totalInches={totalInches} inchMode={inchMode}
+          setTotalInches={v => { setTotalInches(v); setWarningOk(null); setJustSaved('') }}
+          setInchMode={m => { setInchMode(m); saveInchMode(metric.key, m); setFeet(''); setInches(''); setTotalInches(''); setWarningOk(null) }}
           setFeet={v => { setFeet(v); setWarningOk(null); setJustSaved('') }}
           setInches={v => { setInches(v); setWarningOk(null); setJustSaved('') }}
           setAmount={v => { setAmount(v); setWarningOk(null); setJustSaved('') }}
@@ -505,14 +514,15 @@ export default function CombineStation({ teamIds, onClose }: { teamIds: string[]
 // The bottom sheet for one player at this test
 function EntrySheet(props: {
   player: StationPlayer; metric: CombineMetric; team: StationTeam | undefined
-  feet: string; inches: string; amount: string
+  feet: string; inches: string; amount: string; totalInches: string; inchMode: InchMode
   setFeet: (v: string) => void; setInches: (v: string) => void; setAmount: (v: string) => void
+  setTotalInches: (v: string) => void; setInchMode: (m: InchMode) => void
   warningOk: string | null; setWarningOk: (v: string | null) => void
   saving: boolean; saveError: string; justSaved: string; deleteArmed: string | null
   firstBox: React.MutableRefObject<HTMLInputElement | null>
   onClose: () => void; onSave: (value: number) => void; onDelete: (id: string) => void
 }) {
-  const { player, metric, team, feet, inches, amount, warningOk, saving, saveError, justSaved, deleteArmed, firstBox } = props
+  const { player, metric, team, feet, inches, amount, totalInches, inchMode, warningOk, saving, saveError, justSaved, deleteArmed, firstBox } = props
   const tries = triesOf(player, metric.key)
   const best = bestOf(player, metric.key)
   const previous = player.previous[metric.key] ?? null
@@ -522,7 +532,7 @@ function EntrySheet(props: {
   const reachToday = bestOf(player, 'standing_reach_in')
   const reach = reachToday ?? player.previous.standing_reach_in ?? null
 
-  const parsed = parseCombineEntry(metric, { feet, inches, amount })
+  const parsed = parseCombineEntry(metric, { feet, inches, amount, totalInches, inchMode })
   const entered = parsed.value
   const check = entered != null
     ? checkCombineValue(metric, entered, {
@@ -536,7 +546,7 @@ function EntrySheet(props: {
   const warning = !blocking ? check?.warning ?? null : null
   const needsSecondTap = !!warning && warningOk !== warning
   const vertical = isTouch && entered != null ? verticalFrom(entered, reach) : null
-  const typed = feet !== '' || inches !== '' || amount !== ''
+  const typed = feet !== '' || inches !== '' || amount !== '' || totalInches !== ''
 
   function save() {
     if (entered == null || blocking || saving) return
@@ -603,7 +613,11 @@ function EntrySheet(props: {
         {left > 0 ? (
           <>
             <span style={label}>{single ? (tries.length ? 'Measure again (replaces it)' : 'Enter the number') : `Try ${tries.length + 1} of ${metric.maxAttempts}`}</span>
-            {metric.unit === 'ft-in' ? (
+            {metric.unit === 'ft-in' && <div><InchModeSwitch mode={inchMode} onChange={props.setInchMode} /></div>}
+            {metric.unit === 'ft-in' && inchMode === 'in' ? (
+              <UnitBox key="total" inputRef={firstBox} value={totalInches} onChange={props.setTotalInches} unit="in" ariaLabel="Total inches" onEnter={save}
+                placeholder={previous != null ? String(previous) : '0'} inputMode="decimal" step="0.5" autoFocus />
+            ) : metric.unit === 'ft-in' ? (
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <UnitBox inputRef={firstBox} value={feet} onChange={props.setFeet} unit="ft" ariaLabel="Feet" onEnter={save}
                   placeholder={previous != null ? String(Math.floor(previous / 12)) : '0'} inputMode="numeric" step="1" autoFocus />
@@ -614,13 +628,17 @@ function EntrySheet(props: {
               <UnitBox inputRef={firstBox} value={amount} onChange={props.setAmount} unit={metric.unit === 'sec' ? 'sec' : 'mph'} ariaLabel={metric.label} onEnter={save}
                 placeholder={metric.unit === 'sec' ? (metric.key === 'acceleration_sec' ? '1.12' : '5.38') : '45'} inputMode="decimal" step={String(metric.step)} autoFocus />
             )}
-            {metric.unit === 'ft-in' && <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>Half inches are fine: type 4.5 for 4½″.</div>}
+            {metric.unit === 'ft-in' && <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginTop: '0.35rem' }}>{inchMode === 'in' ? 'Type the inches on the measurer, like 69 or 69.5.' : 'Half inches are fine: type 4.5 for 4½″.'}</div>}
 
             {entered != null && !parsed.error && (
               <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
                 <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Saving for {firstName(player.name)}</div>
                 <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2.2rem', lineHeight: 1.1, color: blocking ? 'var(--danger)' : 'var(--text-primary)' }}>{combineText(metric, entered)}</div>
-                {metric.unit === 'ft-in' && <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{entered} inches</div>}
+                {metric.unit === 'ft-in' && (
+                  <div style={{ fontSize: inchMode === 'in' ? '0.9rem' : '0.78rem', color: inchMode === 'in' ? 'var(--text-secondary)' : 'var(--text-muted)', fontWeight: inchMode === 'in' ? 700 : 400 }}>
+                    {inchMode === 'in' ? `${entered} inches = ${combineText(metric, entered)}` : `${entered} inches`}
+                  </div>
+                )}
                 {vertical != null && !blocking && <div style={{ fontSize: '0.92rem', fontWeight: 700, color: 'var(--carolina-dark)' }}>= {vertical}″ {metric.key === 'approach_vertical_in' ? 'approach' : 'standing'} vertical</div>}
               </div>
             )}
