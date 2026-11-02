@@ -7,7 +7,9 @@
 // Roku can only show a picture.
 //
 // Combine Day (lib/combine.ts): instead of blocks, the tests in the combine
-// as big tiles, with a note to enter numbers on phones. The Roku TV Display
+// as big tiles, each with its drawing (components/CombineTestVisual.tsx, on a
+// white panel so the lines show on the dark TV), with a note to enter
+// numbers on phones. The Roku TV Display
 // app opens the live combine leaderboard by itself on those days.
 'use client'
 import { useState, useEffect, Suspense } from 'react'
@@ -18,6 +20,7 @@ import BrandMark from '@/components/BrandMark'
 import { BRAND } from '@/lib/brand'
 import ExerciseClip from '@/components/ExerciseClip'
 import { combineMetricsFor } from '@/lib/combine'
+import CombineTestVisual from '@/components/CombineTestVisual'
 
 interface Exercise {
   id: string
@@ -218,13 +221,17 @@ function DisplayContent() {
             </div>
             <div style={{ flex: 1, display: 'grid', gridTemplateColumns: `repeat(${tileCols}, 1fr)`, gridAutoRows: '1fr', gap: '1.2vh', minHeight: 0 }}>
               {tests.map((t, i) => (
-                <div key={t.key} style={{ background: CARD, border: `2px solid ${YELLOW}30`, borderRadius: '1vh', padding: '2vh 1.5vw', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '1vh', minHeight: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1vw' }}>
-                    <div style={{ flexShrink: 0, background: CAROLINA, borderRadius: '0.6vh', width: '5vh', height: '5vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '3vh', color: '#fff' }}>{i + 1}</div>
-                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '5vh', color: '#fff', lineHeight: 1.05 }}>{t.label}</div>
+                <div key={t.key} style={{ background: CARD, border: `2px solid ${YELLOW}30`, borderRadius: '1vh', padding: '1.4vh 1vw', display: 'flex', flexDirection: 'column', gap: '0.8vh', minHeight: 0, overflow: 'hidden' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.8vw', flexShrink: 0 }}>
+                    <div style={{ flexShrink: 0, background: CAROLINA, borderRadius: '0.6vh', width: '4.4vh', height: '4.4vh', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2.6vh', color: '#fff' }}>{i + 1}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '3.6vh', color: '#fff', lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</div>
                   </div>
-                  <div style={{ fontSize: '2.6vh', color: YELLOW, fontWeight: 700 }}>
-                    {t.short}{t.maxAttempts > 1 ? ` · best of ${t.maxAttempts}` : ''}
+                  {/* the drawing: white panel so the dark lines show on the TV */}
+                  <div style={{ flex: 1, minHeight: 0, background: '#fff', borderRadius: '0.8vh', padding: '0.6vh 0.6vw' }}>
+                    <CombineTestVisual test={t.key} fit title={`How ${t.label} is measured`} />
+                  </div>
+                  <div style={{ fontSize: '2.2vh', color: YELLOW, fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {t.short}
                   </div>
                 </div>
               ))}

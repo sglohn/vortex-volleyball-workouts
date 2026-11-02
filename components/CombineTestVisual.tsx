@@ -16,7 +16,9 @@
 // nothing to load.
 //
 // Used in components/CombineDay.tsx (big on the test screen, small on the
-// test cards) and components/CombineStation.tsx (next to the how-to).
+// test cards), components/CombineStation.tsx (next to the how-to) and the
+// TV Display page on Combine Day (app/coach/display, `fit` in each tile,
+// on a white panel; the Roku TV Display snapshot shows them too).
 'use client'
 import { useId } from 'react'
 import type { CombineMetricKey } from '@/lib/combine'
@@ -203,14 +205,20 @@ function Drawing({ test, m, p }: { test: CombineMetricKey; m: string; p: string 
  * The drawing for one test. `size` is the width in px (height follows);
  * `compact` (small thumbnails) drops the padding and the words.
  */
-export default function CombineTestVisual({ test, size, compact, title }: {
-  test: CombineMetricKey; size?: number | string; compact?: boolean; title?: string
+export default function CombineTestVisual({ test, size, compact, fit, title }: {
+  test: CombineMetricKey; size?: number | string; compact?: boolean
+  /** Fill the box it's in (both width and height), keeping its shape; for the TV tiles */
+  fit?: boolean
+  title?: string
 }) {
   const id = useId().replace(/:/g, '')
   const m = `m${id}`, p = `p${id}`
   return (
-    <svg className={`cv-${id}`} viewBox="0 0 240 144" width={size ?? '100%'} role="img" aria-label={title ?? 'How the test is measured'}
-      style={{ display: 'block', maxWidth: '100%', height: 'auto', padding: compact ? 0 : '0.25rem 0' }}>
+    <svg className={`cv-${id}`} viewBox="0 0 240 144" width={fit ? '100%' : size ?? '100%'} height={fit ? '100%' : undefined}
+      role="img" aria-label={title ?? 'How the test is measured'}
+      style={fit
+        ? { display: 'block', width: '100%', height: '100%' }
+        : { display: 'block', maxWidth: '100%', height: 'auto', padding: compact ? 0 : '0.25rem 0' }}>
       {/* Thumbnails: the words are too small to read, so just the drawing */}
       {compact && <style>{`.cv-${id} text { display: none; }`}</style>}
       <defs>
