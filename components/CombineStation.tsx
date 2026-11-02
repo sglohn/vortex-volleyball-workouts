@@ -28,6 +28,7 @@ import {
   bestValue, checkCombineValue, combineMetric, combineText, feetInchesText, isTouchMetric, parseCombineEntry, verticalFrom,
   type CombineMetric, type CombineMetricKey,
 } from '@/lib/combine'
+import CombineTestVisual from '@/components/CombineTestVisual'
 
 interface Attempt { id: string; metric: CombineMetricKey; value: number; createdAt: string }
 interface StationPlayer {
@@ -400,8 +401,13 @@ export default function CombineStation({ teamIds, onClose }: { teamIds: string[]
 
         {metric && (
           <>
-            <div style={{ fontSize: '0.84rem', color: 'var(--text-secondary)', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 10, padding: '0.6rem 0.8rem', marginBottom: '0.875rem' }}>
-              <strong>{metric.label}:</strong> {metric.howTo}{metric.maxAttempts > 1 ? ` Best of ${metric.maxAttempts} counts.` : ''}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem', flexWrap: 'wrap', fontSize: '0.84rem', color: 'var(--text-secondary)', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 10, padding: '0.6rem 0.8rem', marginBottom: '0.875rem' }}>
+              <div style={{ flex: '0 0 190px', background: 'var(--white)', borderRadius: 8, padding: '0.2rem 0.4rem' }}>
+                <CombineTestVisual test={metric.key} title={`How ${metric.label} is measured`} />
+              </div>
+              <div style={{ flex: '1 1 220px' }}>
+                <strong>{metric.label}:</strong> {metric.howTo}{metric.maxAttempts > 1 ? ` Best of ${metric.maxAttempts} counts.` : ''}
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '0.875rem' }}>
