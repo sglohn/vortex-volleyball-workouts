@@ -2,7 +2,7 @@
 //
 // A small line drawing for each Combine Day test (lib/combine.ts), so
 // players can see at a glance what's being measured:
-//   Height          standing tall against the wall, floor to top of head
+//   Height          shoes on, standing tall against the wall, floor to top of head
 //   Wingspan        arms straight out, fingertip to fingertip
 //   Standing Reach  side-on, heels flat, one hand up
 //   Block Touch     no steps, two-hand jump like a block
@@ -55,11 +55,13 @@ function Drawing({ test, m, p }: { test: CombineMetricKey; m: string; p: string 
           {/* head board */}
           <line x1={64} y1={17} x2={108} y2={17} stroke={INK} strokeWidth={3} strokeLinecap="round" />
           <circle cx={86} cy={29} r={11} {...head} />
-          <path d="M86 40 V92 M86 52 L74 86 M86 52 L98 86 M86 92 L78 134 M86 92 L94 134" {...fig} />
+          <path d="M86 40 V92 M86 52 L74 86 M86 52 L98 86 M86 92 L78 128 M86 92 L94 128" {...fig} />
+          {/* shoes on */}
+          <path d="M71 128 h11 a3 3 0 0 1 3 3 v3 h-14 z M88 128 h11 a3 3 0 0 1 3 3 v3 h-14 z" fill={MEASURE} />
           <Guide x1={108} y1={17} x2={150} y2={17} />
           <Measure x1={150} y1={20} x2={150} y2={133} m={m} />
           <text x={160} y={72} {...measureLabel}>Height</text>
-          <text x={160} y={88} {...label}>shoes off,</text>
+          <text x={160} y={88} {...label}>shoes on,</text>
           <text x={160} y={101} {...label}>back to wall</text>
         </>
       )
@@ -68,14 +70,15 @@ function Drawing({ test, m, p }: { test: CombineMetricKey; m: string; p: string 
       return (
         <>
           <Floor />
-          <rect x={30} y={28} width={180} height={108} rx={2} fill="var(--gray-light, #f1f5f9)" />
+          <rect x={50} y={28} width={140} height={108} rx={2} fill="var(--gray-light, #f1f5f9)" />
           <circle cx={120} cy={42} r={11} {...head} />
-          <path d="M120 53 V100 M48 64 H192 M120 100 L111 134 M120 100 L129 134" {...fig} />
-          <Guide x1={48} y1={64} x2={48} y2={17} />
-          <Guide x1={192} y1={64} x2={192} y2={17} />
-          <Measure x1={51} y1={17} x2={189} y2={17} m={m} />
+          {/* arms about as long as she is tall, like a real wingspan */}
+          <path d="M120 53 V100 M68 64 H172 M120 100 L111 134 M120 100 L129 134" {...fig} />
+          <Guide x1={68} y1={64} x2={68} y2={24} />
+          <Guide x1={172} y1={64} x2={172} y2={24} />
+          <Measure x1={71} y1={24} x2={169} y2={24} m={m} />
           <text x={120} y={12} textAnchor="middle" {...measureLabel}>Fingertip to fingertip</text>
-          <text x={204} y={128} textAnchor="end" {...label} fontSize={9}>back to wall</text>
+          <text x={184} y={128} textAnchor="end" {...label} fontSize={9}>back to wall</text>
         </>
       )
 

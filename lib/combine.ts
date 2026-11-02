@@ -61,8 +61,9 @@ export interface CombineMetric {
 
 export const COMBINE_METRICS: CombineMetric[] = [
   {
-    key: 'height_in', label: 'Height', short: 'Shoes off', unit: 'ft-in',
-    howTo: 'Shoes off. Heels, back and head against the wall, looking straight ahead. Have a partner read it.',
+    key: 'height_in', label: 'Height', short: 'Shoes on', unit: 'ft-in',
+    // Shoes on (Nov 2026): the height she plays at
+    howTo: 'Shoes on, the ones you play in. Heels, back and head against the wall, looking straight ahead. Have a partner read it.',
     maxAttempts: 1, better: 'higher', usual: [54, 84], limits: [36, 96], bigChange: 3, step: 0.5,
   },
   {
