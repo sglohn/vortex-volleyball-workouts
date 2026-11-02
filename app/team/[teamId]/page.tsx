@@ -8,6 +8,13 @@
 // together (Coach → Teams → Start Weight Room Session, or "+ Add team" on
 // this screen). Old /session/<date>?teams=... links come here too.
 //
+// /team/today is for the tablet that stays in the gym: it always shows every
+// team with a workout scheduled today (the same list the TV Display uses,
+// lib/displayTeams.ts), checks the schedule again every 5 minutes, and moves
+// on to the next day's teams by itself, so the tablet never needs a new link.
+// The team chips at the top show one team at a time. With nothing scheduled
+// it says so and waits. (Volleyball only: it reads /api/display-teams.)
+//
 // How it works:
 //   - Roster: players already working out are at the top. Tap your name to
 //     log your next set (on this device you only need your PIN the first
@@ -226,10 +233,16 @@ function teamLabel(t: { name: string; age_group?: string | null }): string {
 export default function TeamSessionPage({ params }: { params: Promise<{ teamId: string }> }) {
   const { teamId: teamParam } = use(params)
   const router = useRouter()
-  // One team id, or several separated by commas
+  // One team id, several separated by commas, or "today" (the gym tablet)
+  const todayMode = decodeURIComponent(teamParam).trim().toLowerCase() === 'today'
+  // today: null until the schedule is read; [] when nothing is scheduled
+  const [todayTeamIds, setTodayTeamIds] = useState<string[] | null>(null)
+  const [todayError, setTodayError] = useState('')
   const teamIds = useMemo(
-    () => [...new Set(decodeURIComponent(teamParam).split(',').map(s => s.trim()).filter(Boolean))],
-    [teamParam],
+    () => todayMode
+      ? (todayTeamIds ?? [])
+      : [...new Set(decodeURIComponent(teamParam).split(',').map(s => s.trim()).filter(Boolean))],
+    [teamParam, todayMode, todayTeamIds],
   )
   const teamKey = teamIds.join(',')
 
@@ -288,7 +301,32 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
     flashTimer.current = setTimeout(() => setFlash(null), 4000)
   }, [])
 
+  // /team/today: today's scheduled teams, checked again every 5 minutes
+  // (so the next day's teams show up by themselves)
+  useEffect(() => {
+    if (!todayMode) return
+    let gone = false
+    const check = async () => {
+      try {
+        const res = await fetch('/api/display-teams', { cache: 'no-store' })
+        const d = await res.json().catch(() => ({}))
+        if (gone) return
+        if (!res.ok) { setTodayError('Today\'s schedule isn\'t available on this site.'); setTodayTeamIds(prev => prev ?? []); return }
+        const ids: string[] = d.todayOnly ? ((d.teams ?? []) as { id: string }[]).map(t => t.id).slice(0, 6) : []
+        setTodayError('')
+        // Only change when the list really changed, so the roster doesn't reload for nothing
+        setTodayTeamIds(prev => (prev && prev.join(',') === ids.join(',') ? prev : ids))
+      } catch {
+        if (!gone) { setTodayError('Could not read today\'s schedule. Check the wifi.'); setTodayTeamIds(prev => prev ?? []) }
+      }
+    }
+    check()
+    const t = setInterval(check, 5 * 60_000)
+    return () => { gone = true; clearInterval(t) }
+  }, [todayMode])
+
   const loadRoster = useCallback(async () => {
+    if (!teamKey) return   // /team/today before the schedule is read, or nothing scheduled
     try {
       const res = await fetch(`/api/team?teamId=${encodeURIComponent(teamKey)}`, { cache: 'no-store' })
       const d = await res.json().catch(() => ({}))
@@ -722,7 +760,19 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
 
   const keys = ['1','2','3','4','5','6','7','8','9','←','0','✓']
 
-  if (loading) return (
+  // ── /team/today with nothing scheduled ──
+  if (todayMode && todayTeamIds !== null && todayTeamIds.length === 0) return (
+    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)', padding: '2rem', textAlign: 'center' }}>
+      <BrandMark size={64} tone="accent" />
+      <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.6rem', color: 'var(--black)' }}>No weight room workouts scheduled today</div>
+      <div style={{ color: 'var(--text-muted)', fontSize: '0.95rem', maxWidth: 420 }}>
+        {todayError || 'This screen checks the schedule every few minutes and shows today\'s teams as soon as a workout is scheduled.'}
+      </div>
+      <button className="btn-ghost" onClick={() => window.location.reload()} style={{ padding: '0.7rem 1.4rem' }}>Check again</button>
+    </div>
+  )
+
+  if (loading || (todayMode && todayTeamIds === null)) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--page-bg)' }}>
       <div style={{ color: 'var(--text-muted)' }}>Loading roster…</div>
     </div>
@@ -1189,10 +1239,15 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
             })}
           </>
         )}
-        <button onClick={openPicker}
-          style={{ padding: '0.45rem 0.9rem', borderRadius: 20, border: '2px dashed var(--carolina)', background: 'transparent', color: 'var(--carolina-dark)', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
-          {multi ? '± Teams' : '+ Add a team lifting with you'}
-        </button>
+        {todayMode ? (
+          // The gym tablet: teams come from today's schedule, so no picker
+          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 600 }}>Today&apos;s teams, from the schedule</span>
+        ) : (
+          <button onClick={openPicker}
+            style={{ padding: '0.45rem 0.9rem', borderRadius: 20, border: '2px dashed var(--carolina)', background: 'transparent', color: 'var(--carolina-dark)', fontSize: '0.85rem', fontWeight: 700, cursor: 'pointer' }}>
+            {multi ? '± Teams' : '+ Add a team lifting with you'}
+          </button>
+        )}
       </div>
 
       {/* Combine Day: how players and coaches use this screen */}

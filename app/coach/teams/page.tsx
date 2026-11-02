@@ -144,6 +144,13 @@ export default function CoachTeamsPage() {
       <div className="card" style={{ padding:'1.25rem', marginTop:'1.5rem', borderLeft:'4px solid var(--carolina)' }}>
         <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.1rem', marginBottom:'0.5rem' }}>Start Weight Room Session</h2>
         <p style={{ color:'var(--text-muted)', fontSize:'0.82rem', marginBottom:'0.875rem' }}>Pick every team lifting together (usually two). It opens one Team Mode screen for all of them, where players without a phone check in, do the body check, log sets and ask Coach for changes. Teams can also be added or removed on that screen.</p>
+        {/* The tablet that stays in the gym: one link that always shows today's teams */}
+        <div style={{ display:'flex', alignItems:'center', gap:'0.75rem', flexWrap:'wrap', padding:'0.65rem 0.8rem', marginBottom:'0.875rem', borderRadius:8, background:'var(--carolina-light)', border:'1px solid var(--carolina-border)' }}>
+          <div style={{ flex:'1 1 220px', fontSize:'0.8rem', color:'var(--text-secondary)' }}>
+            <strong style={{ color:'var(--carolina-deep)' }}>Gym tablet:</strong> bookmark <a href="/team/today" target="_blank" rel="noopener noreferrer" style={{ color:'var(--carolina-dark)', fontWeight:700 }}>/team/today</a>. It always shows the teams scheduled today and switches to the next day&apos;s teams by itself.
+          </div>
+          <a href="/team/today" target="_blank" rel="noopener noreferrer" className="btn-black" style={{ padding:'0.45rem 0.85rem', fontSize:'0.8rem', textDecoration:'none', flexShrink:0 }}>Open →</a>
+        </div>
         <div style={{ display:'flex', flexWrap:'wrap', gap:'0.4rem', marginBottom:'0.875rem' }}>
           {[...(allTeams.length ? allTeams : teams.filter(t => !t.is_open_gym))]
             .sort((a, b) => Number(todayIds.has(b.id)) - Number(todayIds.has(a.id)))
