@@ -5,8 +5,10 @@
 // lib/combine.ts).
 //
 //   Test list   every Volleyball Performance Index test in this combine, as
-//               big cards: done ones show the best try, the rest say "Not
-//               done". Tap any card, in any order.
+//               big cards in two groups: "Still to do" on top (white, dashed
+//               circle, "Not done yet"), then "Done" (green, check mark, best
+//               try, tries left). Tap any card, in any order, so players can
+//               go to the shortest line.
 //   One test    how to do it, last time's number, the tries so far (best one
 //               starred), and a big entry box in the right units: feet +
 //               inches for heights and touches, seconds, or mph. The number
@@ -32,7 +34,7 @@ import { useRouter } from 'next/navigation'
 import { playerFetch, withPass } from '@/lib/playerPass'
 import WarmupCard, { type Warmup } from '@/components/WarmupCard'
 import {
-  bestValue, checkCombineValue, combineMetric, combineText, feetInchesText, verticalFrom,
+  bestValue, checkCombineValue, combineMetric, combineText, feetInchesText, parseCombineEntry, verticalFrom,
   type CombineMetric, type CombineMetricKey,
 } from '@/lib/combine'
 
@@ -97,32 +99,48 @@ function UnitBox({ value, onChange, unit, placeholder, inputMode, step, autoFocu
   )
 }
 
-// The test list card
-function TestCard({ metric, tries, best, onOpen, index }: {
-  metric: CombineMetric; tries: number; best: number | null; onOpen: () => void; index: number
+// The test list card. Not done: white, "Not done yet · Start →".
+// Done: green with a check and the best number (tries left are shown, but a
+// test counts as done once one number is in, since the best try counts).
+function TestCard({ metric, tries, best, onOpen }: {
+  metric: CombineMetric; tries: number; best: number | null; onOpen: () => void
 }) {
   const done = best != null
+  const left = metric.maxAttempts > 1 ? metric.maxAttempts - tries : 0
   return (
-    <button type="button" onClick={onOpen}
+    <button type="button" onClick={onOpen} aria-label={`${metric.label}: ${done ? `done, best ${combineText(metric, best)}` : 'not done yet'}`}
       style={{ width: '100%', display: 'flex', alignItems: 'center', gap: '0.875rem', padding: '0.95rem 1rem', textAlign: 'left', cursor: 'pointer',
-        background: done ? 'rgba(22,163,74,0.06)' : 'var(--white)', border: `1.5px solid ${done ? 'var(--success)' : 'var(--gray-border)'}`, borderRadius: 12 }}>
-      <span aria-hidden style={{ flexShrink: 0, width: 40, height: 40, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.1rem',
-        background: done ? 'var(--success)' : 'var(--gray-light)', color: done ? '#fff' : 'var(--carolina)' }}>
-        {done ? '✓' : index + 1}
+        background: done ? 'rgba(22,163,74,0.07)' : 'var(--white)', border: `2px solid ${done ? 'var(--success)' : 'var(--gray-border)'}`, borderRadius: 12,
+        boxShadow: done ? 'none' : '0 1px 4px rgba(0,0,0,0.05)' }}>
+      <span aria-hidden style={{ flexShrink: 0, width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem',
+        background: done ? 'var(--success)' : 'var(--white)', color: done ? '#fff' : 'var(--gray-border)', border: done ? 'none' : '2.5px dashed var(--gray-border)', boxSizing: 'border-box' }}>
+        {done ? '✓' : ''}
       </span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.08rem', color: 'var(--text-primary)' }}>{metric.label}</span>
         <span style={{ display: 'block', fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '0.1rem' }}>
-          {metric.short}{metric.maxAttempts > 1 ? ` · ${tries} of ${metric.maxAttempts} tries` : ''}
+          {done
+            ? (left > 0 ? `${tries} of ${metric.maxAttempts} tries · ${left} more allowed` : metric.maxAttempts > 1 ? `All ${metric.maxAttempts} tries in` : 'Saved')
+            : metric.short}
         </span>
       </span>
       <span style={{ flexShrink: 0, textAlign: 'right' }}>
         {done
-          ? <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.15rem', color: 'var(--success)' }}>{combineText(metric, best)}</span>
-          : <span style={{ display: 'block', fontSize: '0.8rem', fontWeight: 700, color: 'var(--carolina)' }}>Start →</span>}
+          ? <>
+              <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.15rem', color: 'var(--success)' }}>{combineText(metric, best)}</span>
+              <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 800, color: 'var(--success)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{metric.maxAttempts > 1 ? 'Best · Done' : 'Done'}</span>
+            </>
+          : <>
+              <span style={{ display: 'block', fontSize: '0.66rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Not done yet</span>
+              <span style={{ display: 'block', fontSize: '0.85rem', fontWeight: 800, color: 'var(--carolina-dark)' }}>Start →</span>
+            </>}
       </span>
     </button>
   )
+}
+
+const sectionLabel: React.CSSProperties = {
+  fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.07em', textTransform: 'uppercase', margin: '0 0 0.45rem',
 }
 
 export default function CombineDay({ session, name, description, warmup, warmupNotes, pass, onExit }: Props) {
@@ -274,24 +292,13 @@ export default function CombineDay({ session, name, description, warmup, warmupN
     const tryNumber = tries.length + 1
 
     // The number being entered, in the stored units (inches / sec / mph)
-    let entered: number | null = null
-    let entryError: string | null = null
-    if (metric.unit === 'ft-in') {
-      if (feet !== '' || inches !== '') {
-        const f = parseFloat(feet), i = inches === '' ? 0 : parseFloat(inches)
-        if (feet === '' || !Number.isFinite(f) || f < 0 || !Number.isInteger(f)) entryError = 'Enter the feet as a whole number, like 9.'
-        else if (!Number.isFinite(i) || i < 0 || i >= 12) entryError = 'Inches go from 0 to 11½.'
-        else entered = Math.round((f * 12 + i) * 2) / 2
-      }
-    } else if (amount !== '') {
-      const a = parseFloat(amount)
-      if (Number.isFinite(a)) entered = Math.round(a / metric.step) * metric.step
-      else entryError = 'Enter a number.'
-      if (entered != null) entered = Math.round(entered * 100) / 100
-    }
+    const parsed = parseCombineEntry(metric, { feet, inches, amount })
+    const entered = parsed.value
+    const entryError = parsed.error
     const check = entered != null
       ? checkCombineValue(metric, entered, {
           reach: metric.key === 'standing_reach_in' ? null : reach,
+          reachIsToday: reachToday != null,
           blockTouch: bestFor('standing_vertical_in'),
           previous,
         })
@@ -457,15 +464,18 @@ export default function CombineDay({ session, name, description, warmup, warmupN
           </div>
         )}
 
+        {/* Back to the list is the main way on: players go to the shortest line */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+          <button className={best != null ? 'btn-volt' : 'btn-ghost'} onClick={closeTest} style={{ width: '100%', padding: '0.9rem', fontSize: '1rem' }}>
+            {best != null
+              ? (nextUndone ? `✓ Next test (${metrics.length - doneCount} left)` : '✓ All done. Back to tests')
+              : 'Back to all tests'}
+          </button>
           {best != null && nextUndone && (
-            <button className="btn-volt" onClick={() => openTest(nextUndone.key)} style={{ width: '100%', padding: '0.9rem', fontSize: '1rem' }}>
-              Next: {nextUndone.label} →
+            <button className="btn-ghost" onClick={() => openTest(nextUndone.key)} style={{ width: '100%', padding: '0.8rem', fontSize: '0.92rem' }}>
+              Straight to {nextUndone.label} →
             </button>
           )}
-          <button className="btn-ghost" onClick={closeTest} style={{ width: '100%', padding: '0.85rem', fontSize: '0.95rem' }}>
-            Back to all tests
-          </button>
         </div>
       </div>
     )
@@ -496,15 +506,31 @@ export default function CombineDay({ session, name, description, warmup, warmupN
         <div style={{ padding: '0.7rem 0.85rem', marginBottom: '1rem', borderRadius: 10, background: 'var(--warning-light)', border: '1.5px solid var(--warning)', color: '#92400e', fontSize: '0.88rem', fontWeight: 600 }}>{state.locked}</div>
       )}
 
-      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.75rem' }}>
-        Do the tests in any order. Tap a test to enter your numbers. Have a partner or coach read the number for you.
+      <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginBottom: '0.875rem' }}>
+        Go to whichever test has the shortest line. Tap it to enter your numbers. Have a partner or coach read the number for you.
       </p>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '1.25rem' }}>
-        {metrics.map((m, i) => (
-          <TestCard key={m.key} metric={m} index={i} tries={triesFor(m.key).length} best={bestFor(m.key)} onOpen={() => openTest(m.key)} />
-        ))}
-      </div>
+      {/* Still to do first, then done (each in the usual test order) */}
+      {notDone.length > 0 && (
+        <div style={{ marginBottom: '1rem' }}>
+          <div style={{ ...sectionLabel, color: 'var(--carolina-dark)' }}>Still to do · {notDone.length}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+            {notDone.map(m => (
+              <TestCard key={m.key} metric={m} tries={triesFor(m.key).length} best={null} onOpen={() => openTest(m.key)} />
+            ))}
+          </div>
+        </div>
+      )}
+      {doneCount > 0 && (
+        <div style={{ marginBottom: '1.25rem' }}>
+          <div style={{ ...sectionLabel, color: 'var(--success)' }}>Done · {doneCount}{notDone.length === 0 ? ' · every test is in!' : ''}</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+            {metrics.filter(m => bestFor(m.key) != null).map(m => (
+              <TestCard key={m.key} metric={m} tries={triesFor(m.key).length} best={bestFor(m.key)} onOpen={() => openTest(m.key)} />
+            ))}
+          </div>
+        </div>
+      )}
 
       {!state.locked && (
         <>

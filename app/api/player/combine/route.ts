@@ -7,11 +7,11 @@
 //   POST   { sessionId, templateId, metric, value }   save a try
 //   DELETE { sessionId, templateId, id }              delete a try (a mistake)
 //
-// Each try goes in combine_attempts. After every change the best try for
-// that test is written to today's measurements row (a new row is started
-// from her latest numbers, the same way app/api/player/measurements does it),
-// so the athleticism score, Comparisons and the player's Profile use it.
-// Deleting every try for a test puts back the number from before today.
+// Saving and deleting go through lib/combineEntry.ts (shared with the coach
+// station, app/api/coach/combine-station): each try goes in
+// combine_attempts and the best try for that test is written to today's
+// measurements row. Deleting every try for a test puts back the number from
+// before today.
 //
 // Players can only enter numbers when a Combine Day template really is
 // today's workout for that session (team schedule or a coach's date
@@ -24,17 +24,12 @@ import { createServerClient } from '@/lib/supabase'
 import { canAccessSession, signInAgain } from '@/lib/playerAuth'
 import { clubDateString } from '@/lib/clubTime'
 import {
-  COMBINE_KEYS, bestValue, combineMetric, combineMetricsFor, roundToStep,
+  COMBINE_KEYS, combineMetric, combineMetricsFor,
   type CombineMetric, type CombineMetricKey,
 } from '@/lib/combine'
+import { deleteAttempt, measurementRows, num, saveAttempt } from '@/lib/combineEntry'
 
 type Db = ReturnType<typeof createServerClient>
-
-// Every measurements column, so a new dated row carries the rest forward
-const MEASUREMENT_KEYS = [
-  'height_in', 'wingspan_in', 'standing_reach_in', 'standing_vertical_in',
-  'approach_vertical_in', 'acceleration_sec', 'pro_agility_sec', 'swing_velocity_mph',
-] as const
 
 interface SessionRow {
   id: string
@@ -101,61 +96,6 @@ async function loadCombine(db: Db, sessionId: string, templateIdParam: string | 
   }
 }
 
-type MeasurementRow = Record<string, unknown> & { id: string; measured_at: string }
-
-// Today's row, and the latest row from before today
-async function measurementRows(db: Db, playerId: string) {
-  const today = clubDateString()
-  const [{ data: todayRows }, { data: earlier }] = await Promise.all([
-    db.from('measurements').select('*').eq('player_id', playerId).eq('measured_at', today)
-      .order('created_at', { ascending: false }).limit(1),
-    db.from('measurements').select('*').eq('player_id', playerId).lt('measured_at', today)
-      .order('measured_at', { ascending: false }).limit(1),
-  ])
-  return {
-    todayRow: (todayRows?.[0] ?? null) as MeasurementRow | null,
-    previousRow: (earlier?.[0] ?? null) as MeasurementRow | null,
-  }
-}
-
-function num(v: unknown): number | null {
-  if (v == null || v === '') return null
-  const n = Number(v)
-  return Number.isFinite(n) && n > 0 ? n : null
-}
-
-// Writes the best try for one test to today's measurements row
-async function syncMeasurement(db: Db, playerId: string, sessionId: string, metric: CombineMetric): Promise<string | null> {
-  const { data: tries, error: triesError } = await db
-    .from('combine_attempts')
-    .select('value')
-    .eq('session_id', sessionId)
-    .eq('metric', metric.key)
-  if (triesError) return triesError.message
-  const best = bestValue(metric, (tries ?? []).map(t => Number(t.value)).filter(Number.isFinite))
-  const { todayRow, previousRow } = await measurementRows(db, playerId)
-
-  if (best != null) {
-    if (todayRow) {
-      const { error } = await db.from('measurements').update({ [metric.key]: best }).eq('id', todayRow.id)
-      return error?.message ?? null
-    }
-    // New dated row: last time's numbers, with this test's best today
-    const row: Record<string, unknown> = { player_id: playerId, measured_at: clubDateString() }
-    for (const k of MEASUREMENT_KEYS) row[k] = previousRow?.[k] ?? null
-    row[metric.key] = best
-    const { error } = await db.from('measurements').insert(row)
-    return error?.message ?? null
-  }
-
-  // No tries left for this test: put back the number from before today
-  if (todayRow) {
-    const { error } = await db.from('measurements').update({ [metric.key]: previousRow?.[metric.key] ?? null }).eq('id', todayRow.id)
-    return error?.message ?? null
-  }
-  return null
-}
-
 // Everything the Combine Day screen shows
 async function combineState(db: Db, loaded: Loaded) {
   const { session, template, metrics, locked } = loaded
@@ -207,39 +147,8 @@ export async function POST(req: NextRequest) {
   if (!metric || !loaded.metrics.some(m => m.key === metric.key)) {
     return NextResponse.json({ error: 'That test isn\'t part of this combine' }, { status: 400 })
   }
-  const raw = num(value)
-  if (raw == null) return NextResponse.json({ error: 'Enter a number' }, { status: 400 })
-  const v = roundToStep(metric, raw)
-  if (v < metric.limits[0] || v > metric.limits[1]) {
-    return NextResponse.json({ error: `That can't be right for ${metric.label}. Check the number.` }, { status: 400 })
-  }
-
-  const { data: existing, error: existingError } = await db
-    .from('combine_attempts')
-    .select('id')
-    .eq('session_id', sessionId)
-    .eq('metric', metric.key)
-  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
-
-  if (metric.maxAttempts === 1) {
-    // One number for this test: a new one replaces the old one
-    if ((existing ?? []).length > 0) {
-      await db.from('combine_attempts').delete().eq('session_id', sessionId).eq('metric', metric.key)
-    }
-  } else if ((existing ?? []).length >= metric.maxAttempts) {
-    return NextResponse.json({ error: `You've used all ${metric.maxAttempts} tries. Delete one to enter another.` }, { status: 409 })
-  }
-
-  const { error: insertError } = await db.from('combine_attempts').insert({
-    session_id: sessionId,
-    player_id: loaded.session.player_id,
-    metric: metric.key,
-    value: v,
-  })
-  if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 })
-
-  const syncError = await syncMeasurement(db, loaded.session.player_id, sessionId, metric)
-  if (syncError) return NextResponse.json({ error: `Saved, but your best wasn't updated: ${syncError}` }, { status: 500 })
+  const saved = await saveAttempt(db, { sessionId, playerId: loaded.session.player_id, metric, value })
+  if (!saved.ok) return NextResponse.json({ error: saved.error }, { status: saved.status })
   return NextResponse.json(await combineState(db, loaded))
 }
 
@@ -254,21 +163,7 @@ export async function DELETE(req: NextRequest) {
   if (loaded instanceof NextResponse) return loaded
   if (loaded.locked) return NextResponse.json({ error: loaded.locked }, { status: 409 })
 
-  const { data: attempt } = await db
-    .from('combine_attempts')
-    .select('id, metric')
-    .eq('id', id)
-    .eq('session_id', sessionId)
-    .maybeSingle()
-  if (!attempt) return NextResponse.json(await combineState(db, loaded))
-
-  const { error } = await db.from('combine_attempts').delete().eq('id', id).eq('session_id', sessionId)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-
-  const metric = combineMetric(attempt.metric)
-  if (metric) {
-    const syncError = await syncMeasurement(db, loaded.session.player_id, sessionId, metric)
-    if (syncError) return NextResponse.json({ error: `Deleted, but your best wasn't updated: ${syncError}` }, { status: 500 })
-  }
+  const removed = await deleteAttempt(db, { sessionId, playerId: loaded.session.player_id, id, metricOf: combineMetric })
+  if (!removed.ok) return NextResponse.json({ error: removed.error }, { status: removed.status })
   return NextResponse.json(await combineState(db, loaded))
 }

@@ -30,9 +30,12 @@
 //   - Wrong number? Tap a logged set ("Set 1: 95 lb × 8 ✎") to fix it.
 //   - Exercises the coach took out (Coach → Players replacements with no
 //     new exercise) aren't shown and don't count toward the sets.
-//   - Combine Day (lib/combine.ts): the same test screens as on a phone
-//     (components/CombineDay.tsx), one player at a time, with
-//     "Next player" to hand the screen on.
+//   - Combine Day (lib/combine.ts): players tap their name and get the same
+//     test screens as on a phone (components/CombineDay.tsx), with "Next
+//     player" to hand the screen on. Their cards show tests done (3/8).
+//     Coaches at a test can open the Coach station instead
+//     (components/CombineStation.tsx): sign in with the coach PIN, pick the
+//     test, and enter numbers for each player in line, no player PINs.
 //   - If the wifi drops while saving, the set isn't lost from the screen:
 //     it says it wasn't saved, and tapping Log Set again retries.
 //
@@ -51,6 +54,7 @@ import BrandMark from '@/components/BrandMark'
 import ExerciseClip from '@/components/ExerciseClip'
 import WarmupCard, { type Warmup } from '@/components/WarmupCard'
 import CombineDay from '@/components/CombineDay'
+import CombineStation from '@/components/CombineStation'
 import BodyCheck from '@/components/BodyCheck'
 import ChangeRequestSheet, { type ChangeRequestInput } from '@/components/ChangeRequestSheet'
 import { reasonLabel, wantsLabel } from '@/lib/exerciseLevels'
@@ -65,10 +69,18 @@ interface RosterPlayer {
   checkedIn: boolean
   completed: boolean
   sessionId: string | null
-  stats: { pct: number; completedSets: number; totalSets: number; totalWeightLbs: number; durationMin: number | null } | null
+  stats: {
+    pct: number; completedSets: number; totalSets: number; totalWeightLbs: number; durationMin: number | null
+    /** Combine Day: tests with a number today */
+    testsDone?: number; testsTotal?: number
+  } | null
 }
 
-interface TeamInfo { id: string; name: string; age_group?: string | null; color: string; workoutName: string | null; templateId: string | null }
+interface TeamInfo {
+  id: string; name: string; age_group?: string | null; color: string; workoutName: string | null; templateId: string | null
+  /** Combine Day today (lib/combine.ts): how many tests */
+  combine?: { tests: number } | null
+}
 
 interface TeamData {
   teams: TeamInfo[]
@@ -79,7 +91,7 @@ interface TeamData {
 
 interface PickTeam { id: string; name: string; age_group?: string | null; color: string; is_open_gym?: boolean; coaches?: string[] }
 
-type Screen = 'main' | 'pin' | 'bodycheck' | 'workout' | 'combine'
+type Screen = 'main' | 'pin' | 'bodycheck' | 'workout' | 'combine' | 'station'
 
 interface SetLog { set_number: number; weight_lbs?: number; band?: string | null; reps_completed?: number; velocity_ms?: number; completed: boolean }
 
@@ -742,6 +754,10 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
       .map((p, i) => [p.id, ['🥇', '🥈', '🥉'][i]] as const),
   )
   const workoutNames = [...new Set(teams.map(t => t.workoutName).filter((n): n is string => !!n))]
+  // Combine Day: any team here testing today, and is everyone here testing?
+  const combineTeams = teams.filter(t => t.combine)
+  const allCombine = combineTeams.length > 0 && combineTeams.length === teams.length
+  const isCombinePlayer = (p: RosterPlayer) => !!teamById.get(p.teamId)?.combine
 
   // ── PIN SCREEN ──
   if (screen === 'pin' && selected) {
@@ -798,6 +814,11 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
         onDone={() => openWorkout(next.player, next.sessionId, next.signIn)}
         onBack={() => backToRoster({ text: `${firstName(next.player.name)} is checked in. Tap your name when you're ready.`, tone: 'info' })} />
     )
+  }
+
+  // ── COACH STATION (Combine Day) ──
+  if (screen === 'station') {
+    return <CombineStation teamIds={teams.filter(t => t.combine).map(t => t.id)} onClose={() => backToRoster()} />
   }
 
   // ── COMBINE DAY ──
@@ -1174,6 +1195,23 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
         </button>
       </div>
 
+      {/* Combine Day: how players and coaches use this screen */}
+      {combineTeams.length > 0 && (
+        <div style={{ margin: '0.75rem clamp(0.875rem, 4vw, 1.5rem) 0', padding: '0.8rem 1rem', borderRadius: 12, background: 'var(--black)', color: 'var(--white)', display: 'flex', alignItems: 'center', gap: '0.875rem', flexWrap: 'wrap' }}>
+          <div style={{ flex: '1 1 240px', minWidth: 0 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--yellow)', letterSpacing: '0.04em' }}>
+              COMBINE DAY{!allCombine ? ` · ${combineTeams.map(t => t.name).join(' + ')}` : ''}
+            </div>
+            <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.75)', marginTop: '0.15rem' }}>
+              Players: tap your name, then pick any test. Coach at a test? Open the station and enter numbers for everyone in line.
+            </div>
+          </div>
+          <button className="btn-volt" onClick={() => setScreen('station')} style={{ padding: '0.65rem 1rem', fontSize: '0.9rem', flexShrink: 0 }}>
+            Coach station →
+          </button>
+        </div>
+      )}
+
       {/* Flash message */}
       {flash && (
         <div style={{ background: flash.tone === 'good' ? 'var(--yellow)' : 'var(--yellow-mid)', padding: '0.7rem 1.5rem', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: '0.95rem', color: '#0a0f0d', letterSpacing: '0.03em', marginTop: '0.75rem' }}>
@@ -1190,7 +1228,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
       {working.length > 0 && (
         <div style={{ padding: '1rem clamp(0.875rem, 4vw, 1.5rem) 0.5rem' }}>
           <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, marginBottom: '0.625rem' }}>
-            Working out · tap your name to log your next set
+            {allCombine ? 'Testing · tap your name to enter your next test' : 'Working out · tap your name to log your next set (or your next test)'}
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: '0.6rem' }}>
             {working.map(player => (
@@ -1208,14 +1246,18 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                 <div style={{ fontWeight: 800, fontSize: '0.95rem', color: 'var(--carolina-deep)', marginBottom: '0.2rem', paddingRight: '1.25rem', lineHeight: 1.25 }}>
                   {player.name}
                 </div>
-                {player.stats && (
+                {player.stats && (isCombinePlayer(player) && player.stats.testsTotal != null ? (
+                  <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
+                    <strong style={{ color: player.stats.testsDone === player.stats.testsTotal ? 'var(--success)' : 'var(--carolina-deep)' }}>{player.stats.testsDone}/{player.stats.testsTotal}</strong> tests done
+                  </div>
+                ) : (
                   <div style={{ fontSize: '0.74rem', color: 'var(--text-muted)', marginBottom: '0.35rem' }}>
                     {player.stats.completedSets}/{player.stats.totalSets || '—'} sets
                     {player.stats.totalWeightLbs > 0 ? ` · ${player.stats.totalWeightLbs.toLocaleString()} lbs` : ''}
                   </div>
-                )}
+                ))}
                 <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-                  {opening === player.id ? 'Opening…' : 'Next set →'}
+                  {opening === player.id ? 'Opening…' : isCombinePlayer(player) ? 'Next test →' : 'Next set →'}
                 </div>
               </button>
             ))}
@@ -1233,6 +1275,9 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
             {finished.map(player => (
               <div key={player.id} style={{ background: 'rgba(74,222,128,0.1)', border: '1.5px solid rgba(74,222,128,0.45)', borderRadius: 20, padding: '0.3rem 0.75rem', fontSize: '0.8rem', fontWeight: 700, color: 'var(--success)' }}>
                 ✓ {player.name}{medalFor.has(player.id) ? ` ${medalFor.get(player.id)}` : ''}
+                {isCombinePlayer(player) && player.stats?.testsTotal != null && (
+                  <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}> · {player.stats.testsDone}/{player.stats.testsTotal} tests</span>
+                )}
                 {player.stats && player.stats.totalWeightLbs > 0 && (
                   <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}> · {player.stats.totalWeightLbs.toLocaleString()} lbs</span>
                 )}

@@ -57,6 +57,7 @@ const COACH_ROUTES: Record<string, string[]> = {
   '/api/coach/phases':          ['GET'],
   '/api/coach/templates':       ['GET'],
   '/api/coach/join-workout':    ['POST'],             // join their own team's workout (own profile only)
+  '/api/coach/combine-station': ['GET', 'POST', 'DELETE'], // Combine Day station: enter / fix tries (own teams only)
 }
 
 export async function middleware(req: NextRequest) {

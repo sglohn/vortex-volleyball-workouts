@@ -189,6 +189,33 @@ export function verticalFrom(touch: number | null | undefined, reach: number | n
   return v > 0 ? v : null
 }
 
+/**
+ * What was typed in the entry boxes → the number to save, in stored units
+ * (inches / sec / mph), or the reason it can't be read yet. Shared by the
+ * player screen and the coach station so both read numbers the same way.
+ * Nothing typed → { value: null, error: null }.
+ */
+export function parseCombineEntry(
+  metric: CombineMetric,
+  typed: { feet?: string; inches?: string; amount?: string },
+): { value: number | null; error: string | null } {
+  if (metric.unit === 'ft-in') {
+    const feet = (typed.feet ?? '').trim(), inches = (typed.inches ?? '').trim()
+    if (feet === '' && inches === '') return { value: null, error: null }
+    const f = parseFloat(feet), i = inches === '' ? 0 : parseFloat(inches)
+    if (feet === '' || !Number.isFinite(f) || f < 0 || !Number.isInteger(f)) return { value: null, error: 'Enter the feet as a whole number, like 9.' }
+    if (!Number.isFinite(i) || i < 0 || i >= 12) return { value: null, error: 'Inches go from 0 to 11½.' }
+    return { value: Math.round((f * 12 + i) * 2) / 2, error: null }
+  }
+  const amount = (typed.amount ?? '').trim()
+  if (amount === '') return { value: null, error: null }
+  const a = parseFloat(amount)
+  if (!Number.isFinite(a)) return { value: null, error: 'Enter a number.' }
+  return { value: roundToStep(metric, a), error: null }
+}
+
+export const isTouchMetric = (key: CombineMetricKey) => key === 'standing_vertical_in' || key === 'approach_vertical_in'
+
 export interface CombineCheck {
   /** Can't be saved (outside the hard limits, or a touch at/below reach) */
   error: string | null
@@ -203,18 +230,27 @@ export interface CombineCheck {
 export function checkCombineValue(
   metric: CombineMetric,
   value: number,
-  context: { reach?: number | null; blockTouch?: number | null; previous?: number | null } = {},
+  context: { reach?: number | null; reachIsToday?: boolean; blockTouch?: number | null; previous?: number | null } = {},
 ): CombineCheck {
   if (!Number.isFinite(value) || value <= 0) return { error: 'Enter a number.', warning: null }
   const [lo, hi] = metric.limits
   if (value < lo || value > hi) {
     return { error: `That can't be right for ${metric.label}. Check the number and try again.`, warning: null }
   }
-  const isTouch = metric.key === 'standing_vertical_in' || metric.key === 'approach_vertical_in'
+  const isTouch = isTouchMetric(metric.key)
   if (isTouch && context.reach != null && value <= context.reach) {
+    // Today's reach: a touch at or below it is a typing mistake (usually the
+    // vertical typed instead of the touch). Last time's reach may be old or
+    // wrong, so then it only asks for a double-check.
+    if (context.reachIsToday !== false) {
+      return {
+        error: `The touch has to be higher than standing reach (${feetInchesText(context.reach)}). Enter the height touched, not the vertical.`,
+        warning: null,
+      }
+    }
     return {
-      error: `Your touch has to be higher than your standing reach (${feetInchesText(context.reach)}). Enter the height you touched, not your vertical.`,
-      warning: null,
+      error: null,
+      warning: `That's not above the standing reach on file (${feetInchesText(context.reach)}, from last time). Enter the height touched, not the vertical. Measure Standing Reach today if it changed.`,
     }
   }
   const [ulo, uhi] = metric.usual

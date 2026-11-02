@@ -7,10 +7,13 @@
 //   GET ?teamId=<id>,<id>,...   several teams lifting together (up to 6)
 //
 // Reply:
-//   teams    [{ id, name, age_group, color, workoutName, templateId }]
-//            in the order asked for (unknown ids are left out)
+//   teams    [{ id, name, age_group, color, workoutName, templateId, combine }]
+//            in the order asked for (unknown ids are left out). `combine` is
+//            { tests } when today's workout is a Combine Day (lib/combine.ts),
+//            else null.
 //   roster   every active player on those teams (primary team), each with
-//            teamId, checked-in / done state and today's stats
+//            teamId, checked-in / done state and today's stats (on a Combine
+//            Day, stats.testsDone / testsTotal: tests with a number today)
 //   checkedInCount, completedCount   across all the teams
 //   team, workoutName, templateId    the first team's (older screens)
 //
@@ -30,6 +33,8 @@ import { setPoundsMoved } from '@/lib/loads'
 import { equipmentByExercise } from '@/lib/equipmentLookup'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
 import { isWarmupLabel } from '@/lib/warmup'
+import { combineMetricsFor } from '@/lib/combine'
+import { FEATURES } from '@/lib/features'
 
 type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
 type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
@@ -81,8 +86,18 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // ── Total sets in each of today's workouts (for % complete), warm-up left out ──
   const templateIds = [...new Set(Object.values(scheduleByTeam).map(s => s.templateId).filter((id): id is string => !!id))]
+
+  // ── Combine Day workouts: which tests ('*' so this works before the migration) ──
+  const combineTests: Record<string, string[]> = {}
+  if (FEATURES.measurements && templateIds.length) {
+    const { data: tmpl } = await db.from('workout_templates').select('*').in('id', templateIds)
+    for (const t of tmpl ?? []) {
+      if (t.is_combine === true) combineTests[t.id as string] = combineMetricsFor(t.combine_metrics).map(m => m.key)
+    }
+  }
+
+  // ── Total sets in each of today's workouts (for % complete), warm-up left out ──
   const totalSetsByTemplate: Record<string, number> = {}
   if (templateIds.length) {
     const { data: allBlocks } = await db
@@ -150,6 +165,16 @@ export async function GET(req: NextRequest) {
         .in('session_id', sessionIds)
     : { data: [] }
 
+  // Combine Day tries today: which tests each session has a number for
+  const testsBySession: Record<string, Set<string>> = {}
+  if (Object.keys(combineTests).length && sessionIds.length) {
+    const { data: tries } = await db.from('combine_attempts').select('session_id, metric').in('session_id', sessionIds)
+    for (const t of (tries ?? []) as { session_id: string; metric: string }[]) {
+      if (!testsBySession[t.session_id]) testsBySession[t.session_id] = new Set()
+      testsBySession[t.session_id].add(t.metric)
+    }
+  }
+
   // 2-dumbbell exercises count both dumbbells toward pounds moved
   const equipment = await equipmentByExercise(db, ((logsRaw ?? []) as LogRow[]).map(l => l.exercise_id))
 
@@ -188,6 +213,8 @@ export async function GET(req: NextRequest) {
 
     const templateId = scheduleByTeam[p.teamId]?.templateId ?? null
     const templateTotalSets = templateId ? totalSetsByTemplate[templateId] ?? 0 : 0
+    const tests = templateId ? combineTests[templateId] : undefined
+    const testsDoneSet = new Set(playerSessions.flatMap(s => [...(testsBySession[s.id] ?? [])]))
 
     return {
       id: p.id,
@@ -203,6 +230,7 @@ export async function GET(req: NextRequest) {
         totalSets: templateTotalSets,
         totalWeightLbs: Math.round(totalWeight),
         durationMin,
+        ...(tests ? { testsDone: tests.filter(k => testsDoneSet.has(k)).length, testsTotal: tests.length } : {}),
       },
     }
   })
@@ -211,6 +239,10 @@ export async function GET(req: NextRequest) {
     ...t,
     workoutName: scheduleByTeam[t.id]?.workoutName ?? null,
     templateId: scheduleByTeam[t.id]?.templateId ?? null,
+    combine: (() => {
+      const id = scheduleByTeam[t.id]?.templateId
+      return id && combineTests[id] ? { tests: combineTests[id].length } : null
+    })(),
   }))
 
   return NextResponse.json(
