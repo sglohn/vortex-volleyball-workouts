@@ -7,8 +7,9 @@
 // Boards come from the tries players enter on their phones today
 // (combine_attempts), best try per test:
 //   COMBINE SCORE   the athleticism score (lib/athleticism.ts) from each
-//                   player's latest numbers, today's included, once 5 of the
-//                   8 score metrics are on file
+//                   player's latest numbers, today's included, once she has
+//                   done at least 4 of the score tests today (so nobody is
+//                   ranked on last season's numbers after a single test)
 //   APPROACH JUMP   max vertical (approach touch minus standing reach) and
 //                   approach touch
 //   BLOCK JUMP      standing vertical and block touch
@@ -62,6 +63,12 @@ const TV_SHORT: Record<CombineMetricKey, string> = {
   standing_vertical_in: 'Block Touch', approach_vertical_in: 'Appr Touch',
   acceleration_sec: 'Accel', pro_agility_sec: 'Pro-Agility', swing_velocity_mph: 'Swing',
 }
+
+// Tests that go into the athleticism score (wingspan doesn't)
+const SCORE_TESTS: CombineMetricKey[] = [
+  'height_in', 'standing_reach_in', 'standing_vertical_in', 'approach_vertical_in',
+  'acceleration_sec', 'pro_agility_sec', 'swing_velocity_mph',
+]
 
 const IN_CHUNK = 100
 const PAGE_ROWS = 1000
@@ -214,7 +221,12 @@ export async function buildCombineBoards(db: Db, opts: {
   // ── Combine score (athleticism score with today's numbers in) ──
   const pool = testers.length ? await latestMeasurementPool(db) : new Map<string, MeasurementRow>()
   const population = buildPopulationStats([...pool.values()].map(athleticismInputs))
+  // Only players with at least 4 score tests done today (fewer if the combine
+  // has fewer), so nobody is ranked on last season's numbers after one test
+  const scoreTestsToday = (id: string) => SCORE_TESTS.filter(k => best(id, k) != null).length
+  const scoreNeeded = Math.min(4, Math.max(0, ...testers.map(a => scoreTestsToday(a.id))))
   const scored = testers
+    .filter(a => scoreNeeded > 0 && scoreTestsToday(a.id) >= scoreNeeded)
     .map(a => ({ ...a, score: calculateAthleticismScore(athleticismInputs(pool.get(a.id)), population).score }))
     .filter((a): a is typeof a & { score: number } => a.score != null)
   const scoreBoards = byGender(scored, a => a.gender).map(g => makeBoard({
