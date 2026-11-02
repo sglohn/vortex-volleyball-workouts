@@ -74,29 +74,8 @@ insert into _rt values
 (26, 18, 'Storm', '18 Storm Boys', 'Boys 18s', true, true, null, 'Steven Lohn, Ted Hackett'),
 (27, 18, 'Havoc', '18 Havoc Boys', 'Boys 18s', true, true, null, 'Ted Hackett, Steven Lohn');
 
--- The app's current name for each team (named by coach, e.g. "16 - Phil & Annie")
+-- No old app names this time: every team already has its roster name.
 create temp table _alias (key int, app_name text);
-insert into _alias values
-(4, '13 - Andria'),
-(5, '13 - Bailey'),
-(8, '14 - Austin'),
-(9, '14 - Sarah'),
-(10, '14 - Ragen'),
-(11, '14 - Ivy'),
-(13, '15 - Nick'),
-(14, '15 - Serena'),
-(15, '15 - Shannon & Emma'),
-(16, '15 - Skylar'),
-(18, '16 - Alfie'),
-(19, '16 - Phil & Annie'),
-(20, '16 - Caitlyn'),
-(21, '17 - Jackson'),
-(22, '17 - Mike'),
-(23, '17 - Lauren'),
-(24, '18 - Marj'),
-(25, '18 - Emma'),
-(26, 'Boys - 18 Storm'),
-(27, 'Boys - 18 Havoc');
 
 -- Players not on the website roster who stay on their team (practice players)
 create temp table _keep (key int, pname text);
@@ -142,11 +121,11 @@ insert into _rp values
 (28, 6, 'Daelynn', 'Wallin', '14', '2014-06-10'::date),
 (29, 6, 'Harper', 'Wilson', '9', '2013-09-08'::date),
 (30, 7, 'Cameron', 'Blair', '3', '2013-11-13'::date),
-(31, 7, 'Mila Fernandez', 'Fernande', '0', '2014-01-29'::date),
+(31, 7, 'Mila', 'Fernandez', '0', '2014-01-29'::date),
 (32, 7, 'Adelyn', 'Free', '83', '2013-07-08'::date),
 (33, 7, 'Lillian', 'Hiers', '21', '2014-01-14'::date),
 (34, 7, 'Lily', 'Lambert', '18', '2014-05-20'::date),
-(35, 7, 'Audrey Land', 'Land', '0', '2013-09-20'::date),
+(35, 7, 'Audrey', 'Land', '0', '2013-09-20'::date),
 (36, 7, 'Amarely', 'Maciel', '19', '2014-11-29'::date),
 (37, 7, 'Catherine', 'Pierce', '14', '2014-06-13'::date),
 (38, 7, 'Bowen', 'Smith', '0', '2014-06-12'::date),
