@@ -2,7 +2,9 @@
 //
 // Workout templates. A Combine Day template (is_combine, lib/combine.ts)
 // keeps only its warm-up block: players enter their test numbers instead of
-// lifting. combine_metrics lists the tests it includes (null = all).
+// lifting. combine_metrics lists the tests it includes (null = the regular tests,
+// lib/combine.ts REGULAR_COMBINE_KEYS; optional tests like Swing Velocity
+// only when ticked).
 // Combine Day is volleyball only (FEATURES.measurements); on lacrosse the
 // two fields are left alone.
 import { NextRequest, NextResponse } from 'next/server'

@@ -14,7 +14,7 @@ import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { isWarmupLabel, WARMUP_LABEL } from '@/lib/warmup'
 import { asEquipment, bandInfo, bandsFor, isBandEquipment } from '@/lib/loads'
 import { FEATURES } from '@/lib/features'
-import { COMBINE_KEYS, COMBINE_METRICS } from '@/lib/combine'
+import { COMBINE_KEYS, COMBINE_METRICS, REGULAR_COMBINE_KEYS } from '@/lib/combine'
 
 interface ExerciseLib { id: string; name: string; category?: string; default_sets: number; default_reps?: string; logs_weight: boolean; logs_velocity?: boolean; equipment?: string | null }
 interface BlockExercise { exercise_id: string; custom_reps: string; custom_notes: string; target_velocity_min: string; target_velocity_max: string; recommended_band: string; exercise?: ExerciseLib }
@@ -22,7 +22,7 @@ interface Block { block_label: string; sets: number; exercises: BlockExercise[] 
 interface Template {
   id?: string; name: string; description: string; phase_type: string; warmup_notes: string; blocks: Block[]
   is_combine?: boolean
-  combine_metrics?: string[] | null   // tests in this combine; null = all
+  combine_metrics?: string[] | null   // tests in this combine; null = the regular tests (no optional ones)
 }
 
 const PHASE_TYPES = Object.entries(PHASE_CONFIG).map(([k, v]) => ({ value: k, label: v.label, color: v.color }))
@@ -75,11 +75,11 @@ export default function TemplatesPage() {
     })
   }
 
-  // Tick or untick one combine test (all ticked is saved as "all")
+  // Tick or untick one combine test (exactly the regular tests is saved as null)
   function toggleCombineMetric(key: string) {
     setEditing(p => {
       if (!p) return p
-      const current = new Set<string>(p.combine_metrics ?? COMBINE_KEYS)
+      const current = new Set<string>(p.combine_metrics ?? REGULAR_COMBINE_KEYS)
       if (current.has(key)) current.delete(key); else current.add(key)
       const list = COMBINE_KEYS.filter(k => current.has(k))
       return { ...p, combine_metrics: list }
@@ -271,7 +271,7 @@ export default function TemplatesPage() {
 
           {/* Combine Day (volleyball only) */}
           {FEATURES.measurements && (() => {
-            const picked = new Set<string>(editing.combine_metrics ?? COMBINE_KEYS)
+            const picked = new Set<string>(editing.combine_metrics ?? REGULAR_COMBINE_KEYS)
             const nonePicked = !!editing.combine_metrics && editing.combine_metrics.length === 0
             const droppedBlocks = editing.blocks.filter(b => !isWarmupLabel(b.block_label) && b.exercises.length > 0).length
             return (
@@ -292,11 +292,12 @@ export default function TemplatesPage() {
                         return (
                           <button key={m.key} type="button" onClick={() => toggleCombineMetric(m.key)}
                             style={{ padding: '0.35rem 0.7rem', borderRadius: 20, fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', border: `1.5px solid ${on ? 'var(--carolina)' : 'var(--gray-border)'}`, background: on ? 'var(--carolina)' : 'transparent', color: on ? '#fff' : 'var(--text-secondary)' }}>
-                            {on ? '✓ ' : ''}{m.label}
+                            {on ? '✓ ' : ''}{m.label}{m.optional ? <span style={{ fontWeight: 500, opacity: 0.75 }}> (optional)</span> : null}
                           </button>
                         )
                       })}
                     </div>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.4rem' }}>Optional tests aren&apos;t in the regular combine. Tick one to add it to this combine.</p>
                     {nonePicked && <p style={{ fontSize: '0.75rem', color: 'var(--danger)', marginTop: '0.4rem' }}>Pick at least one test.</p>}
                     {droppedBlocks > 0 && (
                       <p style={{ fontSize: '0.75rem', color: 'var(--warning)', marginTop: '0.5rem', fontWeight: 600 }}>
