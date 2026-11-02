@@ -14,7 +14,8 @@
 //                   approach touch
 //   BLOCK JUMP      standing vertical and block touch
 //   SPEED           acceleration and pro-agility (fastest time first)
-//   SWING VELOCITY  fastest swing
+//   SWING VELOCITY  fastest swing (only when a combine includes this
+//                   optional test; the page is skipped with no numbers)
 //   LENGTH          wingspan and standing reach
 // Girls are only ranked against girls and boys against boys, as on every
 // other board. Height isn't ranked.

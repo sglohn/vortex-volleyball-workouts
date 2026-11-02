@@ -13,6 +13,13 @@
 // Wingspan is a combine test too, though it isn't part of the athleticism
 // score (lib/athleticism.ts).
 //
+// Optional tests (Swing Velocity, Nov 2026: no good way to measure it
+// regularly) stay defined here, keep their measurements column and still
+// count in the athleticism score when a number is on file, but they aren't
+// in the regular combine. A template only includes one when a coach ticks it
+// in Coach → Templates. A template with no test list saved (null) gets the
+// regular tests (REGULAR_COMBINE_KEYS).
+//
 // The live combine leaderboard on the TVs (lib/combineLeaderboard.ts,
 // app/api/leaderboard) uses the same tests, with tvText() for the Roku,
 // which can only draw plain ASCII.
@@ -48,6 +55,8 @@ export interface CombineMetric {
   bigChange: number
   /** Entry step: inches go by halves, seconds by hundredths */
   step: number
+  /** Not in the regular combine; only when a template ticks it */
+  optional?: boolean
 }
 
 export const COMBINE_METRICS: CombineMetric[] = [
@@ -90,29 +99,36 @@ export const COMBINE_METRICS: CombineMetric[] = [
     key: 'swing_velocity_mph', label: 'Swing Velocity', short: 'Radar, hitting arm', unit: 'mph',
     howTo: 'Swing at the ball with your hitting arm. Enter the radar reading in mph.',
     maxAttempts: 3, better: 'higher', usual: [20, 75], limits: [5, 110], bigChange: 15, step: 0.1,
+    optional: true,   // no good way to measure it regularly yet (Nov 2026)
   },
 ]
 
 export const COMBINE_KEYS: CombineMetricKey[] = COMBINE_METRICS.map(m => m.key)
 
+/** The regular combine: every test except the optional ones */
+export const REGULAR_COMBINE_KEYS: CombineMetricKey[] = COMBINE_METRICS.filter(m => !m.optional).map(m => m.key)
+
 export function combineMetric(key: string | null | undefined): CombineMetric | null {
   return COMBINE_METRICS.find(m => m.key === key) ?? null
 }
 
-/** The tests a combine template includes, in the standard order (null/empty = all) */
+const REGULAR_METRICS = COMBINE_METRICS.filter(m => !m.optional)
+
+/** The tests a combine template includes, in the standard order (null/empty = the regular tests) */
 export function combineMetricsFor(selected: string[] | null | undefined): CombineMetric[] {
-  if (!selected || selected.length === 0) return COMBINE_METRICS
+  if (!selected || selected.length === 0) return REGULAR_METRICS
   const set = new Set(selected)
   const list = COMBINE_METRICS.filter(m => set.has(m.key))
-  return list.length > 0 ? list : COMBINE_METRICS
+  return list.length > 0 ? list : REGULAR_METRICS
 }
 
-/** Cleans a template's picked tests for saving: known keys only; all of them → null */
+/** Cleans a template's picked tests for saving: known keys only; exactly the regular tests → null */
 export function cleanCombineMetrics(v: unknown): CombineMetricKey[] | null {
   if (!Array.isArray(v)) return null
   const set = new Set(v.map(String))
   const list = COMBINE_KEYS.filter(k => set.has(k))
-  return list.length === 0 || list.length === COMBINE_KEYS.length ? null : list
+  const regular = list.length === REGULAR_COMBINE_KEYS.length && REGULAR_COMBINE_KEYS.every(k => set.has(k))
+  return list.length === 0 || regular ? null : list
 }
 
 /** Best try: highest touch / reach / speed, lowest time */
