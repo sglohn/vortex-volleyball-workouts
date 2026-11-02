@@ -9,7 +9,8 @@
 //               circle, "Not done yet"), then "Done" (green, check mark, best
 //               try, tries left). Tap any card, in any order, so players can
 //               go to the shortest line.
-//   One test    how to do it, last time's number, the tries so far (best one
+//   One test    a drawing of what's measured (components/CombineTestVisual.tsx;
+//               small copies on the test cards too), how to do it, last time's number, the tries so far (best one
 //               starred), and a big entry box in the right units: feet +
 //               inches for heights and touches, seconds, or mph. The number
 //               is read back in large type before saving, touches also show
@@ -33,6 +34,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { playerFetch, withPass } from '@/lib/playerPass'
 import WarmupCard, { type Warmup } from '@/components/WarmupCard'
+import CombineTestVisual from '@/components/CombineTestVisual'
 import {
   bestValue, checkCombineValue, combineMetric, combineText, feetInchesText, parseCombineEntry, verticalFrom,
   type CombineMetric, type CombineMetricKey,
@@ -115,6 +117,9 @@ function TestCard({ metric, tries, best, onOpen }: {
       <span aria-hidden style={{ flexShrink: 0, width: 40, height: 40, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem',
         background: done ? 'var(--success)' : 'var(--white)', color: done ? '#fff' : 'var(--gray-border)', border: done ? 'none' : '2.5px dashed var(--gray-border)', boxSizing: 'border-box' }}>
         {done ? '✓' : ''}
+      </span>
+      <span aria-hidden style={{ flexShrink: 0, width: 62, opacity: done ? 0.55 : 1 }}>
+        <CombineTestVisual test={metric.key} size={62} compact />
       </span>
       <span style={{ flex: 1, minWidth: 0 }}>
         <span style={{ display: 'block', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.08rem', color: 'var(--text-primary)' }}>{metric.label}</span>
@@ -357,7 +362,10 @@ export default function CombineDay({ session, name, description, warmup, warmupN
             {!single && ` · best of ${metric.maxAttempts}`}
           </div>
 
-          <div style={{ marginTop: '0.875rem', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 10, padding: '0.7rem 0.85rem', fontSize: '0.88rem', lineHeight: 1.45, color: 'var(--text-primary)' }}>
+          <div style={{ marginTop: '0.875rem', border: '1px solid var(--gray-border)', borderRadius: 10, padding: '0.4rem 0.6rem', background: 'var(--white)' }}>
+            <CombineTestVisual test={metric.key} title={`How ${metric.label} is measured`} />
+          </div>
+          <div style={{ marginTop: '0.6rem', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 10, padding: '0.7rem 0.85rem', fontSize: '0.88rem', lineHeight: 1.45, color: 'var(--text-primary)' }}>
             {metric.howTo}
           </div>
 
