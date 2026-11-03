@@ -9,6 +9,11 @@
 // admin or the player's team coach (app/api/coach/logs/check). It then stops
 // counting as "to check". If the set is changed later, the flag comes back.
 //
+// Combine Day numbers show in their own card (app/api/coach/logs/combine):
+// every try for every test, odd-looking ones flagged (lib/combineFlags.ts),
+// with the same Save / Delete / "Looks right" as sets. A fix also updates
+// the TV combine leaderboard and her measurements for that day.
+//
 // Address options: /coach/logs?date=YYYY-MM-DD&session=<session id>
 'use client'
 import { useCallback, useEffect, useMemo, useState, Suspense } from 'react'
@@ -16,6 +21,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { clubDateString } from '@/lib/clubTime'
 import { useIsAdmin } from '@/components/CoachContext'
 import { EQUIPMENT_OPTIONS, bandInfo, bandName, bandsFor, isBandEquipment, loadLabel, type Equipment } from '@/lib/loads'
+import { combineMetric, combineText, isTouchMetric, parseCombineEntry, verticalFrom, type CombineMetricKey } from '@/lib/combine'
 
 interface LogSet {
   id: string
@@ -39,6 +45,22 @@ interface LogExercise {
   usualWeight: number | null
   sets: LogSet[]
 }
+interface CombineTry {
+  id: string
+  value: number
+  createdAt: string
+  isBest: boolean
+  flags: string[]
+  checked: { by: string; at: string } | null
+}
+interface CombineTest {
+  key: CombineMetricKey
+  label: string
+  unit: 'ft-in' | 'sec' | 'mph'
+  maxAttempts: number
+  previous: number | null
+  tries: CombineTry[]
+}
 interface LogSession {
   id: string
   playerId: string
@@ -55,6 +77,24 @@ interface LogSession {
   flagCount: number       // flagged sets still to check
   checkedCount: number    // flagged sets marked "Looks right"
   exercises: LogExercise[]
+  combine: CombineTest[]
+  combineTests: number
+  combineFlags: number
+}
+
+/** Number boxes for a combine try: feet + inches, or one amount */
+type CombineDraft = { feet: string; inches: string; amount: string }
+
+function combineDraftOf(t: CombineTest, value: number): CombineDraft {
+  if (t.unit === 'ft-in') {
+    const ft = Math.floor(value / 12)
+    return { feet: String(ft), inches: String(Math.round((value - ft * 12) * 2) / 2), amount: '' }
+  }
+  return { feet: '', inches: '', amount: String(value) }
+}
+
+function sameCombineDraft(a: CombineDraft, b: CombineDraft): boolean {
+  return a.feet === b.feet && a.inches === b.inches && a.amount === b.amount
 }
 
 type Draft = { weight: string; reps: string; velocity: string; band: string; completed: boolean }
@@ -113,6 +153,7 @@ function WorkoutLogsInner() {
   const [error, setError] = useState('')
   const [onlyFlagged, setOnlyFlagged] = useState(false)
   const [drafts, setDrafts] = useState<Record<string, Draft>>({})
+  const [combineDrafts, setCombineDrafts] = useState<Record<string, CombineDraft>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
   const [checkingId, setCheckingId] = useState<string | null>(null)   // set id, or 'all'
   const [notice, setNotice] = useState('')
@@ -125,7 +166,7 @@ function WorkoutLogsInner() {
       const d = await res.json()
       if (!res.ok) throw new Error(d.error ?? 'Could not load workouts')
       setSessions(d.sessions ?? [])
-      if (!keepDrafts) setDrafts({})
+      if (!keepDrafts) { setDrafts({}); setCombineDrafts({}) }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load workouts')
       setSessions([])
@@ -208,25 +249,80 @@ function WorkoutLogsInner() {
     load(true)
   }
 
-  // "Looks right" (or undo) for one set, or every flagged set for the player
-  async function markChecked(ids: string[], checked: boolean, busyKey: string) {
-    if (!ids.length) return
+  // "Looks right" (or undo) for one set / combine number, or everything
+  // flagged for the player
+  async function markChecked(ids: { sets?: string[]; combine?: string[] }, checked: boolean, busyKey: string) {
+    const setIds = ids.sets ?? [], combineIds = ids.combine ?? []
+    const total = setIds.length + combineIds.length
+    if (!total) return
     setCheckingId(busyKey)
     setNotice('')
-    const res = await fetch('/api/coach/logs/check', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids, checked }),
-    })
+    const calls: Promise<Response>[] = []
+    if (setIds.length) calls.push(fetch('/api/coach/logs/check', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: setIds, checked }),
+    }))
+    if (combineIds.length) calls.push(fetch('/api/coach/logs/combine', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: combineIds, checked }),
+    }))
+    const results = await Promise.all(calls)
     setCheckingId(null)
-    if (!res.ok) {
-      const e = await res.json().catch(() => ({}))
-      setNotice(`Set not ${checked ? 'marked' : 'changed'}: ${e.error ?? 'try again'}`)
+    const failed = results.find(r => !r.ok)
+    if (failed) {
+      const e = await failed.json().catch(() => ({}))
+      setNotice(`Not ${checked ? 'marked' : 'changed'}: ${e.error ?? 'try again'}`)
+      load(true)
       return
     }
     setNotice(checked
-      ? (ids.length === 1 ? 'Marked as looks right' : `${ids.length} sets marked as looks right`)
+      ? (total === 1 ? 'Marked as looks right' : `${total} marked as looks right`)
       : 'Back on the to-check list')
+    load(true)
+  }
+
+  // ── Combine numbers ──
+  function combineDraftFor(t: CombineTest, tr: CombineTry): CombineDraft {
+    return combineDrafts[tr.id] ?? combineDraftOf(t, tr.value)
+  }
+
+  function editCombine(t: CombineTest, tr: CombineTry, patch: Partial<CombineDraft>) {
+    setCombineDrafts(prev => ({ ...prev, [tr.id]: { ...(prev[tr.id] ?? combineDraftOf(t, tr.value)), ...patch } }))
+  }
+
+  async function saveCombine(t: CombineTest, tr: CombineTry) {
+    const metric = combineMetric(t.key)
+    if (!metric) return
+    const d = combineDraftFor(t, tr)
+    const parsed = parseCombineEntry(metric, { feet: d.feet, inches: d.inches, amount: d.amount })
+    if (parsed.error || parsed.value == null) { setNotice(`Number not saved: ${parsed.error ?? 'enter a number'}`); return }
+    setSavingId(tr.id)
+    setNotice('')
+    const res = await fetch('/api/coach/logs/combine', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: tr.id, value: parsed.value }),
+    })
+    setSavingId(null)
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}))
+      setNotice(`Number not saved: ${e.error ?? 'try again'}`)
+      return
+    }
+    setCombineDrafts(prev => { const n = { ...prev }; delete n[tr.id]; return n })
+    setNotice(`${t.label} saved. The TV leaderboard picks it up on its next refresh.`)
+    load(true)
+  }
+
+  async function removeCombine(t: CombineTest, tr: CombineTry) {
+    if (!confirm(`Delete this ${t.label} number (${combineText(combineMetric(t.key)!, tr.value)})? This can't be undone.`)) return
+    setSavingId(tr.id)
+    const res = await fetch('/api/coach/logs/combine', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: tr.id }),
+    })
+    setSavingId(null)
+    if (!res.ok) { setNotice('Number not deleted. Try again.'); return }
+    setNotice(`${t.label} number deleted`)
     load(true)
   }
 
@@ -311,11 +407,13 @@ function WorkoutLogsInner() {
                       <span style={{ flex: 1, minWidth: 0 }}>
                         <span style={{ display: 'block', fontWeight: 600, fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{s.playerName}</span>
                         <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                          {s.setsCompleted} sets{s.totalLbs > 0 ? `, ${s.totalLbs.toLocaleString()} lbs` : ''}
+                          {s.combineTests > 0 && !s.setsCompleted
+                            ? `Combine, ${s.combineTests} test${s.combineTests === 1 ? '' : 's'}`
+                            : `${s.setsCompleted} sets${s.totalLbs > 0 ? `, ${s.totalLbs.toLocaleString()} lbs` : ''}${s.combineTests > 0 ? `, combine ${s.combineTests}` : ''}`}
                         </span>
                       </span>
                       {s.flagCount > 0 && (
-                        <span title={`${s.flagCount} set${s.flagCount === 1 ? '' : 's'} to check`}
+                        <span title={`${s.flagCount} to check`}
                           style={{ minWidth: 22, height: 22, borderRadius: 11, background: 'var(--warning)', color: '#fff', fontSize: '0.72rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 6px' }}>{s.flagCount}</span>
                       )}
                       {s.flagCount === 0 && s.checkedCount > 0 && (
@@ -348,26 +446,37 @@ function WorkoutLogsInner() {
                       </div>
                     )}
                   </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800 }}>{selected.totalLbs.toLocaleString()} lbs</div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{selected.setsCompleted} sets done</div>
-                  </div>
+                  {selected.combineTests > 0 && !selected.setsCompleted ? (
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800 }}>Combine Day</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{selected.combineTests} test{selected.combineTests === 1 ? '' : 's'} with a number</div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800 }}>{selected.totalLbs.toLocaleString()} lbs</div>
+                      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{selected.setsCompleted} sets done</div>
+                    </div>
+                  )}
                 </div>
 
                 {(selected.flagCount > 0 || selected.checkedCount > 0) && (() => {
-                  const open = selected.exercises.flatMap(ex => ex.sets.filter(st => st.flags.length > 0 && !st.checked && !(st.id in drafts)).map(st => st.id))
+                  const openSets = selected.exercises.flatMap(ex => ex.sets.filter(st => st.flags.length > 0 && !st.checked && !(st.id in drafts)).map(st => st.id))
+                  const openCombine = selected.combine.flatMap(t => t.tries.filter(tr => tr.flags.length > 0 && !tr.checked && !(tr.id in combineDrafts)).map(tr => tr.id))
+                  const open = { sets: openSets, combine: openCombine }
+                  const openCount = openSets.length + openCombine.length
+                  const noun = (n: number) => selected.exercises.length ? `${n === 1 ? 'entry' : 'entries'}` : `${n === 1 ? 'number' : 'numbers'}`
                   return (
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', padding: '0.6rem 0.875rem', borderRadius: 8, marginBottom: '0.75rem',
                       background: selected.flagCount > 0 ? 'var(--warning-light)' : 'var(--success-light)', border: `1.5px solid ${selected.flagCount > 0 ? 'var(--warning)' : 'var(--success)'}` }}>
                       <span style={{ fontSize: '0.85rem', fontWeight: 700, color: selected.flagCount > 0 ? 'var(--warning)' : 'var(--success)' }}>
                         {selected.flagCount > 0
-                          ? `${selected.flagCount} set${selected.flagCount === 1 ? '' : 's'} to check${selected.checkedCount ? `, ${selected.checkedCount} checked` : ''}`
-                          : `✓ All ${selected.checkedCount} flagged set${selected.checkedCount === 1 ? '' : 's'} checked`}
+                          ? `${selected.flagCount} ${selected.combine.length ? noun(selected.flagCount) : `set${selected.flagCount === 1 ? '' : 's'}`} to check${selected.checkedCount ? `, ${selected.checkedCount} checked` : ''}`
+                          : `✓ All ${selected.checkedCount} flagged ${selected.combine.length ? noun(selected.checkedCount) : `set${selected.checkedCount === 1 ? '' : 's'}`} checked`}
                       </span>
-                      {open.length > 1 && (
+                      {openCount > 1 && (
                         <button onClick={() => markChecked(open, true, 'all')} disabled={checkingId !== null}
                           style={{ padding: '0.35rem 0.8rem', borderRadius: 6, border: '1.5px solid var(--success)', background: 'var(--white)', color: 'var(--success)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>
-                          {checkingId === 'all' ? 'Saving…' : `✓ All ${open.length} look right`}
+                          {checkingId === 'all' ? 'Saving…' : `✓ All ${openCount} look right`}
                         </button>
                       )}
                     </div>
@@ -376,13 +485,29 @@ function WorkoutLogsInner() {
 
                 {notice && (
                   <div role="status" style={{ padding: '0.5rem 0.875rem', borderRadius: 8, marginBottom: '0.75rem', fontSize: '0.85rem', fontWeight: 600,
-                    background: notice.startsWith('Set not') ? 'var(--danger-light)' : 'var(--success-light)', color: notice.startsWith('Set not') ? 'var(--danger)' : 'var(--success)' }}>{notice}</div>
+                    background: isProblem(notice) ? 'var(--danger-light)' : 'var(--success-light)', color: isProblem(notice) ? 'var(--danger)' : 'var(--success)' }}>{notice}</div>
                 )}
 
-                {!selected.exercises.length && (
+                {!selected.exercises.length && !selected.combine.length && (
                   <div className="card" style={{ padding: '1.5rem', color: 'var(--text-secondary)' }}>
                     {selected.playerName} checked in but didn’t log any sets.
                   </div>
+                )}
+
+                {selected.combine.length > 0 && (
+                  <CombineCard
+                    session={selected}
+                    isAdmin={isAdmin}
+                    savingId={savingId}
+                    checkingId={checkingId}
+                    draftFor={combineDraftFor}
+                    isChanged={(t, tr) => tr.id in combineDrafts && !sameCombineDraft(combineDrafts[tr.id], combineDraftOf(t, tr.value))}
+                    onEdit={editCombine}
+                    onUndo={tr => setCombineDrafts(prev => { const n = { ...prev }; delete n[tr.id]; return n })}
+                    onSave={saveCombine}
+                    onDelete={removeCombine}
+                    onCheck={(tr, checked) => markChecked({ combine: [tr.id] }, checked, tr.id)}
+                  />
                 )}
 
                 {selected.exercises.map(ex => (
@@ -463,12 +588,12 @@ function WorkoutLogsInner() {
                                 )}
                               </div>
                               {s.checked ? (
-                                <button onClick={() => markChecked([s.id], false, s.id)} disabled={checkingId !== null}
+                                <button onClick={() => markChecked({ sets: [s.id] }, false, s.id)} disabled={checkingId !== null}
                                   style={{ padding: '0.3rem 0.6rem', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>
                                   {checkingId === s.id ? 'Saving…' : 'Undo check'}
                                 </button>
                               ) : (
-                                <button onClick={() => markChecked([s.id], true, s.id)} disabled={checkingId !== null}
+                                <button onClick={() => markChecked({ sets: [s.id] }, true, s.id)} disabled={checkingId !== null}
                                   style={{ padding: '0.3rem 0.75rem', borderRadius: 6, border: '1.5px solid var(--success)', background: 'var(--success-light)', color: 'var(--success)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>
                                   {checkingId === s.id ? 'Saving…' : '✓ Looks right'}
                                 </button>
@@ -500,8 +625,148 @@ function WorkoutLogsInner() {
           .log-row > .log-actions:empty { display: none; }
           .log-head > .log-actions { display: none; }
           .log-flags { margin-left: 0 !important; }
+          /* Phones: label + number boxes on one line; the vertical and
+             Save / Delete share the line underneath. */
+          .combine-row { grid-template-columns: 52px 1fr auto !important; row-gap: 0.25rem !important; }
+          .combine-row > :nth-child(2) { grid-column: 2 / -1; }
+          .combine-row > :nth-child(3) { grid-column: 2; }
+          .combine-row > .combine-actions { grid-column: 3; }
+          .combine-flags { margin-left: 0 !important; }
         }
       `}</style>
+    </div>
+  )
+}
+
+function isProblem(notice: string): boolean {
+  return / not (saved|deleted|marked|changed)/.test(notice) || notice.startsWith('Not ')
+}
+
+const combineInput: React.CSSProperties = {
+  width: '100%', padding: '0.4rem 0.5rem', fontSize: '0.95rem', fontWeight: 600,
+  textAlign: 'center', borderRadius: 6, border: '1.5px solid var(--gray-border)', background: 'var(--white)',
+}
+
+// Combine Day numbers for one session: each test, each try, fix / delete /
+// "Looks right". Module scope so its inputs keep focus between renders.
+function CombineCard(props: {
+  session: LogSession
+  isAdmin: boolean
+  savingId: string | null
+  checkingId: string | null
+  draftFor: (t: CombineTest, tr: CombineTry) => CombineDraft
+  isChanged: (t: CombineTest, tr: CombineTry) => boolean
+  onEdit: (t: CombineTest, tr: CombineTry, patch: Partial<CombineDraft>) => void
+  onUndo: (tr: CombineTry) => void
+  onSave: (t: CombineTest, tr: CombineTry) => void
+  onDelete: (t: CombineTest, tr: CombineTry) => void
+  onCheck: (tr: CombineTry, checked: boolean) => void
+}) {
+  const { session, isAdmin, savingId, checkingId } = props
+  const reachTest = session.combine.find(t => t.key === 'standing_reach_in')
+  const reachToday = reachTest ? Math.max(...reachTest.tries.map(tr => tr.value)) : null
+  const reach = reachToday ?? reachTest?.previous ?? null
+
+  return (
+    <div className="card" style={{ padding: '1rem 1.25rem', marginBottom: '0.875rem' }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.25rem 1rem', marginBottom: '0.5rem' }}>
+        <div style={{ fontWeight: 700, fontSize: '1.05rem' }}>Combine Day numbers</div>
+        <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+          {isAdmin ? 'Fixes show on the TV leaderboard and her profile.' : 'Only admins can change numbers.'}
+        </div>
+      </div>
+
+      {session.combine.map(t => {
+        const metric = combineMetric(t.key)!
+        return (
+          <div key={t.key} style={{ padding: '0.625rem 0', borderTop: '1px solid var(--gray-light)' }}>
+            <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', gap: '0.25rem 1rem', marginBottom: '0.375rem' }}>
+              <span style={{ fontWeight: 700 }}>{t.label}</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                {t.previous != null ? `Last time ${combineText(metric, t.previous)}` : 'No number before'}
+                {t.maxAttempts > 1 ? `. Best of ${t.maxAttempts} counts` : ''}
+              </span>
+            </div>
+
+            {t.tries.map((tr, i) => {
+              const d = props.draftFor(t, tr)
+              const changed = props.isChanged(t, tr)
+              const busy = savingId === tr.id
+              const flagged = tr.flags.length > 0 && !tr.checked
+              const vert = isTouchMetric(t.key) ? verticalFrom(tr.value, reach) : null
+              return (
+                <div key={tr.id} style={{ padding: '0.375rem 0' }}>
+                  <div className="combine-row" style={{ display: 'grid', gridTemplateColumns: '64px minmax(140px, 220px) 1fr auto', gap: '0.5rem', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: 'var(--text-secondary)' }}>
+                      {t.maxAttempts > 1 ? `Try ${i + 1}` : 'Number'}
+                      {tr.isBest && t.tries.length > 1 && <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--success)' }}>Best</span>}
+                    </span>
+                    {t.unit === 'ft-in' ? (
+                      <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+                        <input disabled={!isAdmin} aria-label={`${t.label} feet`} type="number" inputMode="numeric" value={d.feet}
+                          onChange={e => props.onEdit(t, tr, { feet: e.target.value })}
+                          style={{ ...combineInput, borderColor: flagged ? 'var(--warning)' : 'var(--gray-border)' }} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ft</span>
+                        <input disabled={!isAdmin} aria-label={`${t.label} inches`} type="number" inputMode="decimal" step="0.5" value={d.inches}
+                          onChange={e => props.onEdit(t, tr, { inches: e.target.value })}
+                          style={{ ...combineInput, borderColor: flagged ? 'var(--warning)' : 'var(--gray-border)' }} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>in</span>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', gap: '0.375rem', alignItems: 'center' }}>
+                        <input disabled={!isAdmin} aria-label={t.label} type="number" inputMode="decimal" step={metric.step} value={d.amount}
+                          onChange={e => props.onEdit(t, tr, { amount: e.target.value })}
+                          style={{ ...combineInput, borderColor: flagged ? 'var(--warning)' : 'var(--gray-border)' }} />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{t.unit}</span>
+                      </div>
+                    )}
+                    <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                      {vert != null ? `${Number.isInteger(vert) ? vert : vert.toFixed(1)}″ vertical` : ''}
+                    </span>
+                    <div className="combine-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.375rem' }}>
+                      {isAdmin && changed && (
+                        <>
+                          <button onClick={() => props.onUndo(tr)} disabled={busy}
+                            style={{ padding: '0.35rem 0.7rem', borderRadius: 6, border: '1.5px solid var(--gray-border)', background: 'var(--white)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600 }}>Undo</button>
+                          <button onClick={() => props.onSave(t, tr)} disabled={busy} className="btn-volt"
+                            style={{ padding: '0.35rem 0.9rem', fontSize: '0.8rem' }}>{busy ? 'Saving…' : 'Save'}</button>
+                        </>
+                      )}
+                      {isAdmin && !changed && (
+                        <button onClick={() => props.onDelete(t, tr)} disabled={busy} aria-label={`Delete ${t.label} number`}
+                          style={{ padding: '0.35rem 0.6rem', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.8rem' }}>Delete</button>
+                      )}
+                    </div>
+                  </div>
+                  {tr.flags.length > 0 && !changed && (
+                    <div className="combine-flags" style={{ marginTop: '0.35rem', marginLeft: 72, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '0.375rem 0.75rem' }}>
+                      <div style={{ fontSize: '0.8rem', fontWeight: 600, color: tr.checked ? 'var(--text-muted)' : 'var(--warning)' }}>
+                        {tr.flags.map((f, j) => <div key={j}>{f}</div>)}
+                        {tr.checked && (
+                          <div style={{ color: 'var(--success)', marginTop: '0.15rem' }}>
+                            ✓ Looks right. Checked by {tr.checked.by}, {clock(tr.checked.at)}
+                          </div>
+                        )}
+                      </div>
+                      {tr.checked ? (
+                        <button onClick={() => props.onCheck(tr, false)} disabled={checkingId !== null}
+                          style={{ padding: '0.3rem 0.6rem', borderRadius: 6, border: 'none', background: 'transparent', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.78rem', fontWeight: 600 }}>
+                          {checkingId === tr.id ? 'Saving…' : 'Undo check'}
+                        </button>
+                      ) : (
+                        <button onClick={() => props.onCheck(tr, true)} disabled={checkingId !== null}
+                          style={{ padding: '0.3rem 0.75rem', borderRadius: 6, border: '1.5px solid var(--success)', background: 'var(--success-light)', color: 'var(--success)', cursor: 'pointer', fontSize: '0.8rem', fontWeight: 700 }}>
+                          {checkingId === tr.id ? 'Saving…' : '✓ Looks right'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )
+      })}
     </div>
   )
 }

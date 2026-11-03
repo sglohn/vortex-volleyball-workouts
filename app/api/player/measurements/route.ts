@@ -1,10 +1,23 @@
 // FILE: app/api/player/measurements/route.ts
+//
+// A player's measurements (Coach → Players, edit a player).
+//
+//   GET  ?playerId=   every dated row, newest first
+//   POST { playerId, height_in, ... }   coaches only; saves today's row
+//
+// On a Combine Day the TV combine leaderboard reads her tries
+// (combine_attempts), not this row. So when a coach changes a test she
+// already has a number for today, the try is fixed too
+// (lib/combineEntry.ts fixFromProfile) and the leaderboard shows the
+// corrected number on its next refresh.
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { canAccessPlayer, signInAgain } from '@/lib/playerAuth'
 import { getCoach } from '@/lib/coachAuth'
 import { canSeePlayer, notYourTeam } from '@/lib/coachScope'
 import { clubDateString } from '@/lib/clubTime'
+import { fixFromProfile } from '@/lib/combineEntry'
+import type { CombineMetricKey } from '@/lib/combine'
 
 export async function GET(req: NextRequest) {
   const playerId = req.nextUrl.searchParams.get('playerId')
@@ -17,6 +30,14 @@ export async function GET(req: NextRequest) {
     .eq('player_id', playerId)
     .order('measured_at', { ascending: false })
   return NextResponse.json({ measurements })
+}
+
+// Combine Day today: every test typed in is checked against her tries today,
+// and a try that differs is fixed, so the TV leaderboard agrees.
+async function fixCombineTries(db: ReturnType<typeof createServerClient>, playerId: string, incoming: Record<string, number | null>) {
+  const typed: Partial<Record<CombineMetricKey, number>> = {}
+  for (const [key, v] of Object.entries(incoming)) if (v != null && Number.isFinite(v) && v > 0) typed[key as CombineMetricKey] = v
+  return fixFromProfile(db, playerId, typed)
 }
 
 export async function POST(req: NextRequest) {
@@ -68,8 +89,10 @@ export async function POST(req: NextRequest) {
   })
 
   if (!changed) {
-    // Nothing changed — just return the existing row
-    return NextResponse.json({ measurement: latest, skipped: true })
+    // Nothing changed — but a combine try today may still disagree with this
+    // row (e.g. a number fixed here before tries were fixed too), so check
+    const otherTryBetter = await fixCombineTries(db, playerId, incoming)
+    return NextResponse.json({ measurement: latest, skipped: true, ...(otherTryBetter.length ? { otherTryBetter } : {}) })
   }
 
   // Check if there's already a row for today — update it rather than adding a duplicate
@@ -100,5 +123,11 @@ export async function POST(req: NextRequest) {
   }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  const otherTryBetter = await fixCombineTries(db, playerId, incoming)
+  if (otherTryBetter.length) {
+    const { data: fresh } = await db.from('measurements').select('*').eq('id', data.id).maybeSingle()
+    return NextResponse.json({ measurement: fresh ?? data, otherTryBetter })
+  }
   return NextResponse.json({ measurement: data })
 }

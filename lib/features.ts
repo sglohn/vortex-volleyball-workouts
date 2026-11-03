@@ -38,7 +38,7 @@ const FEATURE_PATHS: { on: boolean; pages: string[]; apis: string[] }[] = [
   {
     on: FEATURES.measurements,
     pages: ['/coach/comparisons', '/player/profile'],
-    apis: ['/api/coach/comparisons', '/api/player/measurements', '/api/player/combine', '/api/coach/combine-station'],
+    apis: ['/api/coach/comparisons', '/api/player/measurements', '/api/player/combine', '/api/coach/combine-station', '/api/coach/logs/combine'],
   },
   {
     on: FEATURES.vbt,
