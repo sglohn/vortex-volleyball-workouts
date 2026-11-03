@@ -16,9 +16,10 @@
 // The rules for each board live in lib/leaderboardBoards.ts.
 //
 // Combine Day (lib/combine.ts): when a team on the board has a Combine Day
-// template today, the combine pages come first (Combine Score, Approach
-// Jump, Block Jump, Speed, Swing Velocity, Length; lib/combineLeaderboard.ts)
-// with New Bests Today as their third column. Teams lifting the same day
+// template today, the combine pages come first, one per test (Combine Score,
+// Max Vertical, Approach Touch, ... Standing Reach; lib/combineLeaderboard.ts),
+// each pairing today's board with the Club Top 5 for that test, with New
+// Bests Today as their third column. Teams lifting the same day
 // still get the usual pages after them, and players on a combine team are
 // left off the lifting boards (Today, Team Battle). `title` and
 // `summaryText` tell the Roku what to print in the header for each page;

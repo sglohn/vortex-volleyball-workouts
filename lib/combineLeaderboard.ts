@@ -4,21 +4,34 @@
 // by both Roku apps). Used whenever a team on the board has a Combine Day
 // template scheduled today (lib/combine.ts).
 //
-// Boards come from the tries players enter on their phones today
-// (combine_attempts), best try per test:
-//   COMBINE SCORE   the athleticism score (lib/athleticism.ts) from each
-//                   player's latest numbers, today's included, once she has
-//                   done at least 4 of the score tests today (so nobody is
-//                   ranked on last season's numbers after a single test)
-//   APPROACH JUMP   max vertical (approach touch minus standing reach) and
-//                   approach touch
-//   BLOCK JUMP      standing vertical and block touch
-//   SPEED           acceleration and pro-agility (fastest time first)
-//   SWING VELOCITY  fastest swing (only when a combine includes this
-//                   optional test; the page is skipped with no numbers)
-//   LENGTH          wingspan and standing reach
+// One page per test. Each page pairs that test's board for TODAY (tries
+// entered today, combine_attempts, best try per test) with its CLUB TOP 5
+// (the five best numbers in the club right now), so players can see the
+// numbers to shoot for:
+//   COMBINE SCORE      the athleticism score (lib/athleticism.ts) from each
+//                      player's latest numbers, today's included. Today's
+//                      board waits until she has done at least 4 of the
+//                      score tests today (so nobody is ranked on last
+//                      season's numbers after a single test)
+//   MAX VERTICAL       approach touch minus standing reach
+//   APPROACH TOUCH
+//   STANDING VERTICAL  block touch minus standing reach
+//   BLOCK TOUCH
+//   ACCELERATION       fastest time first
+//   PRO-AGILITY        fastest time first
+//   SWING VELOCITY     only when someone entered a swing today (optional test)
+//   WINGSPAN
+//   STANDING REACH
 // Girls are only ranked against girls and boys against boys, as on every
-// other board. Height isn't ranked.
+// other board; with both at the combine, each page has girls' today + club
+// boards, then boys'. Height isn't ranked. Before anyone has a number today,
+// the pages show the Club Top 5 boards on their own.
+//
+// CLUB TOP 5: every active player on a team (not Open Gym, not coaches'
+// workout profiles), each with her current numbers: her latest
+// measurements, or her best try today if she's testing. Verticals use that
+// player's own reach. A player testing today shows "TODAY" after her team,
+// so a new club top-5 number stands out.
 //
 // The third column on combine pages is New Bests Today: every jump, sprint
 // or swing where a player beat her number from before today, newest first
@@ -34,7 +47,7 @@ import {
   COMBINE_KEYS, bestValue, combineMetric, isBetter, tvGain, tvText, verticalFrom,
   type CombineMetric, type CombineMetricKey,
 } from '@/lib/combine'
-import { ACCENTS, byGender, makeBoard, withLabel, type Board, type Gender, type Section } from '@/lib/leaderboardBoards'
+import { ACCENTS, genderOf, makeBoard, withLabel, type Board, type Gender, type Section } from '@/lib/leaderboardBoards'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -72,6 +85,7 @@ const SCORE_TESTS: CombineMetricKey[] = [
 ]
 
 const IN_CHUNK = 100
+const CLUB_TOP = 5
 const PAGE_ROWS = 1000
 const POOL_CACHE_MS = 60_000
 
@@ -111,6 +125,48 @@ async function latestMeasurementPool(db: Db): Promise<Map<string, MeasurementRow
   }
   poolCache = { at: Date.now(), map }
   return map
+}
+
+// Every active player on a team, for the Club Top 5. Cached like the pool.
+type ClubPlayer = { id: string; name: string; gender: Gender; teamName: string; teamColor: string }
+let clubCache: { at: number; list: ClubPlayer[] } | null = null
+
+function rokuColor(hex: unknown): string {
+  const m = /^#?([0-9a-f]{6})$/i.exec(String(hex ?? '').trim())
+  return m ? `0x${m[1].toLowerCase()}ff` : ACCENTS.length
+}
+
+function one<T>(value: T | T[] | null | undefined): T | null {
+  if (Array.isArray(value)) return value[0] ?? null
+  return value ?? null
+}
+
+async function clubPlayers(db: Db): Promise<ClubPlayer[]> {
+  if (clubCache && Date.now() - clubCache.at < POOL_CACHE_MS) return clubCache.list
+  type Join = { id: string; name: string; is_active: boolean; gender?: string | null; coach_id?: string | null }
+  type TeamJoin = { name: string; color?: string | null; is_open_gym?: boolean | null }
+  const list: ClubPlayer[] = []
+  const seen = new Set<string>()
+  for (let from = 0; ; from += PAGE_ROWS) {
+    const { data, error } = await db
+      .from('player_teams')
+      .select('player_id, players(*), teams(*)')
+      .eq('is_primary', true)
+      .order('player_id')
+      .range(from, from + PAGE_ROWS - 1)
+    if (error) break
+    const rows = data ?? []
+    for (const r of rows) {
+      const p = one(r.players as unknown as Join | Join[] | null)
+      const t = one(r.teams as unknown as TeamJoin | TeamJoin[] | null)
+      if (!p || !t || !p.is_active || p.coach_id || t.is_open_gym || seen.has(p.id)) continue
+      seen.add(p.id)
+      list.push({ id: p.id, name: p.name, gender: genderOf(p.gender), teamName: t.name, teamColor: rokuColor(t.color) })
+    }
+    if (rows.length < PAGE_ROWS) break
+  }
+  clubCache = { at: Date.now(), list }
+  return list
 }
 
 function athleticismInputs(m: MeasurementRow | undefined): AthleticismInputs {
@@ -193,68 +249,130 @@ export async function buildCombineBoards(db: Db, opts: {
     limit,
   }
 
-  // One board per gender for a test (fastest-first tests rank by 1 / time,
-  // so the bar shows how close each time is to the fastest)
-  function testBoards(key: CombineMetricKey, accent: keyof typeof ACCENTS, title: string, sub: string): Board[] {
+  // Genders at the combine today, girls first. A label ("Girls") only when
+  // both are here, as on the other boards.
+  const genders: Gender[] = (['F', 'M'] as Gender[]).filter(g => athletes.some(a => a.gender === g))
+  const todayLabel = (g: Gender) => (genders.length > 1 ? (g === 'F' ? 'Girls' : 'Boys') : null)
+  const clubLabel = (g: Gender) => (g === 'F' ? 'Girls' : 'Boys')
+
+  // ── The club's current numbers (Club Top 5) ──
+  const pool = athletes.length ? await latestMeasurementPool(db) : new Map<string, MeasurementRow>()
+  const club = athletes.length ? await clubPlayers(db) : []
+  const testerIds = new Set(testers.map(a => a.id))
+  /** Her current number: her best try today if she's testing, else her latest on file */
+  const clubValue = (id: string, key: CombineMetricKey): number | null =>
+    (testerIds.has(id) ? best(id, key) : null) ?? num(pool.get(id)?.[key])
+  const clubTeam = (p: ClubPlayer, today: boolean) => (today ? `${p.teamName}  -  TODAY` : p.teamName)
+
+  function clubBoard(g: Gender, accent: keyof typeof ACCENTS, sub: string, items: Array<ClubPlayer & { v: number; today: boolean }>, lowerFirst: boolean, value: (v: number) => string): Board {
+    return makeBoard({
+      key: accent, title: `Club Top ${CLUB_TOP}`, sub: withLabel(clubLabel(g), sub),
+      items: items.filter(p => p.gender === g),
+      score: p => (lowerFirst ? 1 / p.v : p.v),
+      value: p => value(p.v),
+      name: p => p.name, team: p => clubTeam(p, p.today), teamColor: p => p.teamColor,
+      limit: CLUB_TOP,
+    })
+  }
+
+  /** Today's board then the Club Top 5, for each gender here today */
+  function paired(today: (g: Gender) => Board, clubFor: (g: Gender) => Board): Board[] {
+    return genders.flatMap(g => [today(g), clubFor(g)])
+  }
+
+  // One test: today's best tries, and the club's numbers
+  function testSection(page: string, key: CombineMetricKey, accent: keyof typeof ACCENTS, title: string, sub: string, clubSub: string): Section {
     const metric = combineMetric(key)!
+    const lower = metric.better === 'lower'
     const items = testers
       .map(a => ({ ...a, v: best(a.id, key) }))
       .filter((a): a is typeof a & { v: number } => a.v != null)
-    return byGender(items, a => a.gender).map(g => makeBoard({
-      ...common, key: accent, title, sub: withLabel(g.label, sub), items: g.items,
-      score: a => metric.better === 'lower' ? 1 / a.v : a.v,
-      value: a => tvText(metric, a.v),
-    }))
+    const clubItems = club
+      .map(p => ({ ...p, v: clubValue(p.id, key), today: testerIds.has(p.id) && best(p.id, key) != null }))
+      .filter((p): p is typeof p & { v: number } => p.v != null)
+    return {
+      page,
+      boards: paired(
+        g => makeBoard({
+          ...common, key: accent, title, sub: withLabel(todayLabel(g), sub), items: items.filter(a => a.gender === g),
+          score: a => (lower ? 1 / a.v : a.v),
+          value: a => tvText(metric, a.v),
+        }),
+        g => clubBoard(g, accent, clubSub, clubItems, lower, v => tvText(metric, v)),
+      ),
+    }
   }
 
   // Vertical = touch minus standing reach (today's reach, else last time's)
-  function verticalBoards(touchKey: CombineMetricKey, title: string, sub: string): Board[] {
+  function verticalSection(page: string, touchKey: CombineMetricKey, title: string, sub: string, clubSub: string): Section {
+    const vertText = (v: number) => `${Number.isInteger(v) ? v : v.toFixed(1)}"`
     const items = testers
       .map(a => ({ ...a, v: verticalFrom(best(a.id, touchKey), reachOf(a.id)) }))
       .filter((a): a is typeof a & { v: number } => a.v != null)
-    return byGender(items, a => a.gender).map(g => makeBoard({
-      ...common, key: 'jump', title, sub: withLabel(g.label, sub), items: g.items,
-      score: a => a.v,
-      value: a => `${Number.isInteger(a.v) ? a.v : a.v.toFixed(1)}"`,
-    }))
+    const clubItems = club
+      .map(p => ({
+        ...p,
+        v: verticalFrom(clubValue(p.id, touchKey), clubValue(p.id, 'standing_reach_in')),
+        today: testerIds.has(p.id) && best(p.id, touchKey) != null,
+      }))
+      .filter((p): p is typeof p & { v: number } => p.v != null)
+    return {
+      page,
+      boards: paired(
+        g => makeBoard({
+          ...common, key: 'jump', title, sub: withLabel(todayLabel(g), sub), items: items.filter(a => a.gender === g),
+          score: a => a.v, value: a => vertText(a.v),
+        }),
+        g => clubBoard(g, 'jump', clubSub, clubItems, false, vertText),
+      ),
+    }
   }
 
   // ── Combine score (athleticism score with today's numbers in) ──
-  const pool = testers.length ? await latestMeasurementPool(db) : new Map<string, MeasurementRow>()
   const population = buildPopulationStats([...pool.values()].map(athleticismInputs))
   // Only players with at least 4 score tests done today (fewer if the combine
   // has fewer), so nobody is ranked on last season's numbers after one test
   const scoreTestsToday = (id: string) => SCORE_TESTS.filter(k => best(id, k) != null).length
   const scoreNeeded = Math.min(4, Math.max(0, ...testers.map(a => scoreTestsToday(a.id))))
+  const scoreOf = (id: string) => {
+    const inputs = athleticismInputs(pool.get(id))
+    // Testers: today's best tries over what's on file (the pool is cached briefly)
+    if (testerIds.has(id)) for (const k of SCORE_TESTS) { const b = best(id, k); if (b != null) (inputs as Record<string, number | null>)[k] = b }
+    return calculateAthleticismScore(inputs, population).score
+  }
   const scored = testers
     .filter(a => scoreNeeded > 0 && scoreTestsToday(a.id) >= scoreNeeded)
-    .map(a => ({ ...a, score: calculateAthleticismScore(athleticismInputs(pool.get(a.id)), population).score }))
+    .map(a => ({ ...a, score: scoreOf(a.id) }))
     .filter((a): a is typeof a & { score: number } => a.score != null)
-  const scoreBoards = byGender(scored, a => a.gender).map(g => makeBoard({
-    ...common, key: 'vpi', title: 'Combine Score', sub: withLabel(g.label, 'Athleticism score, ~400 = club average'),
-    items: g.items, score: a => a.score, value: a => String(Math.round(a.score)),
-  }))
+  const clubScored = club
+    .map(p => ({ ...p, v: scoreOf(p.id), today: testerIds.has(p.id) && scoreTestsToday(p.id) >= Math.max(1, scoreNeeded) }))
+    .filter((p): p is typeof p & { v: number } => p.v != null)
+  const scoreSection: Section = {
+    page: 'COMBINE SCORE',
+    boards: paired(
+      g => makeBoard({
+        ...common, key: 'vpi', title: 'Combine Score', sub: withLabel(todayLabel(g), 'Athleticism score, ~400 = club average'),
+        items: scored.filter(a => a.gender === g), score: a => a.score, value: a => String(Math.round(a.score)),
+      }),
+      g => clubBoard(g, 'vpi', 'Best athleticism scores', clubScored, false, v => String(Math.round(v))),
+    ),
+  }
 
   const sections: Section[] = [
-    { page: 'COMBINE SCORE', boards: scoreBoards },
-    { page: 'APPROACH JUMP', boards: [
-      ...verticalBoards('approach_vertical_in', 'Max Vertical', 'Approach touch minus reach'),
-      ...testBoards('approach_vertical_in', 'jump', 'Approach Touch', 'Highest touch today'),
-    ] },
-    { page: 'BLOCK JUMP', boards: [
-      ...verticalBoards('standing_vertical_in', 'Standing Vertical', 'Block touch minus reach'),
-      ...testBoards('standing_vertical_in', 'jump', 'Block Touch', 'Highest touch today'),
-    ] },
-    { page: 'SPEED', boards: [
-      ...testBoards('acceleration_sec', 'sprint', 'Acceleration', '5 yards, fastest time'),
-      ...testBoards('pro_agility_sec', 'sprint', 'Pro-Agility', '5-10-5, fastest time'),
-    ] },
-    { page: 'SWING VELOCITY', boards: testBoards('swing_velocity_mph', 'swing', 'Swing Velocity', 'Fastest arm swing') },
-    { page: 'LENGTH', boards: [
-      ...testBoards('wingspan_in', 'length', 'Wingspan', 'Fingertip to fingertip'),
-      ...testBoards('standing_reach_in', 'length', 'Standing Reach', 'Flat-footed, one hand'),
-    ] },
+    scoreSection,
+    verticalSection('MAX VERTICAL', 'approach_vertical_in', 'Max Vertical', 'Approach touch minus reach', 'Best max verticals'),
+    testSection('APPROACH TOUCH', 'approach_vertical_in', 'jump', 'Approach Touch', 'Highest touch today', 'Highest approach touches'),
+    verticalSection('STANDING VERTICAL', 'standing_vertical_in', 'Standing Vertical', 'Block touch minus reach', 'Best standing verticals'),
+    testSection('BLOCK TOUCH', 'standing_vertical_in', 'jump', 'Block Touch', 'Highest touch today', 'Highest block touches'),
+    testSection('ACCELERATION', 'acceleration_sec', 'sprint', 'Acceleration', '5 yards, fastest time', 'Fastest 5 yards'),
+    testSection('PRO-AGILITY', 'pro_agility_sec', 'sprint', 'Pro-Agility', '5-10-5, fastest time', 'Fastest 5-10-5'),
+    testSection('WINGSPAN', 'wingspan_in', 'length', 'Wingspan', 'Fingertip to fingertip', 'Longest wingspans'),
+    testSection('STANDING REACH', 'standing_reach_in', 'length', 'Standing Reach', 'Flat-footed, one hand', 'Highest standing reach'),
   ]
+  // Swing Velocity is optional: only when someone entered a swing today
+  if (testers.some(a => best(a.id, 'swing_velocity_mph') != null)) {
+    sections.splice(7, 0, testSection('SWING VELOCITY', 'swing_velocity_mph', 'swing', 'Swing Velocity', 'Fastest arm swing', 'Fastest arm swings'))
+  }
 
   // ── New bests today (beat the number from before today) ──
   type Event = { athlete: CombineAthlete; metric: CombineMetric; value: number; gain: number; at: string }
