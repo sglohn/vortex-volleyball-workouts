@@ -46,6 +46,7 @@ const COACH_ROUTES: Record<string, string[]> = {
   '/api/coach/players':         ['GET'],
   '/api/coach/logs':            ['GET'],
   '/api/coach/logs/check':      ['POST'],                     // "Looks right" on flagged sets (own players only)
+  '/api/coach/logs/combine':    ['POST'],                     // "Looks right" on flagged combine numbers (own players only); fixes are admins only
   '/api/coach/session-detail':  ['GET'],
   '/api/coach/change-requests': ['GET', 'PATCH'],             // view, approve / decline, mark seen
   '/api/coach/overrides':       ['GET', 'POST', 'DELETE'],    // one player's exercise replacements only

@@ -16,6 +16,11 @@
 //
 // Leaderboards, totals and suggestions all read set_logs, so a fix here
 // shows up everywhere on their next refresh.
+//
+// Combine Day numbers (combine_attempts) come back on each session as
+// `combine`, with odd-looking numbers flagged (lib/combineFlags.ts). They
+// count in flagCount / checkedCount like sets. Fixing, deleting and
+// "Looks right" for them: app/api/coach/logs/combine.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
@@ -25,6 +30,9 @@ import { flagExerciseSets } from '@/lib/outliers'
 import { setFingerprint } from '@/lib/setChecks'
 import { getCoach } from '@/lib/coachAuth'
 import { signInRequired, visiblePlayerIds } from '@/lib/coachScope'
+import { FEATURES } from '@/lib/features'
+import { COMBINE_KEYS, bestValue, combineMetric, type CombineMetricKey } from '@/lib/combine'
+import { combineFingerprint, flagCombineTry } from '@/lib/combineFlags'
 
 export const dynamic = 'force-dynamic'
 
@@ -44,6 +52,94 @@ type PlayerJoin = { id: string; name: string; jersey_number?: string | null }
 type TeamJoin = { id: string; name: string; color?: string | null; age_group?: string | null }
 
 const HISTORY_SESSIONS = 8   // earlier sessions per player used for "usual"
+
+type AttemptRow = {
+  id: string; session_id: string; player_id: string; metric: string; value: number | string; created_at: string
+  // after the 2026-11-02_combine_attempt_checks migration
+  checked_at?: string | null; checked_by_name?: string | null; checked_values?: string | null
+}
+
+export type CombineLogTry = {
+  id: string; value: number; createdAt: string; isBest: boolean
+  flags: string[]; checked: { by: string; at: string } | null
+}
+export type CombineLogTest = {
+  key: CombineMetricKey; label: string; unit: string; maxAttempts: number
+  /** Her number from before that day */
+  previous: number | null
+  tries: CombineLogTry[]
+}
+
+/** The day's combine tries per session, flagged (empty map when there are none) */
+async function combineForSessions(db: Db, sessions: SessionRow[], date: string): Promise<Map<string, CombineLogTest[]>> {
+  const out = new Map<string, CombineLogTest[]>()
+  if (!FEATURES.measurements || !sessions.length) return out
+  const attempts: AttemptRow[] = []
+  for (const ids of chunk(sessions.map(s => s.id), 100)) {
+    const { data, error } = await db.from('combine_attempts').select('*').in('session_id', ids).order('created_at', { ascending: true })
+    if (error) return out   // e.g. before the Combine Day migration
+    attempts.push(...((data ?? []) as AttemptRow[]))
+  }
+  if (!attempts.length) return out
+
+  // Her numbers from before that day
+  const playerIds = [...new Set(attempts.map(a => a.player_id))]
+  const before = new Map<string, Partial<Record<CombineMetricKey, number>>>()
+  for (const ids of chunk(playerIds, 100)) {
+    const { data } = await db.from('measurements').select('*').in('player_id', ids).lt('measured_at', date)
+      .order('measured_at', { ascending: false })
+    for (const r of (data ?? []) as Record<string, unknown>[]) {
+      const pid = r.player_id as string
+      if (before.has(pid)) continue
+      const vals: Partial<Record<CombineMetricKey, number>> = {}
+      for (const k of COMBINE_KEYS) { const n = Number(r[k]); if (r[k] != null && Number.isFinite(n) && n > 0) vals[k] = n }
+      before.set(pid, vals)
+    }
+  }
+
+  const bySession = new Map<string, AttemptRow[]>()
+  for (const a of attempts) {
+    if (!bySession.has(a.session_id)) bySession.set(a.session_id, [])
+    bySession.get(a.session_id)!.push(a)
+  }
+  for (const [sessionId, list] of bySession) {
+    const playerId = list[0].player_id
+    // Best per test that day (this session)
+    const today: Partial<Record<CombineMetricKey, number>> = {}
+    for (const k of COMBINE_KEYS) {
+      const m = combineMetric(k)!
+      const b = bestValue(m, list.filter(a => a.metric === k).map(a => Number(a.value)))
+      if (b != null) today[k] = b
+    }
+    const tests: CombineLogTest[] = []
+    for (const k of COMBINE_KEYS) {
+      const metric = combineMetric(k)!
+      const mine = list.filter(a => a.metric === k)
+      if (!mine.length) continue
+      const best = today[k] ?? null
+      let bestMarked = false
+      tests.push({
+        key: k, label: metric.label, unit: metric.unit, maxAttempts: metric.maxAttempts,
+        previous: before.get(playerId)?.[k] ?? null,
+        tries: mine.map(a => {
+          const value = Number(a.value)
+          const flags = flagCombineTry(metric, value, {
+            today, before: before.get(playerId) ?? {},
+            otherTries: mine.filter(o => o.id !== a.id).map(o => Number(o.value)),
+          })
+          const checked = flags.length && a.checked_at && a.checked_values === combineFingerprint(a.value)
+            ? { by: a.checked_by_name || 'A coach', at: a.checked_at }
+            : null
+          const isBest = !bestMarked && value === best
+          if (isBest) bestMarked = true
+          return { id: a.id, value, createdAt: a.created_at, isBest, flags, checked }
+        }),
+      })
+    }
+    out.set(sessionId, tests)
+  }
+  return out
+}
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = []
@@ -176,6 +272,9 @@ export async function GET(req: NextRequest) {
     // History is only for flags; carry on without it
   }
 
+  // ── Combine Day numbers ──
+  const combineBySession = await combineForSessions(db, sessions, date)
+
   // ── Build each session ──
   const logsBySession: Record<string, LogRow[]> = {}
   for (const l of logs) (logsBySession[l.session_id] ??= []).push(l)
@@ -253,6 +352,14 @@ export async function GET(req: NextRequest) {
       }
     })
 
+    const combine = combineBySession.get(s.id) ?? []
+    let combineFlags = 0
+    for (const t of combine) for (const tr of t.tries) {
+      if (!tr.flags.length) continue
+      if (tr.checked) checkedCount++
+      else { flagCount++; combineFlags++ }
+    }
+
     return {
       id: s.id,
       playerId: s.player_id,
@@ -269,6 +376,9 @@ export async function GET(req: NextRequest) {
       flagCount,
       checkedCount,
       exercises,
+      combine,
+      combineTests: combine.length,
+      combineFlags,
     }
   })
 
