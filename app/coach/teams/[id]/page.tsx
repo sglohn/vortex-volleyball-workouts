@@ -1,6 +1,6 @@
 // FILE: app/coach/teams/[id]/page.tsx
 'use client'
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect, use, Fragment } from 'react'
 import Link from 'next/link'
 import FeetInchesInput from '@/components/FeetInchesInput'
 import { inchesToFeetInches, calcVertical, painLevelColor, painLevelLabel } from '@/lib/fitness'
@@ -8,6 +8,8 @@ import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { FEATURES, POSITIONS } from '@/lib/features'
 import { useIsAdmin } from '@/components/CoachContext'
 import { teamInitial } from '@/lib/teamInitial'
+import { AttendancePill, DayStrip, SeasonHealth, seasonHealthParts } from '@/components/Attendance'
+import { pctColor, HIGH_PCT, LOW_PCT, type PlayerAttendance, type TeamAttendance } from '@/lib/attendance'
 
 interface Measurement { height_in?: number; wingspan_in?: number; standing_reach_in?: number; standing_vertical_in?: number; approach_vertical_in?: number; measured_at?: string }
 interface HealthReport { id: string; report_type: string; body_part: string; pain_level?: number; status: string; confirmed_by_coach: boolean; description?: string; reported_at: string; coach_notes?: string }
@@ -17,6 +19,7 @@ interface Team { id: string; name: string; age_group?: string; color: string }
 interface Phase { id: string; phase_type: string; name: string; description?: string }
 
 type Tab = 'roster' | 'stats' | 'health'
+type RosterSort = 'name' | 'attendance'
 
 // Volleyball measurements. Empty when measurements are off (lib/features.ts).
 const ALL_MEAS_FIELDS = [
@@ -50,6 +53,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const isAdmin = useIsAdmin()
   const [tab, setTab] = useState<Tab>('roster')
 
+  // Weight room attendance this season (volleyball only, lib/attendance.ts)
+  const [attTeam, setAttTeam] = useState<TeamAttendance | null>(null)
+  const [attByPlayer, setAttByPlayer] = useState<Record<string, PlayerAttendance>>({})
+  const [openDays, setOpenDays] = useState<string | null>(null)
+  const [rosterSort, setRosterSort] = useState<RosterSort>('name')
+
   // Edit player modal
   const [editPlayer, setEditPlayer] = useState<RosterPlayer | null>(null)
   const [editForm, setEditForm] = useState({ name: '', jersey_number: '', position: '', pin: '' })
@@ -75,6 +84,13 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
     const d = await res.json()
     setTeam(d.team); setRoster(d.roster ?? []); setPhase(d.currentPhase ?? null)
     setLoading(false)
+    if (FEATURES.datedSchedule) {
+      fetch(`/api/coach/attendance?teamId=${teamId}`).then(r => r.ok ? r.json() : null).then(a => {
+        if (!a) return
+        setAttTeam(a.team ?? null)
+        setAttByPlayer(Object.fromEntries(((a.players ?? []) as PlayerAttendance[]).map(p => [p.playerId, p])))
+      }).catch(() => {})
+    }
   }
 
   function openEdit(p: RosterPlayer) {
@@ -148,6 +164,12 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const phaseConfig = phase ? PHASE_CONFIG[phase.phase_type as PhaseType] : null
   const activeHealthCount = roster.reduce((sum, p) => sum + p.healthReports.filter(r => r.status === 'active').length, 0)
   const filteredPlayers = allPlayers.filter(p => p.name.toLowerCase().includes(newPlayerSearch.toLowerCase()))
+  const showAtt = FEATURES.datedSchedule && !!attTeam
+  // Lowest attendance first, so the players who need a nudge are on top
+  const rosterRows = rosterSort === 'attendance' && showAtt
+    ? [...roster].sort((a, b) => (attByPlayer[a.id]?.attendance.pct ?? 101) - (attByPlayer[b.id]?.attendance.pct ?? 101) || a.name.localeCompare(b.name))
+    : roster
+  const rosterCols = showAtt ? ['Player','Attendance','Position','Last Active','Health','Actions'] : ['Player','Position','Sessions','Last Active','Health','Actions']
 
   return (
     <div style={{ padding: '2rem', maxWidth: 1000 }}>
@@ -184,23 +206,47 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
 
       {rosterMsg && <div style={{ color: 'var(--danger)', fontSize: '0.85rem', marginBottom: '1rem' }}>{rosterMsg}</div>}
 
+      {/* ── SEASON ATTENDANCE ── */}
+      {tab === 'roster' && showAtt && attTeam && (
+        <div className="card wrap-phone" style={{ padding: '1rem 1.25rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '1.25rem', rowGap: '0.75rem', borderLeft: `4px solid ${pctColor(attTeam.pct)}` }}>
+          <div style={{ textAlign: 'center', minWidth: 84 }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '2rem', lineHeight: 1, color: pctColor(attTeam.pct) }}>{attTeam.pct === null ? '—' : `${attTeam.pct}%`}</div>
+            <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginTop: '0.25rem' }}>Attendance</div>
+          </div>
+          <div style={{ flex: 1, minWidth: 200, fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
+            <div><strong style={{ color: 'var(--black)' }}>{attTeam.workoutsSoFar}</strong> of {attTeam.workoutsSeason} team workouts so far this season · {attTeam.attended} check-ins of {attTeam.counted} possible{attTeam.finishedPct !== null && <> · {attTeam.finishedPct}% finished</>}</div>
+            {attTeam.counted > 0 && <div>{attTeam.playersHigh} player{attTeam.playersHigh === 1 ? '' : 's'} at {HIGH_PCT}%+ · <span style={{ color: attTeam.playersLow ? 'var(--danger)' : undefined }}>{attTeam.playersLow} under {LOW_PCT}%</span></div>}
+            <div><SeasonHealth health={attTeam.health} prefix="Health this season: " />{attTeam.health.playersInjured > 0 && <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}> ({attTeam.health.playersInjured} player{attTeam.health.playersInjured === 1 ? '' : 's'} injured)</span>}</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tap a player&apos;s % to see each day. Days a player was Out with an injury don&apos;t count against them.</div>
+          </div>
+          <div className="full-phone" style={{ display: 'flex', gap: '0.25rem', background: 'var(--carolina-light)', padding: '0.2rem', borderRadius: 8, border: '1px solid var(--carolina-border)', flexShrink: 0 }}>
+            {([['name', 'A–Z'], ['attendance', 'Lowest % first']] as [RosterSort, string][]).map(([k, label]) => (
+              <button key={k} onClick={() => setRosterSort(k)} style={{ padding: '0.3rem 0.65rem', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, background: rosterSort === k ? 'var(--carolina)' : 'transparent', color: rosterSort === k ? 'var(--white)' : 'var(--carolina-dark)' }}>{label}</button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── ROSTER TAB ── */}
       {tab === 'roster' && (
         <div className="card" style={{ overflowX: 'auto' }}>
           <table className="tbl-tight" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ background: 'var(--carolina-light)', borderBottom: '1.5px solid var(--carolina-border)' }}>
-                {['Player','Position','Sessions','Last Active','Health','Actions'].map(h => (
+                {rosterCols.map(h => (
                   <th key={h} className={h === 'Position' || h === 'Last Active' || h === 'Sessions' ? 'hide-phone' : undefined} style={{ padding: '0.75rem 1rem', textAlign: 'left', fontSize: '0.72rem', color: 'var(--carolina-deep)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {roster.length === 0 && <tr><td colSpan={6} style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No players on this team yet.</td></tr>}
-              {roster.map((p, i) => {
+              {rosterRows.map((p, i) => {
                 const activeHealth = p.healthReports.filter(r => r.status === 'active' || r.status === 'monitoring')
+                const att = showAtt ? attByPlayer[p.id] : undefined
+                const daysOpen = openDays === p.id
                 return (
-                  <tr key={p.id} style={{ borderBottom: '1px solid var(--gray-border)', background: i % 2 === 0 ? 'var(--white)' : 'rgba(238,244,255,0.3)' }}>
+                  <Fragment key={p.id}>
+                  <tr style={{ borderBottom: daysOpen ? 'none' : '1px solid var(--gray-border)', background: i % 2 === 0 ? 'var(--white)' : 'rgba(238,244,255,0.3)' }}>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
                         <div style={{ width: 32, height: 32, borderRadius: '50%', background: `${team.color}22`, border: `1.5px solid ${team.color}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'var(--font-display)', fontWeight: 700, color: team.color, fontSize: '0.85rem', flexShrink: 0 }}>
@@ -209,14 +255,24 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                         <span style={{ fontWeight: 600 }}>{p.name}</span>
                       </div>
                     </td>
+                    {showAtt && (
+                      <td style={{ padding: '0.875rem 1rem' }}>
+                        {att
+                          ? <AttendancePill pct={att.attendance.pct} attended={att.attendance.attended} counted={att.attendance.counted} open={daysOpen} onClick={() => setOpenDays(daysOpen ? null : p.id)} />
+                          : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>}
+                      </td>
+                    )}
                     <td className="hide-phone" style={{ padding: '0.875rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{p.position || '—'}</td>
-                    <td className="hide-phone" style={{ padding: '0.875rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{p.sessionCount}</td>
+                    {!showAtt && <td className="hide-phone" style={{ padding: '0.875rem 1rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>{p.sessionCount}</td>}
                     <td className="hide-phone" style={{ padding: '0.875rem 1rem', color: 'var(--text-muted)', fontSize: '0.82rem' }}>{p.lastSeen ? new Date(p.lastSeen).toLocaleDateString() : 'Never'}</td>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       {activeHealth.length > 0
                         ? <button onClick={() => { setHealthPlayer(p); setTab('health') }} style={{ background: 'var(--danger-light)', border: '1px solid #fecaca', borderRadius: 5, padding: '0.2rem 0.6rem', fontSize: '0.75rem', color: 'var(--danger)', fontWeight: 700, cursor: 'pointer' }}>⚠ {activeHealth.length}</button>
                         : <span style={{ color: 'var(--success)', fontSize: '0.82rem' }}>✓ Clear</span>
                       }
+                      {att && seasonHealthParts(att.health).length > 0 && (
+                        <div style={{ marginTop: '0.2rem' }}><SeasonHealth health={att.health} prefix="Season: " /></div>
+                      )}
                     </td>
                     <td style={{ padding: '0.875rem 1rem' }}>
                       <div style={{ display: 'flex', gap: '0.625rem', flexWrap: 'wrap' }}>
@@ -232,6 +288,19 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                       </div>
                     </td>
                   </tr>
+                  {daysOpen && att && (
+                    <tr style={{ borderBottom: '1px solid var(--gray-border)', background: i % 2 === 0 ? 'var(--white)' : 'rgba(238,244,255,0.3)' }}>
+                      <td colSpan={rosterCols.length} style={{ padding: '0 1rem 0.9rem' }}>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
+                          {att.attendance.attended} of {att.attendance.counted} workouts · {att.attendance.finished} finished
+                          {att.attendance.out > 0 && <> · {att.attendance.out} missed while Out (not counted)</>}
+                          {att.attendance.extra > 0 && <> · {att.attendance.extra} extra day{att.attendance.extra === 1 ? '' : 's'} with no team workout</>}
+                        </div>
+                        <DayStrip days={att.attendance.days} />
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 )
               })}
             </tbody>

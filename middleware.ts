@@ -43,6 +43,7 @@ const COACH_ROUTES: Record<string, string[]> = {
   '/api/coach/health':          ['GET', 'POST'],              // view, add an injury / health note
   '/api/coach/health-watch':    ['GET', 'POST', 'DELETE'],    // Watch tab patterns (own teams/players), mark seen / undo
   '/api/coach/team-detail':     ['GET'],
+  '/api/coach/attendance':      ['GET'],                      // season attendance + health counts (own teams only)
   '/api/coach/players':         ['GET'],
   '/api/coach/logs':            ['GET'],
   '/api/coach/logs/check':      ['POST'],                     // "Looks right" on flagged sets (own players only)

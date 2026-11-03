@@ -53,7 +53,7 @@ const FEATURE_PATHS: { on: boolean; pages: string[]; apis: string[] }[] = [
   {
     on: FEATURES.datedSchedule,
     pages: ['/coach/schedule'],
-    apis: ['/api/coach/schedule'],
+    apis: ['/api/coach/schedule', '/api/coach/attendance'],
   },
   {
     on: FEATURES.weekPlan,
