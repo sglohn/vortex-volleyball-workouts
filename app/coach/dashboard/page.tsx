@@ -16,6 +16,7 @@ interface DashboardData {
   unconfirmedHealth: Array<{ id: string; playerName: string; bodyPart: string; reportType: string; painLevel?: number }>
   changeRequests?: Array<{ id: string; kind: string; playerName: string; exerciseName: string; summary: string; createdAt: string }>
   activeInjuries: number
+  achesAndPains?: number
   totalPlayers: number
   sessionsTodayCount: number
   sessionsWeekCount: number
@@ -60,6 +61,7 @@ export default function CoachDashboardPage() {
 
   const pendingHealth = data?.unconfirmedHealth?.length ?? 0
   const activeInjuries = data?.activeInjuries ?? 0
+  const achesAndPains = data?.achesAndPains ?? 0
 
   return (
     <div style={{ padding: '2rem', maxWidth: 1040 }}>
@@ -273,7 +275,7 @@ export default function CoachDashboardPage() {
           </div>
 
           {/* Summary row */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.625rem', marginBottom: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.625rem', marginBottom: '1rem' }}>
             <div style={{ background: pendingHealth > 0 ? 'rgba(248,113,113,0.06)' : 'var(--carolina-light)', border: `1px solid ${pendingHealth > 0 ? 'rgba(248,113,113,0.25)' : 'var(--carolina-border)'}`, borderRadius: 8, padding: '0.625rem', textAlign: 'center' }}>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: pendingHealth > 0 ? '#f87171' : 'var(--carolina)', lineHeight: 1 }}>{pendingHealth}</div>
               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginTop: '0.2rem' }}>Need review</div>
@@ -282,6 +284,10 @@ export default function CoachDashboardPage() {
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: activeInjuries > 0 ? '#f59e0b' : 'var(--carolina)', lineHeight: 1 }}>{activeInjuries}</div>
               <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginTop: '0.2rem' }}>Active injuries</div>
             </div>
+            <Link href="/coach/health?tab=aches" style={{ textDecoration: 'none', background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 8, padding: '0.625rem', textAlign: 'center' }}>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.5rem', color: achesAndPains > 0 ? '#ca8a04' : 'var(--carolina)', lineHeight: 1 }}>{achesAndPains}</div>
+              <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 600, marginTop: '0.2rem' }}>Aches &amp; pains</div>
+            </Link>
           </div>
 
           {!data?.unconfirmedHealth?.length

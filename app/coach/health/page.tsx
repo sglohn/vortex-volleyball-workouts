@@ -10,7 +10,7 @@
 import { useState, useEffect, type CSSProperties } from 'react'
 import { painLevelColor } from '@/lib/fitness'
 import {
-  AVAILABILITY_LEVELS, BOARD_ORDER, CLEARED, availabilityLevel, describeUpdate, formatDays,
+  AVAILABILITY_LEVELS, BOARD_ORDER, CLEARED, INJURY_LEVELS, isInjuryLevel, availabilityLevel, describeUpdate, formatDays,
   daysBetween, isAvailability, stageTotals, type Availability, type HealthUpdate,
 } from '@/lib/availability'
 import type { FlagLevel, WatchFlag, WatchResult } from '@/lib/healthPatterns'
@@ -455,7 +455,7 @@ function WatchTab({ data, error, busy, onOpenReport, onStartTracking, onSeen, on
 }
 
 export default function CoachHealthPage() {
-  const [tab, setTab] = useState<'active' | 'watch' | 'history' | 'trends'>('active')
+  const [tab, setTab] = useState<'active' | 'aches' | 'watch' | 'history' | 'trends'>('active')
   const [watch, setWatch] = useState<WatchData | null>(null)
   const [watchError, setWatchError] = useState('')
   const [watchBusy, setWatchBusy] = useState(false)
@@ -477,7 +477,12 @@ export default function CoachHealthPage() {
   const [savingNew, setSavingNew] = useState(false)
   const [playerSearch, setPlayerSearch] = useState('')
 
-  useEffect(() => { loadActive(); loadWatch() }, [])
+  useEffect(() => {
+    loadActive(); loadWatch()
+    // /coach/health?tab=aches (dashboard link) opens that tab
+    const t = new URLSearchParams(window.location.search).get('tab')
+    if (t === 'aches' || t === 'watch' || t === 'history' || t === 'trends') setTab(t)
+  }, [])
   useEffect(() => {
     if (tab === 'history' && !history.length) loadHistory()
     if (tab === 'trends' && !trends) loadTrends()
@@ -640,8 +645,14 @@ export default function CoachHealthPage() {
     (p.jersey_number ?? '').includes(playerSearch)
   )
 
-  const totalActive = unconfirmed.length + active.length
   const byLevel = (a: Availability) => active.filter(r => (isAvailability(r.availability) ? r.availability : 'full') === a)
+  // Active = injuries (Modified / Out / Return to Play) plus player reports
+  // waiting for review. Aches & Pains has its own tab so soreness doesn't
+  // crowd the injury list.
+  const injuries = active.filter(r => isInjuryLevel(r.availability))
+  const aches = byLevel('full')
+  const totalActive = unconfirmed.length + injuries.length
+  const achesLevel = availabilityLevel('full')
 
   // What the Save button will do, in words
   const currentLevel: Availability | 'cleared' | null = selected
@@ -670,7 +681,7 @@ export default function CoachHealthPage() {
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '1.5rem', background: 'var(--court-raised)', borderRadius: 10, padding: '0.25rem', width: 'fit-content', maxWidth: '100%', overflowX: 'auto' }}>
-        {([['active', `Active${totalActive ? ` (${totalActive})` : ''}`], ['watch', `Watch${watch?.openCount ? ` (${watch.openCount})` : ''}`], ['history', 'History'], ['trends', 'Trends']] as const).map(([t, label]) => (
+        {([['active', `Active${totalActive ? ` (${totalActive})` : ''}`], ['aches', `Aches & Pains${aches.length ? ` (${aches.length})` : ''}`], ['watch', `Watch${watch?.openCount ? ` (${watch.openCount})` : ''}`], ['history', 'History'], ['trends', 'Trends']] as const).map(([t, label]) => (
           <button key={t} onClick={() => setTab(t)} style={{ padding: '0.4rem 0.8rem', whiteSpace: 'nowrap', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 600, background: tab === t ? 'var(--surface)' : 'transparent', color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)', boxShadow: tab === t ? '0 1px 4px rgba(0,0,0,0.12)' : 'none', transition: 'all 0.12s' }}>
             {label}
           </button>
@@ -697,7 +708,7 @@ export default function CoachHealthPage() {
           {/* Counts by level */}
           {active.length > 0 && (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: '0.5rem', marginBottom: '1.5rem' }}>
-              {BOARD_ORDER.map(a => {
+              {INJURY_LEVELS.map(a => {
                 const l = availabilityLevel(a)
                 const n = byLevel(a).length
                 return (
@@ -707,6 +718,11 @@ export default function CoachHealthPage() {
                   </div>
                 )
               })}
+              <button onClick={() => setTab('aches')} className="card" title="Not counted as injuries — open the Aches & Pains tab"
+                style={{ padding: '0.65rem 0.75rem', borderLeft: `4px solid ${achesLevel.color}`, opacity: aches.length ? 0.9 : 0.55, textAlign: 'left', cursor: 'pointer', background: 'var(--surface)' }}>
+                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.4rem', color: achesLevel.color, lineHeight: 1 }}>{aches.length}</div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.2rem', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>{achesLevel.label} →</div>
+              </button>
             </div>
           )}
 
@@ -719,12 +735,12 @@ export default function CoachHealthPage() {
             </div>
           )}
 
-          {active.length === 0
+          {injuries.length === 0
             ? <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-                No active health reports.{' '}
-                <button onClick={() => setShowNewModal(true)} style={{ background: 'none', border: 'none', color: 'var(--volt)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}>Log one →</button>
+                No active injuries{aches.length ? <> · <button onClick={() => setTab('aches')} style={{ background: 'none', border: 'none', color: 'var(--volt)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', padding: 0 }}>{aches.length} aches &amp; pains →</button></> : '.'}{' '}
+                <button onClick={() => setShowNewModal(true)} style={{ background: 'none', border: 'none', color: 'var(--volt)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem', padding: 0, marginLeft: '0.5rem' }}>Log one →</button>
               </div>
-            : BOARD_ORDER.map(a => {
+            : INJURY_LEVELS.map(a => {
                 const list = byLevel(a)
                 if (!list.length) return null
                 const l = availabilityLevel(a)
@@ -740,6 +756,23 @@ export default function CoachHealthPage() {
               })
           }
         </>
+      )}
+
+      {/* ── ACHES & PAINS TAB ── */}
+      {tab === 'aches' && (
+        <div>
+          <h2 style={{ ...SECTION_H2, color: achesLevel.color }}>
+            {achesLevel.label} ({aches.length})
+            <span style={{ fontFamily: 'inherit', textTransform: 'none', letterSpacing: 0, fontWeight: 500, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{achesLevel.desc}</span>
+          </h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1rem' }}>
+            Not counted as injuries. When one keeps coming up, open it and move it to Modified and it moves to Active.
+          </p>
+          {aches.length === 0
+            ? <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No aches or pains being tracked.</div>
+            : aches.map(r => <ReportCard key={r.id} r={r} onOpen={openReport} />)
+          }
+        </div>
       )}
 
       {/* ── WATCH TAB ── */}
