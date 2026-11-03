@@ -11,10 +11,34 @@ import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useIsAdmin } from '@/components/CoachContext'
 import { teamInitial } from '@/lib/teamInitial'
+import { FEATURES } from '@/lib/features'
+import { AttendancePill, SeasonHealth } from '@/components/Attendance'
+import { pctColor, type TeamAttendance } from '@/lib/attendance'
 
 interface Team { id: string; name: string; age_group?: string; color: string; is_active: boolean; playerCount?: number; is_open_gym?: boolean; coaches?: string[] }
 
 const COLORS = ['#56a0d3','#111827','#ef4444','#f97316','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16']
+// Season Report columns (lib/attendance.ts)
+type ReportSort = 'team' | 'pct' | 'finished' | 'injuries' | 'pains' | 'outDays'
+const REPORT_COLS: { key: ReportSort; label: string; title: string }[] = [
+  { key: 'team',     label: 'Team',       title: 'Team name' },
+  { key: 'pct',      label: 'Attendance', title: 'Check-ins ÷ workout days that count, whole roster' },
+  { key: 'finished', label: 'Finished',   title: 'Workouts finished (tapped Finish) ÷ workout days that count' },
+  { key: 'injuries', label: 'Injuries',   title: 'Injury reports this season (players injured)' },
+  { key: 'pains',    label: 'Pain / Sore', title: 'Pain and soreness reports this season' },
+  { key: 'outDays',  label: 'Days Out',   title: 'Player-days at Out this season, added up' },
+]
+function reportValue(t: TeamAttendance, k: ReportSort): number | string {
+  switch (k) {
+    case 'team': return t.teamName
+    case 'pct': return t.pct ?? -1
+    case 'finished': return t.finishedPct ?? -1
+    case 'injuries': return t.health.injuries
+    case 'pains': return t.health.pains + t.health.soreness
+    case 'outDays': return t.health.outDays
+  }
+}
+
 const AGE_GROUPS = ['12s','13s','14s','15s','16s','17s','18s','Boys 13s','Boys 14s','Boys 15s','Boys 16s','Boys 17s','Boys 18s','Open']
 
 export default function CoachTeamsPage() {
@@ -34,10 +58,21 @@ export default function CoachTeamsPage() {
   const [todayIds, setTodayIds] = useState<Set<string>>(new Set())
   // Team coaches see their own teams here; adding, editing and scheduling are admins only
   const isAdmin = useIsAdmin()
+  // Weight room attendance + health this season, per team (volleyball only)
+  const [att, setAtt] = useState<Record<string, TeamAttendance>>({})
+  const [attList, setAttList] = useState<TeamAttendance[]>([])
+  const [reportSort, setReportSort] = useState<{ key: ReportSort; desc: boolean }>({ key: 'pct', desc: true })
 
   useEffect(() => {
     fetch('/api/coach/teams').then(r => r.json()).then(d => { setTeams(d.teams ?? []); setLoading(false) })
     fetch('/api/coach/teams?all=1').then(r => r.json()).then(d => setAllTeams(((d.teams ?? []) as Team[]).filter(t => !t.is_open_gym))).catch(() => {})
+    if (FEATURES.datedSchedule) {
+      fetch('/api/coach/attendance').then(r => r.ok ? r.json() : null).then(d => {
+        const list = (d?.teams ?? []) as TeamAttendance[]
+        setAttList(list)
+        setAtt(Object.fromEntries(list.map(t => [t.teamId, t])))
+      }).catch(() => {})
+    }
     // Volleyball only (lib/features.ts); lacrosse just doesn't mark "today"
     fetch('/api/display-teams').then(r => r.ok ? r.json() : null).then(d => {
       if (d?.todayOnly) setTodayIds(new Set(((d.teams ?? []) as { id: string }[]).map(t => t.id)))
@@ -118,6 +153,12 @@ export default function CoachTeamsPage() {
               {!t.is_open_gym && !!t.coaches?.length && (
                 <div style={{ fontSize:'0.78rem', color:'var(--text-secondary)', marginTop:'0.1rem' }}>{t.coaches.join(' · ')}</div>
               )}
+              {!t.is_open_gym && att[t.id] && (
+                <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap', marginTop:'0.35rem' }}>
+                  <AttendancePill pct={att[t.id].pct} attended={att[t.id].attended} counted={att[t.id].counted} />
+                  <SeasonHealth health={att[t.id].health} prefix="" />
+                </div>
+              )}
             </div>
             <div className="full-phone" style={{ display:'flex', gap:'0.625rem', alignItems:'center', flexShrink:0, flexWrap:'wrap' }}>
               {!t.is_open_gym && (
@@ -139,6 +180,59 @@ export default function CoachTeamsPage() {
           </div>
         ))}
       </div>
+
+
+      {/* ── SEASON REPORT: attendance next to injuries, team by team ── */}
+      {attList.length > 0 && (() => {
+        const rows = [...attList].sort((a, b) => {
+          const va = reportValue(a, reportSort.key), vb = reportValue(b, reportSort.key)
+          const c = typeof va === 'string' ? va.localeCompare(vb as string, undefined, { numeric: true }) : (va as number) - (vb as number)
+          return (reportSort.desc ? -c : c) || a.teamName.localeCompare(b.teamName, undefined, { numeric: true })
+        })
+        const th: React.CSSProperties = { padding:'0.6rem 0.75rem', textAlign:'left', fontSize:'0.68rem', color:'var(--carolina-deep)', textTransform:'uppercase', letterSpacing:'0.05em', fontWeight:700, whiteSpace:'nowrap', cursor:'pointer', userSelect:'none' }
+        const td: React.CSSProperties = { padding:'0.6rem 0.75rem', fontSize:'0.82rem', whiteSpace:'nowrap' }
+        return (
+          <div className="card" style={{ marginTop:'1.5rem', overflow:'hidden' }}>
+            <div style={{ padding:'1.1rem 1.25rem 0.75rem' }}>
+              <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.1rem' }}>Season Report</h2>
+              <p style={{ color:'var(--text-muted)', fontSize:'0.78rem', marginTop:'0.2rem' }}>Weight room attendance next to health reports, since Aug 1. Tap a column to sort. Days a player was Out with an injury don&apos;t count against attendance.</p>
+            </div>
+            <div style={{ overflowX:'auto' }}>
+              <table className="tbl-tight" style={{ width:'100%', borderCollapse:'collapse', minWidth:620 }}>
+                <thead>
+                  <tr style={{ background:'var(--carolina-light)', borderBottom:'1.5px solid var(--carolina-border)' }}>
+                    {REPORT_COLS.map(c => (
+                      <th key={c.key} title={c.title} style={th}
+                        onClick={() => setReportSort(s => s.key === c.key ? { key: c.key, desc: !s.desc } : { key: c.key, desc: c.key !== 'team' })}>
+                        {c.label}{reportSort.key === c.key ? (reportSort.desc ? ' ↓' : ' ↑') : ''}
+                      </th>
+                    ))}
+                    <th style={{ ...th, cursor:'default' }}>Workouts</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((t, i) => (
+                    <tr key={t.teamId} style={{ borderBottom:'1px solid var(--gray-border)', background: i % 2 === 0 ? 'var(--white)' : 'rgba(238,244,255,0.3)' }}>
+                      <td style={{ ...td, fontWeight:700 }}><Link href={`/coach/teams/${t.teamId}`} style={{ color:'var(--black)', textDecoration:'none' }}>{t.teamName}</Link></td>
+                      <td style={{ ...td, fontFamily:'var(--font-display)', fontWeight:800, color:pctColor(t.pct) }}>
+                        {t.pct === null ? '—' : `${t.pct}%`}
+                        {t.playersLow > 0 && <span style={{ fontFamily:'inherit', fontSize:'0.68rem', fontWeight:600, color:'var(--danger)', marginLeft:'0.4rem' }}>{t.playersLow} low</span>}
+                      </td>
+                      <td style={{ ...td, color:'var(--text-secondary)' }}>{t.finishedPct === null ? '—' : `${t.finishedPct}%`}</td>
+                      <td style={{ ...td, color: t.health.injuries ? 'var(--danger)' : 'var(--text-muted)', fontWeight: t.health.injuries ? 700 : 400 }}>
+                        {t.health.injuries}{t.health.playersInjured > 0 && <span style={{ fontSize:'0.7rem', fontWeight:500, color:'var(--text-muted)' }}> ({t.health.playersInjured} pl.)</span>}
+                      </td>
+                      <td style={{ ...td, color:'var(--text-secondary)' }}>{t.health.pains} / {t.health.soreness}</td>
+                      <td style={{ ...td, color: t.health.outDays ? 'var(--text-secondary)' : 'var(--text-muted)' }}>{t.health.outDays}</td>
+                      <td style={{ ...td, color:'var(--text-muted)' }}>{t.workoutsSoFar} of {t.workoutsSeason}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── SESSION LAUNCHER ── */}
       <div className="card" style={{ padding:'1.25rem', marginTop:'1.5rem', borderLeft:'4px solid var(--carolina)' }}>
