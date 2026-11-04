@@ -47,6 +47,18 @@ export function availabilityLevel(v: string | null | undefined): AvailabilityLev
 /** Board order, most serious first: Out, Return to Play, Modified, Aches & Pains. */
 export const BOARD_ORDER: Availability[] = ['out', 'return_to_play', 'limited', 'full']
 
+/**
+ * The levels that count as an injury: Modified, Out and Return to Play.
+ * Aches & Pains ('full') is tracked separately so everyday soreness doesn't
+ * fill up the injury list; move a report to Modified once it keeps coming up.
+ */
+export const INJURY_LEVELS: Availability[] = ['out', 'return_to_play', 'limited']
+
+/** True for Modified / Out / Return to Play (a missing level counts as Aches & Pains). */
+export function isInjuryLevel(v: string | null | undefined): boolean {
+  return isAvailability(v) && v !== 'full'
+}
+
 /** How much a level limits the player (higher = more). Used for a player's overall status. */
 export const AVAILABILITY_RANK: Record<Availability, number> = { full: 0, limited: 1, return_to_play: 2, out: 3 }
 

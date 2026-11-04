@@ -9,6 +9,7 @@ import { requestSummary } from '@/lib/exerciseLevels'
 import { getCoach } from '@/lib/coachAuth'
 import { inList, signInRequired, visiblePlayerIds, visibleTeamIds } from '@/lib/coachScope'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
+import { isInjuryLevel } from '@/lib/availability'
 
 export async function GET(req: NextRequest) {
   const coach = await getCoach(req)
@@ -76,10 +77,13 @@ export async function GET(req: NextRequest) {
     painLevel: r.pain_level,
   }))
 
-  // Active injuries count
-  let injuriesQuery = db.from('health_reports').select('*', { count: 'exact', head: true }).eq('status', 'active').eq('confirmed_by_coach', true)
-  if (pids) injuriesQuery = injuriesQuery.in('player_id', pids)
-  const { count: activeInjuries } = await injuriesQuery
+  // Open reports a coach has confirmed (same set as the Health Board), split
+  // into injuries (Modified / Out / Return to Play) and Aches & Pains.
+  let openQuery = db.from('health_reports').select('availability').in('status', ['active', 'monitoring']).eq('confirmed_by_coach', true)
+  if (pids) openQuery = openQuery.in('player_id', pids)
+  const { data: openReports } = await openQuery
+  const activeInjuries = (openReports ?? []).filter(r => isInjuryLevel(r.availability)).length
+  const achesAndPains = (openReports ?? []).length - activeInjuries
 
   // Week session count
   let weekQuery = db.from('sessions').select('*', { count: 'exact', head: true }).gte('checked_in_at', weekAgo.toISOString())
@@ -150,7 +154,8 @@ export async function GET(req: NextRequest) {
     changeRequests,
     todaySessions,
     unconfirmedHealth,
-    activeInjuries: activeInjuries ?? 0,
+    activeInjuries,
+    achesAndPains,
     totalPlayers: totalPlayers ?? 0,
     sessionsTodayCount: sessions?.length ?? 0,
     sessionsWeekCount: weekCount ?? 0,
