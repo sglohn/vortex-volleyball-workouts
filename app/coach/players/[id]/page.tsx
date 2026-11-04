@@ -45,7 +45,8 @@ export default function CoachPlayerDetailPage() {
   const [showMeasForm, setShowMeasForm] = useState(false)
   const [savingMeas, setSavingMeas] = useState(false)
   const [msg, setMsg] = useState('')
-  const [overrides, setOverrides] = useState<Array<{ id: string; override_date: string; template_id: string; notes?: string }>>([])
+  const [overrides, setOverrides] = useState<Array<{ id: string; override_date: string; template_id: string; reason?: string | null }>>([])
+  const [overrideError, setOverrideError] = useState('')
   const [skips, setSkips] = useState<Array<{ id: string; exercise_id: string; reason?: string; ends_on?: string; exercise_library?: { name: string }; replacement_library?: { name: string } | null }>>([])
   const [allTemplates, setAllTemplates] = useState<Array<{ id: string; name: string }>>([])
   const [allExercises, setAllExercises] = useState<Array<{ id: string; name: string; category: string }>>([])
@@ -554,7 +555,7 @@ export default function CoachPlayerDetailPage() {
                   <div style={{ flex: 1 }}>
                     <div style={{ fontWeight: 600, fontSize: '0.85rem' }}>{new Date(ov.override_date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{allTemplates.find(t => t.id === ov.template_id)?.name ?? 'Custom template'}</div>
-                    {ov.notes && <div style={{ fontSize: '0.7rem', color: 'var(--carolina-dark)', fontStyle: 'italic' }}>{ov.notes}</div>}
+                    {ov.reason && <div style={{ fontSize: '0.7rem', color: 'var(--carolina-dark)', fontStyle: 'italic' }}>{ov.reason}</div>}
                   </div>
                   <button onClick={async () => {
                     await fetch('/api/coach/overrides', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_template', id: ov.id }) })
@@ -579,10 +580,19 @@ export default function CoachPlayerDetailPage() {
                   <input className="input" placeholder="Notes (optional)" value={newOverride.notes} onChange={e => setNewOverride(p => ({ ...p, notes: e.target.value }))} style={{ flex: 1, padding: '0.5rem 0.75rem', fontSize: '0.85rem' }} />
                   <button className="btn-volt" disabled={!newOverride.date || !newOverride.templateId} onClick={async () => {
                     const res = await fetch('/api/coach/overrides', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ type: 'player_template', playerId: id, date: newOverride.date, templateId: newOverride.templateId, notes: newOverride.notes }) })
-                    const d = await res.json()
-                    if (d.override) { setOverrides(prev => [...prev, d.override]); setNewOverride({ date: '', templateId: '', notes: '' }) }
+                    const d = await res.json().catch(() => ({}))
+                    if (res.ok && d.override) {
+                      setOverrideError('')
+                      // Same date replaces the old one; newest date first, like the list loads
+                      setOverrides(prev => [...prev.filter(o => o.id !== d.override.id && o.override_date !== d.override.override_date), d.override]
+                        .sort((a, b) => b.override_date.localeCompare(a.override_date)))
+                      setNewOverride({ date: '', templateId: '', notes: '' })
+                    } else {
+                      setOverrideError(d.error ? `Couldn't add override: ${d.error}` : "Couldn't add override. Try again.")
+                    }
                   }} style={{ padding: '0.5rem 1.25rem', flexShrink: 0 }}>Add Override</button>
                 </div>
+                {overrideError && <div style={{ gridColumn: '1/-1', fontSize: '0.75rem', color: 'var(--danger, #c0392b)', fontWeight: 600 }}>{overrideError}</div>}
               </div>
             </div>}
           </div>
