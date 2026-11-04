@@ -241,7 +241,8 @@ export default function HomePage() {
         return
       }
       saveSession(data)
-      router.push('/player/bodycheck')
+      // Signed back in to a workout she already did the body check for: skip it
+      router.push(data.bodyCheckDone ? '/player/workout' : '/player/bodycheck')
     } catch { setError('Something went wrong'); setCheckingIn(false) }
   }
 
@@ -270,6 +271,11 @@ export default function HomePage() {
     } catch { setError('Something went wrong'); setCheckingIn(false) }
   }
 
+  // The saved sign-in says she already did today's body check for this workout
+  function savedBodyCheckDone(): boolean {
+    try { return JSON.parse(localStorage.getItem('vx_session') ?? '{}')?.bodyCheckDone === true } catch { return false }
+  }
+
   function saveSession(data: Record<string, unknown>) {
     if (!selectedPlayer) return
     localStorage.setItem('vx_session', JSON.stringify({
@@ -281,6 +287,7 @@ export default function HomePage() {
         teamId: data.teamId, templateId: data.templateId,
         hasHealthFlags: data.hasHealthFlags, healthReports: data.healthReports,
         isResumed: data.isResumed,
+        bodyCheckDone: data.bodyCheckDone === true,
         playerPass: data.playerPass,
       }))
   }
@@ -541,7 +548,7 @@ export default function HomePage() {
                     <WeekDayRow key={d.slot} day={d} resumed={week.resumed} starting={checkingIn}
                       canStart={week.status === 'ready'}
                       waitLabel={week.unlock === 'pending' ? 'Waiting on coach' : 'Tomorrow'}
-                      onStart={() => { setCheckingIn(true); router.push(selectedCoach ? '/player/workout' : '/player/bodycheck') }} />
+                      onStart={() => { setCheckingIn(true); router.push(selectedCoach || savedBodyCheckDone() ? '/player/workout' : '/player/bodycheck') }} />
                   ))}
                 </div>
               )}

@@ -6,6 +6,7 @@ import { calculateAge } from '@/lib/age'
 import { calculateAthleticismScore, buildPopulationStats, type AthleticismInputs } from '@/lib/athleticism'
 import { getCoach } from '@/lib/coachAuth'
 import { canSeePlayer, inList, notYourTeam, signInRequired, visiblePlayerIds } from '@/lib/coachScope'
+import { mergeSameDayChecks } from '@/lib/bodyChecks'
 
 // Fetches the latest measurement snapshot (the combine-relevant fields
 // only) for every active player, keyed by player_id. Used both to build
@@ -115,7 +116,7 @@ export async function GET(req: NextRequest) {
       athleticism_metrics_used: athleticism.metricsUsed,
     } : null
 
-    return NextResponse.json({ player: enrichedPlayer, sessions: sessions?.slice(0, 10), measurements, healthReports, bodyChecks: bodyChecks ?? [], exerciseProgress, team: playerTeam?.teams ?? null })
+    return NextResponse.json({ player: enrichedPlayer, sessions: sessions?.slice(0, 10), measurements, healthReports, bodyChecks: mergeSameDayChecks(bodyChecks ?? []), exerciseProgress, team: playerTeam?.teams ?? null })
   }
 
   // Player list — now includes measurements + best lifts for leaderboard/sorting

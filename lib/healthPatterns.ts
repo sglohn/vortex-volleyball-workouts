@@ -22,6 +22,8 @@
 // Seen list until it gets worse (its `evidence` number goes up) or 14 days
 // pass.
 
+import { mergeSameDayChecks } from './bodyChecks'
+
 // ─── Body areas ──────────────────────────────────────────────────────────────
 
 /** Body check zone ids (components/BodyCheck.tsx) + 'general' (sore/injured with no area marked) */
@@ -214,8 +216,12 @@ export function findPatterns(input: PatternInput): WatchResult {
     return s?.team_id ?? playerById.get(c.player_id)?.teamIds[0] ?? null
   }
 
+  // One check per player per day: two sign-ins on one day are one day flagged
+  // (lib/bodyChecks.ts). Every count below uses these.
+  const dayChecks = mergeSameDayChecks(input.checks)
+
   const checksByPlayer = new Map<string, CheckRow[]>()
-  for (const c of input.checks) {
+  for (const c of dayChecks) {
     if (!playerById.has(c.player_id)) continue
     const list = checksByPlayer.get(c.player_id) ?? []
     list.push(c)
@@ -518,7 +524,7 @@ export function findPatterns(input: PatternInput): WatchResult {
     teamPlayers.set(tid, s)
   }
   const teamChecks = new Map<string, CheckRow[]>()
-  for (const c of input.checks) {
+  for (const c of dayChecks) {
     if (!playerById.has(c.player_id)) continue
     const tid = checkTeam(c)
     if (!tid) continue
@@ -533,7 +539,7 @@ export function findPatterns(input: PatternInput): WatchResult {
   // ── CLUB ──────────────────────────────────────────────────────────────────
   let club: WatchResult['club'] = null
   if (input.includeClub) {
-    const all = input.checks.filter(c => playerById.has(c.player_id))
+    const all = dayChecks.filter(c => playerById.has(c.player_id))
     flags.push(...groupFlags('club', 'club', 'Club', all, new Set(input.players.map(p => p.id))))
 
     // Weekly picture, 6 weeks, Monday starts

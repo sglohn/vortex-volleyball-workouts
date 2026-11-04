@@ -503,8 +503,8 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
     loadRoster() // so she moves to the top
     const player = { ...selected, checkedIn: true, sessionId }
 
-    if (d.isResumed !== true) {
-      // First check-in today: body check first, same as on a phone
+    if (d.bodyCheckDone !== true) {
+      // No body check yet for this workout: body check first, same as on a phone
       setSelected(player)
       setAfterBodyCheck({ player, sessionId, signIn })
       setScreen('bodycheck')

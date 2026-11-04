@@ -212,6 +212,14 @@ export async function startWorkout(
     sessionId = session.id
   }
 
+  // Already answered the body check for this workout (signed in again)?
+  // Then the sign-in screens skip it so she isn't asked twice.
+  let bodyCheckDone = false
+  if (isResumed) {
+    const { data: done } = await db.from('body_checks').select('id').eq('session_id', sessionId).limit(1)
+    bodyCheckDone = (done?.length ?? 0) > 0
+  }
+
   return { status: 200, body: {
     sessionId,
     playerName: player.name,
@@ -219,6 +227,7 @@ export async function startWorkout(
     templateId,
     selfGuided,
     isResumed,
+    bodyCheckDone,
     hasHealthFlags: (healthReports?.length ?? 0) > 0,
     healthReports: healthReports ?? [],
     ...(week ? { week: publicWeek(week) } : {}),
