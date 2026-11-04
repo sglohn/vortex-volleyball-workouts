@@ -13,7 +13,10 @@
 //            else null.
 //   roster   every active player on those teams (primary team), each with
 //            teamId, checked-in / done state and today's stats (on a Combine
-//            Day, stats.testsDone / testsTotal: tests with a number today)
+//            Day, stats.testsDone / testsTotal: tests with a number today).
+//            Players from other teams who train with one of these teams
+//            (players.trains_with_team_id, volleyball) are listed with it,
+//            with fromTeam = their own team's name.
 //   checkedInCount, completedCount   across all the teams
 //   team, workoutName, templateId    the first team's (older screens)
 //
@@ -37,6 +40,7 @@ import { combineMetricsFor } from '@/lib/combine'
 import { FEATURES } from '@/lib/features'
 
 type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
+type GuestRow = { id: string; name: string; jersey_number?: string; trains_with_team_id: string; player_teams: { team_id: string; is_primary: boolean; teams: { name: string } | { name: string }[] | null }[] | null }
 type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
 type LogRow = { session_id: string; exercise_id: string; completed: boolean; weight_lbs: number | null; reps_completed: number | null }
 type TeamRow = { id: string; name: string; age_group?: string | null; color: string }
@@ -128,12 +132,32 @@ export async function GET(req: NextRequest) {
     .eq('is_primary', true)
 
   const seen = new Set<string>()
-  const players: Array<PlayerJoin & { teamId: string }> = []
+  const players: Array<PlayerJoin & { teamId: string; fromTeam?: string }> = []
   for (const pt of playerTeams ?? []) {
     const p = one(pt.players as unknown as PlayerJoin | PlayerJoin[] | null)
     if (!p || !p.is_active || seen.has(p.id)) continue
     seen.add(p.id)
     players.push({ ...p, teamId: pt.team_id as string })
+  }
+
+  // Players from other teams who come in with one of these teams
+  if (FEATURES.datedSchedule) {
+    const { data: guests } = await db
+      .from('players')
+      .select('id, name, jersey_number, trains_with_team_id, player_teams(team_id, is_primary, teams(name))')
+      .in('trains_with_team_id', ids)
+      .eq('is_active', true)
+      .is('coach_id', null)
+    for (const g of (guests ?? []) as unknown as GuestRow[]) {
+      if (seen.has(g.id)) continue
+      const own = (g.player_teams ?? []).find(pt => pt.is_primary)
+      seen.add(g.id)
+      players.push({
+        id: g.id, name: g.name, jersey_number: g.jersey_number, is_active: true,
+        teamId: g.trains_with_team_id,
+        fromTeam: one(own?.teams ?? null)?.name ?? undefined,
+      })
+    }
   }
   players.sort((a, b) => a.name.localeCompare(b.name))
 
@@ -189,7 +213,7 @@ export async function GET(req: NextRequest) {
     const playerSessions = sessionsByPlayer[p.id] ?? []
     if (!playerSessions.length) {
       return {
-        id: p.id, name: p.name, jerseyNumber: p.jersey_number, teamId: p.teamId,
+        id: p.id, name: p.name, jerseyNumber: p.jersey_number, teamId: p.teamId, fromTeam: p.fromTeam ?? null,
         checkedIn: false, completed: false, sessionId: null, stats: null,
       }
     }
@@ -221,6 +245,7 @@ export async function GET(req: NextRequest) {
       name: p.name,
       jerseyNumber: p.jersey_number,
       teamId: p.teamId,
+      fromTeam: p.fromTeam ?? null,
       checkedIn: true,
       completed: !openSession,
       sessionId: activeSession.id,

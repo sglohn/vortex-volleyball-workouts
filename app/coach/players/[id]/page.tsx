@@ -76,6 +76,7 @@ export default function CoachPlayerDetailPage() {
   const [dobForm, setDobForm] = useState('')
   const [savingDob, setSavingDob] = useState(false)
   const [savingSelfGuided, setSavingSelfGuided] = useState(false)
+  const [savingTrainsWith, setSavingTrainsWith] = useState(false)
   const [newOverride, setNewOverride] = useState({ date: '', templateId: '', notes: '' })
   const [newSkip, setNewSkip] = useState({ exerciseId: '', replacementId: '', reason: '', skipType: 'avoid', endsOn: '' })
   const [replacementSearch, setReplacementSearch] = useState('')
@@ -142,6 +143,22 @@ export default function CoachPlayerDetailPage() {
     }
     fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)
     setSavingSelfGuided(false)
+  }
+
+  // Trains with: she comes in with another team (lib/checkin.ts). '' = only her own team.
+  async function setTrainsWith(teamId: string) {
+    setSavingTrainsWith(true)
+    const res = await fetch('/api/coach/players/delete', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, trains_with_team_id: teamId || null }),
+    })
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}))
+      alert(`Could not save: ${d.error ?? 'Unknown error'}`)
+    }
+    fetch(`/api/coach/players?playerId=${id}`).then(r => r.json()).then(setData)
+    setSavingTrainsWith(false)
   }
 
   if (loading) return <div style={{ padding: '2rem', color: 'var(--text-muted)' }}>Loading…</div>
@@ -370,6 +387,35 @@ export default function CoachPlayerDetailPage() {
           </div>
         </div>
       )}
+
+      {/* ── TRAINS WITH ANOTHER TEAM (volleyball) ── */}
+      {isAdmin && FEATURES.datedSchedule && team && (() => {
+        const withId = (player as unknown as { trains_with_team_id?: string | null }).trains_with_team_id ?? ''
+        const withTeam = allTeams.find(t => t.id === withId)
+        return (
+          <div className="card" style={{ padding: '1.25rem', marginBottom: '1.5rem', border: withId ? '1.5px solid var(--carolina)' : undefined }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+              <div style={{ flex: '1 1 260px', minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <h3 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1rem' }}>Trains With Another Team</h3>
+                  {withTeam && <span style={{ fontSize: '0.65rem', background: 'rgba(22,163,74,0.1)', color: 'var(--success)', border: '1px solid rgba(22,163,74,0.3)', borderRadius: 4, padding: '0.1rem 0.4rem', fontWeight: 600 }}>{withTeam.name}</span>}
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginTop: '0.15rem', lineHeight: 1.45 }}>
+                  For a player who can't make {team.name}'s nights and comes in with another team. She stays on {team.name}: she signs in under it, and her workouts, numbers, leaderboard and attendance stay with it. On days {team.name} has no workout she gets the other team's workout, she's listed in that team's Team Mode, and her attendance follows that team's workout days.
+                </p>
+              </div>
+              <select className="input" value={withId} disabled={savingTrainsWith}
+                onChange={e => setTrainsWith(e.target.value)}
+                style={{ flex: '0 1 220px', fontSize: '0.85rem', opacity: savingTrainsWith ? 0.6 : 1 }}>
+                <option value="">Only {team.name}</option>
+                {allTeams.filter(t => !t.is_open_gym && t.id !== team.id).map(t => (
+                  <option key={t.id} value={t.id}>Comes in with {t.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* ── SELF-GUIDED WORKOUTS ── */}
       {isAdmin && (() => {

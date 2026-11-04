@@ -7,8 +7,10 @@ import { calculateAge } from '@/lib/age'
 // team_id: undefined = leave team alone, '' or null = unassign, uuid = move to that team.
 // self_guided: true/false — auto-built full-body workouts (lib/fullBodyWorkout.ts).
 // gender: 'F' (girl) or 'M' (boy) — decides who a player is compared with.
+// trains_with_team_id: uuid = she comes in with that team (lib/checkin.ts),
+//   '' or null = only her own team. Volleyball.
 export async function PATCH(req: NextRequest) {
-  const { id, name, pin, jersey_number, position, team_id, date_of_birth, self_guided, gender } = await req.json()
+  const { id, name, pin, jersey_number, position, team_id, date_of_birth, self_guided, gender, trains_with_team_id } = await req.json()
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   if (pin && (pin.length !== 4 || !/^\d{4}$/.test(pin)))
     return NextResponse.json({ error: 'PIN must be exactly 4 digits' }, { status: 400 })
@@ -22,6 +24,7 @@ export async function PATCH(req: NextRequest) {
   if (position !== undefined) updates.position = position || null
   if (date_of_birth !== undefined) updates.date_of_birth = date_of_birth || null
   if (self_guided !== undefined) updates.self_guided = self_guided === true
+  if (trains_with_team_id !== undefined) updates.trains_with_team_id = trains_with_team_id || null
   if (gender !== undefined) {
     if (gender !== 'F' && gender !== 'M') return NextResponse.json({ error: 'Gender must be F or M' }, { status: 400 })
     updates.gender = gender

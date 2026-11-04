@@ -12,7 +12,9 @@
 //                   season start through today, that counts for attendance
 //                   (counts_for_attendance; make-up days are set not to).
 //   Counts for her  workout days on or after she joined the team
-//                   (player_teams.joined_at).
+//                   (player_teams.joined_at). A player who trains with
+//                   another team (players.trains_with_team_id) follows that
+//                   team's workout days instead, still counted on her team.
 //   Attended        she checked in that day (a session that club-local date,
 //                   for any team or workout: a coach override, Combine Day
 //                   and Team Mode all count).
