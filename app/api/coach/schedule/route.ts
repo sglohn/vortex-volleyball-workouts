@@ -1,3 +1,4 @@
+// FILE: app/api/coach/schedule/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 
@@ -29,7 +30,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { teamId, templateId, scheduledDate, notes } = await req.json()
+  // countsForAttendance is only sent by the Assign screen and the day's
+  // "Counts for attendance" switch. When it's left out, a new day counts
+  // (the column default) and an existing day keeps its setting.
+  const { teamId, templateId, scheduledDate, notes, countsForAttendance } = await req.json()
   if (!teamId || !scheduledDate) return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
 
   const db = createServerClient()
@@ -42,6 +46,7 @@ export async function POST(req: NextRequest) {
       template_id: templateId ?? null,
       scheduled_date: scheduledDate,
       notes: notes ?? null,
+      ...(typeof countsForAttendance === 'boolean' ? { counts_for_attendance: countsForAttendance } : {}),
     }, { onConflict: 'team_id,scheduled_date' })
     .select()
     .single()
