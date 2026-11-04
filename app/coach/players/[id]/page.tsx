@@ -91,6 +91,8 @@ export default function CoachPlayerDetailPage() {
     })
     fetch('/api/coach/exercises').then(r => r.json()).then(d => setAllExercises(d.exercises ?? []))
     fetch(`/api/coach/player-programs?playerId=${id}`).then(r => r.json()).then(d => setPrograms(d.programs ?? []))
+    // Teams for "Move to team" and "Trains With Another Team" (admins see every team)
+    fetch('/api/coach/teams').then(r => r.json()).then(d => setAllTeams(d.teams ?? [])).catch(() => {})
   }, [id])
 
   async function saveMeasurement() {
