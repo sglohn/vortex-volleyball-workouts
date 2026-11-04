@@ -44,7 +44,8 @@ export interface AttendanceResult {
   players: Record<string, PlayerAttendance[]>
 }
 
-type Member = { player_id: string; team_id: string; joined_at: string | null; players: { is_active: boolean; coach_id: string | null } | { is_active: boolean; coach_id: string | null }[] | null }
+type MemberPlayer = { is_active: boolean; coach_id: string | null; trains_with_team_id: string | null }
+type Member = { player_id: string; team_id: string; joined_at: string | null; players: MemberPlayer | MemberPlayer[] | null }
 
 export async function loadAttendance(db: Db, teamIds: string[], today = clubDateString()): Promise<AttendanceResult> {
   const from = seasonStart(today)
@@ -57,11 +58,30 @@ export async function loadAttendance(db: Db, teamIds: string[], today = clubDate
   if (!teams.length) return empty
   const ids = teams.map(t => t.id as string)
 
+  // Rosters: active players, not coach workout profiles
+  const membersRaw = await all<Member>((a, b) =>
+    db.from('player_teams').select('player_id, team_id, joined_at, players!inner(is_active, coach_id, trains_with_team_id)')
+      .in('team_id', ids).eq('players.is_active', true).is('players.coach_id', null)
+      .order('player_id').range(a, b))
+  const memberPlayer = (m: Member) => (Array.isArray(m.players) ? m.players[0] : m.players) ?? null
+  const members = membersRaw.filter(m => {
+    const p = memberPlayer(m)
+    return !!p?.is_active && !p.coach_id
+  })
+  const playerIds = [...new Set(members.map(m => m.player_id))]
+  // A player who comes in with another team follows that team's workout days
+  const trainsWith = new Map<string, string>()
+  for (const m of members) {
+    const other = memberPlayer(m)?.trains_with_team_id
+    if (other && other !== m.team_id) trainsWith.set(m.player_id, other)
+  }
+  const scheduleTeamIds = [...new Set([...ids, ...trainsWith.values()])]
+
   // Workout days, all season (future ones only count toward "of N this season").
   // Days set to not count for attendance (make-up days) are left out.
   const schedule = await all<{ team_id: string; scheduled_date: string }>((a, b) =>
     db.from('team_schedule').select('team_id, scheduled_date')
-      .in('team_id', ids).not('template_id', 'is', null)
+      .in('team_id', scheduleTeamIds).not('template_id', 'is', null)
       .eq('counts_for_attendance', true)
       .gte('scheduled_date', from).lte('scheduled_date', seasonEnd(today))
       .order('scheduled_date').range(a, b))
@@ -76,16 +96,6 @@ export async function loadAttendance(db: Db, teamIds: string[], today = clubDate
     }
   }
 
-  // Rosters: active players, not coach workout profiles
-  const membersRaw = await all<Member>((a, b) =>
-    db.from('player_teams').select('player_id, team_id, joined_at, players!inner(is_active, coach_id)')
-      .in('team_id', ids).eq('players.is_active', true).is('players.coach_id', null)
-      .order('player_id').range(a, b))
-  const members = membersRaw.filter(m => {
-    const p = Array.isArray(m.players) ? m.players[0] : m.players
-    return !!p?.is_active && !p.coach_id
-  })
-  const playerIds = [...new Set(members.map(m => m.player_id))]
 
   // Check-ins this season: date → finished?
   const checkIns = new Map<string, Map<string, boolean>>()
@@ -144,7 +154,9 @@ export async function loadAttendance(db: Db, teamIds: string[], today = clubDate
       .filter(m => m.team_id === t.id)
       .map(m => ({
         playerId: m.player_id,
-        attendance: playerAttendance(dates, m.joined_at, checkIns.get(m.player_id) ?? new Map(), outBy.get(m.player_id) ?? new Set(), today),
+        attendance: playerAttendance(
+          trainsWith.has(m.player_id) ? workoutsSoFar.get(trainsWith.get(m.player_id)!) ?? [] : dates,
+          m.joined_at, checkIns.get(m.player_id) ?? new Map(), outBy.get(m.player_id) ?? new Set(), today),
         health: healthBy.get(m.player_id)!,
       }))
     players[t.id] = list

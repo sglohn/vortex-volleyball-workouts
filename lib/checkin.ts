@@ -12,7 +12,10 @@
 //   3. Self-guided player (players.self_guided) → auto-built full-body
 //      workout (lib/fullBodyWorkout.ts), saved on the session so resuming
 //      shows the same exercises. Each new session gets a new one.
-//   4. Team schedule (volleyball), or this week's plan (lacrosse,
+//   4. Team schedule (volleyball): her team's workout today; if her team has
+//      none and she trains with another team (players.trains_with_team_id),
+//      that team's workout. The session stays on her team and keeps the
+//      workout in sessions.template_id. Or this week's plan (lacrosse,
 //      FEATURES.weekPlan): the next Day she hasn't finished, in order, one
 //      per day. See lib/weekPlan.ts. When nothing is waiting (done today,
 //      done for the week, no workouts) no session is made and the reply has
@@ -34,7 +37,7 @@ export interface CheckInResult { status: number; body: Record<string, unknown> }
 /** player: the players row (select '*'); teamId: whose team workout to use */
 export async function startWorkout(
   db: Db,
-  player: { id: string; name: string; self_guided?: boolean | null },
+  player: { id: string; name: string; self_guided?: boolean | null; trains_with_team_id?: string | null },
   teamId: string | null,
 ): Promise<CheckInResult> {
   const playerId = player.id
@@ -58,6 +61,8 @@ export async function startWorkout(
   let templateId: string | null = null
   let selfGuided = false
   let week: PlayerWeek | null = null
+  // Set when today's workout comes from the team she trains with
+  let trainsWithTemplateId: string | null = null
 
   const { data: override } = await db
     .from('player_overrides')
@@ -112,6 +117,20 @@ export async function startWorkout(
         .eq('scheduled_date', today)
         .single()
       templateId = schedule?.template_id ?? null
+      // Nothing for her team today: the team she comes in with
+      const withTeam = player.trains_with_team_id
+      if (!templateId && withTeam && withTeam !== teamId) {
+        const { data: other } = await db
+          .from('team_schedule')
+          .select('template_id')
+          .eq('team_id', withTeam)
+          .eq('scheduled_date', today)
+          .maybeSingle()
+        if (other?.template_id) {
+          templateId = other.template_id
+          trainsWithTemplateId = other.template_id
+        }
+      }
     }
   }
 
@@ -205,6 +224,8 @@ export async function startWorkout(
         workout_id: legacyWorkoutId,
         team_id: teamId,
         ...(generated ? { generated_workout: generated } : {}),
+        // Another team's workout: remember which, since her team has none today
+        ...(trainsWithTemplateId ? { template_id: trainsWithTemplateId } : {}),
       })
       .select('id')
       .single()

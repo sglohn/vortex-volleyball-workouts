@@ -73,6 +73,8 @@ interface RosterPlayer {
   name: string
   jerseyNumber?: string
   teamId: string
+  /** Her own team, when she's from another team and comes in with this one */
+  fromTeam?: string | null
   checkedIn: boolean
   completed: boolean
   sessionId: string | null
@@ -1368,6 +1370,7 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
                           {player.jerseyNumber || player.name.charAt(0).toUpperCase()}
                         </div>
                         <div style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--black)', lineHeight: 1.3, marginBottom: '0.2rem' }}>{player.name}</div>
+                        {player.fromTeam && <div style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--carolina-dark)', marginBottom: '0.15rem' }}>{player.fromTeam}</div>}
                         <div style={{ fontSize: '0.68rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Tap to check in</div>
                       </button>
                     ))}

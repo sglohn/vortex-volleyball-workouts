@@ -52,7 +52,7 @@ import { FEATURES } from '@/lib/features'
 
 type Db = ReturnType<typeof createServerClient>
 
-type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
+type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null; template_id?: string | null }
 type LogRow = {
   session_id: string; exercise_id: string; weight_lbs: number | null; reps_completed: number | null
   completed: boolean; velocity_ms: number | null; logged_at: string | null
@@ -260,7 +260,7 @@ export async function GET(req: NextRequest) {
   // ── Everyone who checked in today ──
   const { data: sessionsRaw } = await db
     .from('sessions')
-    .select('id, player_id, checked_in_at, completed_at')
+    .select('id, player_id, checked_in_at, completed_at, template_id')
     .gte('checked_in_at', start)
     .lt('checked_in_at', end)
     .order('checked_in_at', { ascending: true })
@@ -342,7 +342,16 @@ export async function GET(req: NextRequest) {
   const templateByTeam: Record<string, string> = {}
   for (const s of schedules ?? []) if (s.template_id) templateByTeam[s.team_id] = s.template_id
 
-  const templateIds = [...new Set(Object.values(templateByTeam))]
+  // A player who came in with another team (players.trains_with_team_id) has
+  // that team's workout saved on her session; her own team has none today.
+  const sessionTemplateByPlayer: Record<string, string> = {}
+  if (FEATURES.datedSchedule) {
+    for (const s of shownSessions) if (s.template_id) sessionTemplateByPlayer[s.player_id] = s.template_id
+  }
+  const templateOf = (p: { id: string; team: { id: string } }): string | undefined =>
+    templateByTeam[p.team.id] ?? sessionTemplateByPlayer[p.id]
+
+  const templateIds = [...new Set([...Object.values(templateByTeam), ...Object.values(sessionTemplateByPlayer)])]
 
   // Combine Day teams ('*' so this works before the Combine Day migration)
   const combineTemplateIds = new Set<string>()
@@ -350,8 +359,12 @@ export async function GET(req: NextRequest) {
     const { data: tmpl } = await db.from('workout_templates').select('*').in('id', templateIds)
     for (const t of tmpl ?? []) if (t.is_combine === true) combineTemplateIds.add(t.id as string)
   }
-  const combineTeamIds = new Set(
-    Object.entries(templateByTeam).filter(([, t]) => combineTemplateIds.has(t)).map(([team]) => team))
+  // At a Combine Day today: her team's workout, or the one on her session
+  const atCombine = (p: { id: string; team: { id: string } }) => {
+    const t = templateOf(p)
+    return !!t && combineTemplateIds.has(t)
+  }
+  const anyCombine = players.some(atCombine)
   const totalSetsByTemplate: Record<string, number> = {}
   const mainLiftIds: string[] = []   // first exercise of each block, in block order
 
@@ -418,7 +431,7 @@ export async function GET(req: NextRequest) {
     const playerSessions = sessionsByPlayer[p.id] ?? []
     const logs = logsByPlayer.get(p.id) ?? []
     const totalWeight = logs.reduce((sum, l) => sum + setPoundsMoved(l.weight_lbs, l.reps_completed, eq(l.exercise_id)), 0)
-    const templateId = templateByTeam[p.team.id]
+    const templateId = templateOf(p)
     const totalSets = templateId ? (totalSetsByTemplate[templateId] ?? 0) : 0
     return {
       ...p,
@@ -431,7 +444,7 @@ export async function GET(req: NextRequest) {
   })
   const athleteById = new Map(athletes.map(a => [a.id, a]))
   // Players lifting today (not testing at a combine)
-  const lifters = combineTeamIds.size ? athletes.filter(a => !combineTeamIds.has(a.team.id)) : athletes
+  const lifters = anyCombine ? athletes.filter(a => !atCombine(a)) : athletes
   const doneOf = (id: string) => athleteById.get(id)?.completed ?? false
 
   const sections: Section[] = []
@@ -672,8 +685,8 @@ export async function GET(req: NextRequest) {
   // ── Combine Day pages (come first) ──
   let combine: CombineBoards | null = null
   let combinePages: { name: string; boards: Board[] }[] = []
-  if (combineTeamIds.size) {
-    const combineAthletes = athletes.filter(a => combineTeamIds.has(a.team.id))
+  if (anyCombine) {
+    const combineAthletes = athletes.filter(atCombine)
     const combineIds = new Set(combineAthletes.map(a => a.id))
     combine = await buildCombineBoards(db, {
       date,
