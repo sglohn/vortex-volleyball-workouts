@@ -58,10 +58,15 @@ export async function POST(req: NextRequest) {
   }
 
   if (type === 'player_template') {
-    const { playerId, date, templateId, notes } = body
+    // The table's note column is `reason` (the page sends `notes`)
+    const { playerId, date, templateId } = body
+    if (!playerId || !date || !templateId) {
+      return NextResponse.json({ error: 'Pick a date and a workout' }, { status: 400 })
+    }
+    const note = String(body.notes ?? body.reason ?? '').trim()
     const { data, error } = await db
       .from('player_overrides')
-      .upsert({ player_id: playerId, override_date: date, template_id: templateId, notes }, { onConflict: 'player_id,override_date' })
+      .upsert({ player_id: playerId, override_date: date, template_id: templateId, reason: note || null }, { onConflict: 'player_id,override_date' })
       .select().single()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ override: data })
