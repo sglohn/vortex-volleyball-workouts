@@ -13,6 +13,8 @@
 //   - Girls are only compared with girls, boys only with boys.
 //   - Coaches who join a team's workout (lib/coachWorkout.ts) show with that
 //     team, on the boys board for a boys team and the girls board otherwise.
+//   - Checking in isn't enough: a lifter shows once she has logged a set
+//     today (MIN_SETS_ON_BOARD), so sign-ins at 0% stay off the boards.
 // The rules for each board live in lib/leaderboardBoards.ts.
 //
 // Combine Day (lib/combine.ts): when a team on the board has a Combine Day
@@ -67,7 +69,11 @@ type Athlete = PoolPlayer & {
   setsCompleted: number; totalSets: number; pct: number
 }
 
-const HISTORY_DAYS = 84          // 12 weeks, for streaks and most improved
+// Sets a player must log today before she shows on the lifting boards
+// (Today, Team Battle, the header counts, and today's day for This Week /
+// Streaks). Raise it to make the board stricter.
+const MIN_SETS_ON_BOARD = 1
+const HISTORY_DAYS = 84         // 12 weeks, for streaks and most improved
 const POOL_CACHE_MS = 2 * 60_000 // past days don't change mid-session
 const PR_CACHE_MS = 10 * 60_000
 const EXERCISE_CACHE_MS = 10 * 60_000
@@ -443,8 +449,14 @@ export async function GET(req: NextRequest) {
     }
   })
   const athleteById = new Map(athletes.map(a => [a.id, a]))
+  // A lifter is on today's boards only once she has logged MIN_SETS_ON_BOARD
+  // sets. Checking in alone (e.g. on a day her team isn't scheduled) leaves
+  // her off. Combine Day players don't log sets; the combine boards decide.
+  const workingOut = (a: Athlete) => atCombine(a) || a.setsCompleted >= MIN_SETS_ON_BOARD
+  const boardAthletes = athletes.filter(workingOut)
+  const onBoardToday = new Set(boardAthletes.map(a => a.id))
   // Players lifting today (not testing at a combine)
-  const lifters = anyCombine ? athletes.filter(a => !atCombine(a)) : athletes
+  const lifters = anyCombine ? boardAthletes.filter(a => !atCombine(a)) : boardAthletes
   const doneOf = (id: string) => athleteById.get(id)?.completed ?? false
 
   const sections: Section[] = []
@@ -573,7 +585,7 @@ export async function GET(req: NextRequest) {
       if (l.date < monday) continue
       weekLbs.set(l.player_id, (weekLbs.get(l.player_id) ?? 0) + setPoundsMoved(l.weight_lbs, l.reps_completed, eq(l.exercise_id)))
     }
-    for (const a of athletes) {
+    for (const a of boardAthletes) {
       addDay(a.id, date)
       weekLbs.set(a.id, (weekLbs.get(a.id) ?? 0) + a.totalWeightLbs)
     }
@@ -602,7 +614,7 @@ export async function GET(req: NextRequest) {
   {
     const items = poolPlayers.map(p => {
       const days = new Set(history.daysByPlayer.get(p.id) ?? [])
-      if (athleteById.has(p.id)) days.add(date)
+      if (onBoardToday.has(p.id)) days.add(date)
       return { ...p, streak: weekStreak(days, date) }
     }).filter(p => p.streak >= 2)
     const boards: Board[] = []
@@ -737,9 +749,11 @@ export async function GET(req: NextRequest) {
       asOf: clubTimeLabel(now),
       page: { index: pageIndex + 1, count: pages.length, name: page.name, seconds: PAGE_SECONDS },
       summary: {
-        lifting: athletes.filter(a => !a.completed).length,
-        checkedIn: athletes.length,
-        finished: athletes.filter(a => a.completed).length,
+        // Only players on the boards (see MIN_SETS_ON_BOARD); the Roku shows
+        // its empty screen while checkedIn is 0
+        lifting: boardAthletes.filter(a => !a.completed).length,
+        checkedIn: boardAthletes.length,
+        finished: boardAthletes.filter(a => a.completed).length,
         totalLbs,
         totalLbsLabel: totalLbs.toLocaleString('en-US'),
         prsToday: prsToday.length,
