@@ -2,12 +2,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { canAccessPlayer, canAccessSession, signInAgain } from '@/lib/playerAuth'
+import { checkDay, daysFlagged, mergeRegions } from '@/lib/bodyChecks'
 
 // ─── Zone classification ──────────────────────────────────────────────────────
 // Every flagged area now reaches the coach Health Board.
 // Classification only decides HOW it is labelled:
 //   injured                         → major_injury
-//   sore joint, 2+ times in 30 days → nagging_pain
+//   sore joint, 2+ days in 30 days  → nagging_pain
 //   any other soreness              → soreness
 const JOINT_ZONES = new Set([
   'r_knee','l_knee','r_ankle','l_ankle','r_shoulder','l_shoulder',
@@ -47,6 +48,7 @@ type ExistingReport = {
   report_type: string
   reported_by: string
   report_count: number | null
+  last_reported_at: string | null
 }
 
 export async function POST(req: NextRequest) {
@@ -79,34 +81,44 @@ export async function POST(req: NextRequest) {
     Object.keys(regions).length === 0 && (quickStatus === 'sore' || quickStatus === 'injured')
       ? { general: quickStatus }
       : regions
-  const { error: checkError } = await db.from('body_checks').insert({
-    session_id: sessionId,
-    player_id: playerId,
-    regions: savedRegions,
-  })
+  // One body check per workout: if she already answered for this session
+  // (signed in again), merge into that one instead of saving a second check.
+  const { data: earlier } = await db.from('body_checks')
+    .select('id, regions')
+    .eq('session_id', sessionId)
+    .order('checked_at', { ascending: false })
+    .limit(1)
+  const { error: checkError } = earlier?.[0]
+    ? await db.from('body_checks')
+        .update({ regions: mergeRegions(earlier[0].regions as Record<string, string>, savedRegions) })
+        .eq('id', earlier[0].id)
+    : await db.from('body_checks').insert({
+        session_id: sessionId,
+        player_id: playerId,
+        regions: savedRegions,
+      })
   if (checkError) return NextResponse.json({ error: checkError.message }, { status: 500 })
 
   // ── 2. Pull what we need once: last 30 days of checks + this player's open reports
   const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const [{ data: recentChecks }, { data: openReportsRaw }] = await Promise.all([
     db.from('body_checks')
-      .select('regions')
+      .select('regions, checked_at')
       .eq('player_id', playerId)
       .gte('checked_at', thirtyDaysAgo),
     db.from('health_reports')
-      .select('id, body_part, report_type, reported_by, report_count')
+      .select('id, body_part, report_type, reported_by, report_count, last_reported_at')
       .eq('player_id', playerId)
       .in('status', ['active', 'monitoring']),
   ])
   const openReports = (openReportsRaw ?? []) as ExistingReport[]
 
-  // How many times has this zone been flagged in the last 30 days (includes today's check)
+  // How many different DAYS this zone was flagged in the last 30 days
+  // (includes today). Two sign-ins on one day count once.
   function flagCount(zone: string): number {
-    return (recentChecks ?? []).filter(c => {
-      const r = (c.regions ?? {}) as Record<string, string>
-      return r[zone] === 'sore' || r[zone] === 'injured'
-    }).length
+    return daysFlagged((recentChecks ?? []) as { checked_at: string; regions: Record<string, string> | null }[], zone)
   }
+  const today = checkDay(now)
 
   // ── 3. Create or update one report per flagged area
   async function upsertReport(bodyPart: string, reportType: string, description: string) {
@@ -127,12 +139,16 @@ export async function POST(req: NextRequest) {
       return error
     }
 
-    // Already open for this area → bump it back into "Needs Review" instead of duplicating
+    // Already open for this area → bump it back into "Needs Review" instead of duplicating.
+    // Reported again the same day (signed in twice): not a new report, so the
+    // count stays and it isn't sent back to Needs Review unless it got worse.
     const upgraded = (TYPE_RANK[reportType] ?? 0) > (TYPE_RANK[existing.report_type] ?? 0)
+    const sameDay = !!existing.last_reported_at && checkDay(existing.last_reported_at) === today
+    if (sameDay && !upgraded) return null
     const updates: Record<string, unknown> = {
       confirmed_by_coach: false,
       last_reported_at: now,
-      report_count: (existing.report_count ?? 1) + 1,
+      report_count: sameDay ? (existing.report_count ?? 1) : (existing.report_count ?? 1) + 1,
     }
     if (upgraded) updates.report_type = reportType
     // Never overwrite a coach's own description on a coach-logged report
@@ -161,11 +177,11 @@ export async function POST(req: NextRequest) {
         : 'Player reported pain/injury on pre-workout body check'
     } else if (isJoint && count >= 2) {
       reportType = 'nagging_pain'
-      description = `Recurring joint soreness — flagged ${count}× in the last 30 days`
+      description = `Recurring joint soreness — flagged on ${count} days in the last 30 days`
     } else {
       reportType = 'soreness'
       description = count > 1
-        ? `Player reported soreness — flagged ${count}× in the last 30 days`
+        ? `Player reported soreness — flagged on ${count} days in the last 30 days`
         : 'Player reported soreness on pre-workout body check'
       if (isMuscle && count >= 4) description += ' — recurring, consider adjusting load'
     }
