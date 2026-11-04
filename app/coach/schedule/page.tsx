@@ -1,11 +1,12 @@
 'use client'
+// FILE: app/coach/schedule/page.tsx
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 
 interface Team { id: string; name: string; age_group?: string; color: string }
 interface Template { id: string; name: string; phase_type?: string }
-interface ScheduleEntry { id: string; team_id: string; template_id?: string; scheduled_date: string; notes?: string; workout_templates?: Template }
+interface ScheduleEntry { id: string; team_id: string; template_id?: string; scheduled_date: string; notes?: string; counts_for_attendance?: boolean; workout_templates?: Template }
 
 function getMonday(date: Date): Date {
   const d = new Date(date)
@@ -25,6 +26,25 @@ const TODAY = localFmt(new Date())
 // Which weekdays to show gym days (0=Mon..6=Sun)
 const GYM_DAYS = [0,1,2,3,4] // Mon-Fri default
 
+// "Counts for attendance" switch for one schedule day. Off = a make-up day:
+// anyone can still check in and do the workout, but nobody on the team is
+// marked missing (lib/attendance.ts).
+function CountsSwitch({ counts, onChange }: { counts: boolean; onChange: (counts: boolean) => void }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.625rem', padding: '0.625rem 0.75rem', marginBottom: '1rem', border: '1px solid var(--gray-border)', borderRadius: 8, background: counts ? 'var(--white)' : 'var(--carolina-light)', cursor: 'pointer' }}>
+      <input type="checkbox" checked={counts} onChange={e => onChange(e.target.checked)} style={{ marginTop: '0.2rem', width: 16, height: 16, flexShrink: 0 }} />
+      <span>
+        <span style={{ display: 'block', fontWeight: 600, fontSize: '0.85rem' }}>Counts for attendance</span>
+        <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          {counts
+            ? 'A team workout day. Players who don\'t come show as Missed.'
+            : 'Make-up day: anyone can still do the workout, but nobody is marked missing. Players who came get it as an Extra day.'}
+        </span>
+      </span>
+    </label>
+  )
+}
+
 function ScheduleContent() {
   const searchParams = useSearchParams()
   const teamFilter = searchParams.get('team')
@@ -41,7 +61,7 @@ function ScheduleContent() {
 
   // Assign modal
   const [assigning, setAssigning] = useState<{ teamId: string; date: string } | null>(null)
-  const [form, setForm] = useState({ templateId: '', notes: '' })
+  const [form, setForm] = useState({ templateId: '', notes: '', counts: true })
 
   // Custom workout builder
   const [buildingCustom, setBuildingCustom] = useState(false)
@@ -204,10 +224,21 @@ function ScheduleContent() {
     await fetch('/api/coach/schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ teamId: assigning.teamId, templateId: form.templateId || null, scheduledDate: assigning.date, notes: form.notes }),
+      body: JSON.stringify({ teamId: assigning.teamId, templateId: form.templateId || null, scheduledDate: assigning.date, notes: form.notes, countsForAttendance: form.counts }),
     })
     await loadSchedule()
     setAssigning(null); setSaving(false)
+  }
+
+  // Make-up days: the workout still runs, but nobody is marked missing
+  async function setCounts(entry: ScheduleEntry, counts: boolean) {
+    setSchedule(prev => prev.map(s => s.id === entry.id ? { ...s, counts_for_attendance: counts } : s))
+    setEditingSchedule(prev => prev && prev.entry.id === entry.id ? { ...prev, entry: { ...prev.entry, counts_for_attendance: counts } } : prev)
+    await fetch('/api/coach/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ teamId: entry.team_id, templateId: entry.template_id ?? null, scheduledDate: entry.scheduled_date, notes: entry.notes ?? null, countsForAttendance: counts }),
+    })
   }
 
   async function remove(id: string) {
@@ -348,12 +379,13 @@ function ScheduleContent() {
                       <td key={di} style={{ padding: '0.3rem', textAlign: 'center', verticalAlign: 'middle', background: fmt(d) === TODAY ? 'var(--carolina-light)' : 'transparent' }}>
                         {entry ? (
                           <div style={{ background: phaseConfig ? `${phaseConfig.color}18` : 'rgba(86,160,211,0.1)', border: `1px solid ${phaseConfig?.color ?? 'var(--carolina)'}40`, borderRadius: 6, padding: '0.3rem 0.4rem', position: 'relative', cursor: 'pointer' }}
-                            onClick={() => entry.template_id ? openEditSchedule(entry) : (setAssigning({ teamId: team.id, date: fmt(d) }), setForm({ templateId: entry.template_id ?? '', notes: entry.notes ?? '' }))}>
+                            onClick={() => entry.template_id ? openEditSchedule(entry) : (setAssigning({ teamId: team.id, date: fmt(d) }), setForm({ templateId: entry.template_id ?? '', notes: entry.notes ?? '', counts: entry.counts_for_attendance !== false }))}>
                             <div style={{ fontWeight: 600, fontSize: '0.72rem', color: phaseConfig?.color ?? 'var(--carolina)', lineHeight: 1.2 }}>{entry.workout_templates?.name ?? 'Workout'}</div>
+                            {entry.counts_for_attendance === false && <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 600, marginTop: '0.15rem' }}>Make-up · not counted</div>}
                             <button onClick={e => { e.stopPropagation(); remove(entry.id) }} style={{ position: 'absolute', top: 2, right: 2, background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '0.65rem', lineHeight: 1 }}>✕</button>
                           </div>
                         ) : (
-                          <button onClick={() => { setAssigning({ teamId: team.id, date: fmt(d) }); setForm({ templateId: '', notes: '' }) }}
+                          <button onClick={() => { setAssigning({ teamId: team.id, date: fmt(d) }); setForm({ templateId: '', notes: '', counts: true }) }}
                             style={{ width: '100%', minHeight: 36, background: 'transparent', border: '1px dashed var(--gray-border)', borderRadius: 6, color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1rem', transition: 'all 0.12s' }}
                             onMouseEnter={e => { e.currentTarget.style.borderColor = team.color; e.currentTarget.style.color = team.color }}
                             onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--gray-border)'; e.currentTarget.style.color = 'var(--text-muted)' }}>+</button>
@@ -442,6 +474,7 @@ function ScheduleContent() {
               <Label>Notes (optional)</Label>
               <input className="input" placeholder="e.g. Focus on explosive work" value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} />
             </div>
+            <CountsSwitch counts={form.counts} onChange={c => setForm(p => ({ ...p, counts: c }))} />
             <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.625rem' }}>
               <button className="btn-ghost" onClick={() => setAssigning(null)} style={{ flex: 1, padding: '0.75rem' }}>Cancel</button>
               <button className="btn-volt" onClick={assign} disabled={saving || !form.templateId} style={{ flex: 2, padding: '0.75rem' }}>{saving ? 'Saving…' : 'Assign'}</button>
@@ -470,10 +503,11 @@ function ScheduleContent() {
                 <p style={{ color: 'var(--carolina-dark)', fontSize: '0.75rem', marginTop: '0.3rem' }}>Click any exercise to swap it for this date only. All other dates keep the original.</p>
               </div>
               <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
-                <button onClick={() => { setAssigning({ teamId: editingSchedule.entry.team_id, date: editingSchedule.entry.scheduled_date }); setForm({ templateId: editingSchedule.entry.template_id ?? '', notes: editingSchedule.entry.notes ?? '' }); setEditingSchedule(null) }} className="btn-ghost" style={{ padding: '0.4rem 0.875rem', fontSize: '0.82rem' }}>Change Template</button>
+                <button onClick={() => { setAssigning({ teamId: editingSchedule.entry.team_id, date: editingSchedule.entry.scheduled_date }); setForm({ templateId: editingSchedule.entry.template_id ?? '', notes: editingSchedule.entry.notes ?? '', counts: editingSchedule.entry.counts_for_attendance !== false }); setEditingSchedule(null) }} className="btn-ghost" style={{ padding: '0.4rem 0.875rem', fontSize: '0.82rem' }}>Change Template</button>
                 <button onClick={() => setEditingSchedule(null)} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: '1.3rem', lineHeight: 1 }}>✕</button>
               </div>
             </div>
+            <CountsSwitch counts={editingSchedule.entry.counts_for_attendance !== false} onChange={c => setCounts(editingSchedule.entry, c)} />
             {editingSchedule.template?.warmup_notes && (
               <div style={{ background: 'var(--carolina-light)', border: '1px solid var(--carolina-border)', borderRadius: 8, padding: '0.625rem 0.875rem', marginBottom: '1rem', fontSize: '0.8rem', color: 'var(--carolina-deep)' }}>
                 <strong>Warmup:</strong> {editingSchedule.template.warmup_notes}

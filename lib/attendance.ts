@@ -9,7 +9,8 @@
 // The rules:
 //   Season          Aug 1 to Jul 31 (seasonStart). Rolls over by itself.
 //   Workout day     a team_schedule row for the team with a workout, from the
-//                   season start through today.
+//                   season start through today, that counts for attendance
+//                   (counts_for_attendance; make-up days are set not to).
 //   Counts for her  workout days on or after she joined the team
 //                   (player_teams.joined_at).
 //   Attended        she checked in that day (a session that club-local date,
@@ -20,7 +21,8 @@
 //                   in: not counted against her (shown as "Out").
 //   Today           counts once she checks in; until then it's left out, so
 //                   nobody shows a miss before the workout has happened.
-//   Extra           days she checked in with no team workout scheduled.
+//   Extra           days she checked in with no team workout that counts
+//                   (no workout scheduled, or a make-up day).
 //
 // Attendance % = attended ÷ workout days that count. A team's % is the whole
 // roster added together (attended ÷ counted), so every workout weighs the same.

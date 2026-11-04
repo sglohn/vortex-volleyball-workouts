@@ -57,10 +57,12 @@ export async function loadAttendance(db: Db, teamIds: string[], today = clubDate
   if (!teams.length) return empty
   const ids = teams.map(t => t.id as string)
 
-  // Workout days, all season (future ones only count toward "of N this season")
+  // Workout days, all season (future ones only count toward "of N this season").
+  // Days set to not count for attendance (make-up days) are left out.
   const schedule = await all<{ team_id: string; scheduled_date: string }>((a, b) =>
     db.from('team_schedule').select('team_id, scheduled_date')
       .in('team_id', ids).not('template_id', 'is', null)
+      .eq('counts_for_attendance', true)
       .gte('scheduled_date', from).lte('scheduled_date', seasonEnd(today))
       .order('scheduled_date').range(a, b))
   const workoutsSoFar = new Map<string, string[]>()
