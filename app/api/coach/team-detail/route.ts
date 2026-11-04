@@ -1,9 +1,11 @@
+// FILE: app/api/coach/team-detail/route.ts
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getBestOneRepMax, getTrend, estimateOneRepMax } from '@/lib/fitness'
 import { getCoach } from '@/lib/coachAuth'
 import { canSeeTeam, notYourTeam, signInRequired } from '@/lib/coachScope'
-import { clubDateString } from '@/lib/clubTime'
+import { clubDateString, clubDayBounds } from '@/lib/clubTime'
+import { seasonStart } from '@/lib/attendance'
 
 type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
 type LogRow = { exercise_id: string; session_id: string; weight_lbs: number | null; reps_completed: number | null; completed: boolean }
@@ -74,8 +76,12 @@ export async function GET(req: NextRequest) {
     if (arr) arr.push(s)
   }
 
-  // Set logs for strength
-  const allSessionIds = allSessions.map(s => s.id)
+  // Set logs for strength: this season only (Aug 1 on, club time), like the
+  // measurements. Last season's lifts don't count toward Top Lift.
+  const seasonFrom = clubDayBounds(seasonStart(clubDateString())).start
+  const seasonSessions = allSessions.filter(s => new Date(s.checked_in_at).getTime() >= new Date(seasonFrom).getTime())
+  const allSessionIds = seasonSessions.map(s => s.id)
+  const seasonIds = new Set(allSessionIds)
   const { data: allLogsRaw } = allSessionIds.length
     ? await db.from('set_logs').select('exercise_id, session_id, weight_lbs, reps_completed, completed').in('session_id', allSessionIds).eq('completed', true)
     : { data: [] }
@@ -90,7 +96,7 @@ export async function GET(req: NextRequest) {
     const exMap = Object.fromEntries([...(exercises ?? []), ...(legacyEx ?? [])].map(e => [e.id, e.name]))
 
     for (const p of players) {
-      const playerSessions = new Set((sessionsByPlayer[p.id] ?? []).map(s => s.id))
+      const playerSessions = new Set((sessionsByPlayer[p.id] ?? []).filter(s => seasonIds.has(s.id)).map(s => s.id))
       const playerLogs = allLogs.filter(l => playerSessions.has(l.session_id))
       const byExercise: Record<string, LogRow[]> = {}
       for (const l of playerLogs) {
@@ -98,7 +104,9 @@ export async function GET(req: NextRequest) {
         const arr = byExercise[l.exercise_id]
         if (arr) arr.push(l)
       }
-      strengthByPlayer[p.id] = Object.entries(byExercise).map(([exId, logs]) => {
+      // Lifts whose exercise no longer exists (deleted from the library or an
+      // old workout) are skipped: there's no name to show.
+      strengthByPlayer[p.id] = Object.entries(byExercise).filter(([exId]) => exMap[exId]).map(([exId, logs]) => {
         const bySession: Record<string, number> = {}
         for (const l of logs) {
           if (l.weight_lbs && l.reps_completed) {
@@ -107,7 +115,7 @@ export async function GET(req: NextRequest) {
           }
         }
         const vals = Object.values(bySession)
-        return { exerciseId: exId, exerciseName: exMap[exId] ?? exId, best1RM: getBestOneRepMax(logs), trend: getTrend(vals) }
+        return { exerciseId: exId, exerciseName: exMap[exId] as string, best1RM: getBestOneRepMax(logs), trend: getTrend(vals) }
       }).filter(e => e.best1RM > 0).sort((a, b) => b.best1RM - a.best1RM).slice(0, 3)
     }
   }
