@@ -3,13 +3,25 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { canAccessPlayer, canAccessSession, signInAgain } from '@/lib/playerAuth'
 import { checkDay, daysFlagged, mergeRegions } from '@/lib/bodyChecks'
+import { logHealthUpdate } from '@/lib/healthUpdates'
 
 // ─── Zone classification ──────────────────────────────────────────────────────
-// Every flagged area now reaches the coach Health Board.
-// Classification only decides HOW it is labelled:
+// Every flagged area is kept as a health report. Classification decides how
+// it is labelled:
 //   injured                         → major_injury
 //   sore joint, 2+ days in 30 days  → nagging_pain
 //   any other soreness              → soreness
+//
+// ─── Which reports need a coach's review ─────────────────────────────────────
+// Needs Review (confirmed_by_coach = false) only when:
+//   • the player marked it injured ("Something hurts" / tapped twice)
+//   • she wrote a note for the coach
+//   • it keeps coming up: the same area on REVIEW_AFTER_DAYS different days
+//     in the last 30 (joints, low back and "no area marked": 2; muscles: 3)
+// Plain soreness is still saved, but goes straight to Aches & Pains
+// (confirmed_by_coach = true) and feeds the counts above and the Watch tab.
+// Once a coach has reviewed a repeat, later sore days don't send it back
+// unless it gets worse, she writes a note, or it's marked injured.
 const JOINT_ZONES = new Set([
   'r_knee','l_knee','r_ankle','l_ankle','r_shoulder','l_shoulder',
   'r_hip','l_hip','r_elbow','l_elbow','r_wrist','l_wrist',
@@ -20,6 +32,14 @@ const MUSCLE_ZONES = new Set([
   'r_glute','l_glute','r_shin','l_shin','chest','core',
   'upper_back','lower_back',
 ])
+
+/** Different sore days (last 30) before soreness needs a coach's review */
+const REVIEW_AFTER_DAYS = { sensitive: 2, muscle: 3 }
+function reviewAfter(zone: string): number {
+  return JOINT_ZONES.has(zone) || zone === 'lower_back' || zone === 'general'
+    ? REVIEW_AFTER_DAYS.sensitive
+    : REVIEW_AFTER_DAYS.muscle
+}
 
 // Higher number = more serious. A report can be upgraded, never downgraded, by a player re-report.
 const TYPE_RANK: Record<string, number> = { soreness: 1, nagging_pain: 2, major_injury: 3 }
@@ -49,6 +69,7 @@ type ExistingReport = {
   reported_by: string
   report_count: number | null
   last_reported_at: string | null
+  confirmed_by_coach: boolean | null
 }
 
 export async function POST(req: NextRequest) {
@@ -56,6 +77,9 @@ export async function POST(req: NextRequest) {
   const { sessionId, playerId, quickStatus } = body as {
     sessionId?: string; playerId?: string; quickStatus?: 'good' | 'sore' | 'injured'
   }
+  // Optional note for the coach (components/BodyCheck.tsx). Any note sends
+  // every area she marked to Needs Review.
+  const note = typeof body.note === 'string' ? body.note.trim().slice(0, 1000) : ''
   if (!sessionId || !playerId) return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   // Her own pass, for her own session
   if (!(await canAccessPlayer(req, playerId)) || !(await canAccessSession(req, sessionId))) return signInAgain()
@@ -107,7 +131,7 @@ export async function POST(req: NextRequest) {
       .eq('player_id', playerId)
       .gte('checked_at', thirtyDaysAgo),
     db.from('health_reports')
-      .select('id, body_part, report_type, reported_by, report_count, last_reported_at')
+      .select('id, body_part, report_type, reported_by, report_count, last_reported_at, confirmed_by_coach')
       .eq('player_id', playerId)
       .in('status', ['active', 'monitoring']),
   ])
@@ -121,40 +145,59 @@ export async function POST(req: NextRequest) {
   const today = checkDay(now)
 
   // ── 3. Create or update one report per flagged area
-  async function upsertReport(bodyPart: string, reportType: string, description: string) {
+  // needsReview: injured, has a note, or has reached its repeat count.
+  // reachedRepeat: today is the day it reached that count (sends a report
+  // a coach already saw back to Needs Review once, not every sore day after).
+  type Review = { needsReview: boolean; reachedRepeat: boolean }
+  const withNote = (text: string) => note ? `Player note: "${note}" · ${text}` : text
+
+  async function upsertReport(bodyPart: string, reportType: string, description: string, review: Review) {
     const existing = openReports.find(r => r.body_part.toLowerCase() === bodyPart.toLowerCase())
 
     if (!existing) {
-      const { error } = await db.from('health_reports').insert({
+      const { data: created, error } = await db.from('health_reports').insert({
         player_id: playerId,
         report_type: reportType,
         body_part: bodyPart,
         reported_by: 'player',
         status: 'active',
-        confirmed_by_coach: false,
-        description,
+        // Plain soreness is noted (Aches & Pains) without waiting for review
+        confirmed_by_coach: !review.needsReview,
+        description: withNote(description),
         last_reported_at: now,
         report_count: 1,
-      })
+      }).select('id').single()
+      if (!error && created && note) {
+        await logHealthUpdate(db, { reportId: created.id, playerId: playerId!, kind: 'note', note })
+      }
       return error
     }
 
-    // Already open for this area → bump it back into "Needs Review" instead of duplicating.
+    // Already open for this area → update it instead of duplicating.
     // Reported again the same day (signed in twice): not a new report, so the
-    // count stays and it isn't sent back to Needs Review unless it got worse.
+    // count stays and it isn't sent back to Needs Review unless it got worse
+    // or she added a note.
     const upgraded = (TYPE_RANK[reportType] ?? 0) > (TYPE_RANK[existing.report_type] ?? 0)
     const sameDay = !!existing.last_reported_at && checkDay(existing.last_reported_at) === today
-    if (sameDay && !upgraded) return null
+    if (sameDay && !upgraded && !note) return null
     const updates: Record<string, unknown> = {
-      confirmed_by_coach: false,
       last_reported_at: now,
       report_count: sameDay ? (existing.report_count ?? 1) : (existing.report_count ?? 1) + 1,
     }
+    // Back to Needs Review only for something new: marked injured, a note,
+    // worse than before, or the day it reached the repeat count.
+    const injured = reportType === 'major_injury'
+    if (review.needsReview && (injured || !!note || upgraded || review.reachedRepeat)) {
+      updates.confirmed_by_coach = false
+    }
     if (upgraded) updates.report_type = reportType
     // Never overwrite a coach's own description on a coach-logged report
-    if (existing.reported_by === 'player') updates.description = description
+    if (existing.reported_by === 'player') updates.description = withNote(description)
 
     const { error } = await db.from('health_reports').update(updates).eq('id', existing.id)
+    if (!error && note) {
+      await logHealthUpdate(db, { reportId: existing.id, playerId: playerId!, kind: 'note', note })
+    }
     return error
   }
 
@@ -186,18 +229,26 @@ export async function POST(req: NextRequest) {
       if (isMuscle && count >= 4) description += ' — recurring, consider adjusting load'
     }
 
-    const err = await upsertReport(bodyPart, reportType, description)
+    const need = reviewAfter(zone)
+    const review: Review = {
+      needsReview: status === 'injured' || !!note || count >= need,
+      reachedRepeat: count === need,
+    }
+    const err = await upsertReport(bodyPart, reportType, description, review)
     if (err) errors.push(`${bodyPart}: ${err.message}`)
   }
 
   // ── 4. Player said "sore" or "something hurts" but didn't tap an area — still report it
   if (entries.length === 0 && (quickStatus === 'sore' || quickStatus === 'injured')) {
+    const count = flagCount('general')
+    const need = reviewAfter('general')
     const err = await upsertReport(
       GENERAL_BODY_PART,
       quickStatus === 'injured' ? 'major_injury' : 'soreness',
       quickStatus === 'injured'
         ? 'Player said something hurts but did not mark where — check in with them'
         : 'Player said they were sore but did not mark where',
+      { needsReview: quickStatus === 'injured' || !!note || count >= need, reachedRepeat: count === need },
     )
     if (err) errors.push(`${GENERAL_BODY_PART}: ${err.message}`)
   }

@@ -24,11 +24,11 @@ export default function BodyCheckPage() {
   return (
     <BodyCheck
       playerName={signIn.playerName}
-      onSend={async (quickStatus, regions) => {
+      onSend={async (quickStatus, regions, note) => {
         await playerFetch('/api/player/bodycheck', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: signIn.sessionId, playerId: signIn.playerId, quickStatus, regions }),
+          body: JSON.stringify({ sessionId: signIn.sessionId, playerId: signIn.playerId, quickStatus, regions, note }),
         })
       }}
       onDone={() => router.push('/player/workout')} />

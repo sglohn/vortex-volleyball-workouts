@@ -1,9 +1,11 @@
 // FILE: components/BodyCheck.tsx
 //
 // "How are you feeling today?" body check before a workout: I'm Good /
-// A bit sore / Something hurts, then a front/back body map to tap where.
-// Every sore or hurt area reaches the coach Health Board
-// (app/api/player/bodycheck).
+// A bit sore / Something hurts, then a front/back body map to tap where,
+// plus an optional note for the coach. Every sore or hurt area is kept on
+// the coach Health Board (app/api/player/bodycheck); plain soreness goes to
+// Aches & Pains, while hurt areas, a note, or soreness that keeps coming
+// back go to Needs Review.
 //
 // Used by:
 //   app/player/bodycheck   the player's phone, right after sign-in
@@ -94,7 +96,7 @@ export type BodyCheckRegions = RegionMap
 interface Props {
   playerName: string
   /** Sends the answer (only called when there's something to report) */
-  onSend: (quickStatus: QuickStatus, regions: RegionMap) => Promise<void>
+  onSend: (quickStatus: QuickStatus, regions: RegionMap, note: string) => Promise<void>
   /** Next screen (the workout) */
   onDone: () => void
   /** Shared screen: back to the roster without answering */
@@ -107,6 +109,7 @@ export default function BodyCheck({ playerName, onSend, onDone, onBack }: Props)
   const [side, setSide] = useState<'front'|'back'>('front')
   const [hovered, setHovered] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [note, setNote] = useState('')
 
   function tap(id: string) {
     setRegions(prev => {
@@ -124,15 +127,16 @@ export default function BodyCheck({ playerName, onSend, onDone, onBack }: Props)
     setSubmitting(true)
     const status = opts?.status ?? quickStatus
     const sendRegions = opts?.skipRegions ? {} : regions
+    const sendNote = opts?.skipRegions ? '' : note.trim()
 
     // "I'm Good" with nothing flagged — nothing to report
-    if (status === 'good' && Object.keys(sendRegions).length === 0) {
+    if (status === 'good' && Object.keys(sendRegions).length === 0 && !sendNote) {
       onDone()
       return
     }
 
     try {
-      await onSend(status ?? 'good', sendRegions)
+      await onSend(status ?? 'good', sendRegions, sendNote)
     } catch {
       // Don't block the workout if the network hiccups
     }
@@ -254,6 +258,17 @@ export default function BodyCheck({ playerName, onSend, onDone, onBack }: Props)
         />
       </div>
 
+      {/* Optional note: anything written here goes to the coach for review */}
+      <div style={{ marginTop: '0.75rem' }}>
+        <label htmlFor="bodycheck-note" style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.3rem', fontWeight: 600 }}>
+          Anything your coach should know? (optional)
+        </label>
+        <textarea id="bodycheck-note" className="input" rows={2} maxLength={1000}
+          placeholder="What happened, when it started, what makes it worse…"
+          value={note} onChange={e => setNote(e.target.value)}
+          style={{ resize: 'none', width: '100%', fontSize: '16px' }} />
+      </div>
+
       <div style={{ display: 'flex', gap: '0.75rem', marginTop: '1rem' }}>
         <button onClick={() => submit({ skipRegions: true })} disabled={submitting}
           style={{ flex: 1, padding: '0.875rem', borderRadius: 10, border: '1.5px solid var(--gray-border)', background: 'var(--white)', color: 'var(--text-muted)', cursor: 'pointer', fontWeight: 600, fontSize: '0.9rem' }}>
@@ -261,7 +276,7 @@ export default function BodyCheck({ playerName, onSend, onDone, onBack }: Props)
         </button>
         <button onClick={() => submit()} disabled={submitting}
           className="btn-volt" style={{ flex: 2, padding: '0.875rem', fontSize: '1rem' }}>
-          {submitting ? 'Saving…' : flagCount > 0 ? `Report ${flagCount} area${flagCount > 1 ? 's' : ''} & Continue` : 'Continue'}
+          {submitting ? 'Saving…' : flagCount > 0 ? `Report ${flagCount} area${flagCount > 1 ? 's' : ''} & Continue` : note.trim() ? 'Send note & Continue' : 'Continue'}
         </button>
       </div>
     </div>
