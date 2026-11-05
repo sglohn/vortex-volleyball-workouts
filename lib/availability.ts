@@ -159,6 +159,7 @@ export function describeUpdate(u: HealthUpdate): string {
     case 'level':    return `${u.from_availability ? availabilityLevel(u.from_availability).label : '—'} → ${availabilityLevel(u.to_availability).label}`
     case 'cleared':  return 'Cleared — full competition'
     case 'reopened': return `Reopened as ${availabilityLevel(u.to_availability).label}`
-    case 'note':     return 'Progress note'
+    // Notes with no coach name were written by the player on her body check
+    case 'note':     return u.coach_name ? 'Progress note' : 'Player note'
   }
 }

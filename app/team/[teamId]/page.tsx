@@ -591,12 +591,12 @@ export default function TeamSessionPage({ params }: { params: Promise<{ teamId: 
 
   // ── Body check ──
 
-  async function sendBodyCheck(quickStatus: string, regions: Record<string, string>) {
+  async function sendBodyCheck(quickStatus: string, regions: Record<string, string>, note: string) {
     if (!afterBodyCheck) return
     await fetch('/api/player/bodycheck', withPass(afterBodyCheck.signIn.pass, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: afterBodyCheck.sessionId, playerId: afterBodyCheck.player.id, quickStatus, regions }),
+      body: JSON.stringify({ sessionId: afterBodyCheck.sessionId, playerId: afterBodyCheck.player.id, quickStatus, regions, note }),
     }))
   }
 

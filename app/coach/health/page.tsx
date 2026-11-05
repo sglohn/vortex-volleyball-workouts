@@ -672,7 +672,7 @@ export default function CoachHealthPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '1.75rem', gap: '1rem', flexWrap: 'wrap' }}>
         <div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, marginBottom: '0.25rem' }}>Health Board</h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Every player report — soreness, pain, or injury — shows up here for review</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Injuries, player notes and soreness that keeps coming back need review · everyday soreness goes straight to Aches &amp; Pains</p>
         </div>
         <button className="btn-volt" onClick={() => setShowNewModal(true)} style={{ padding: '0.625rem 1.25rem', flexShrink: 0 }}>
           + Log Injury
@@ -766,7 +766,7 @@ export default function CoachHealthPage() {
             <span style={{ fontFamily: 'inherit', textTransform: 'none', letterSpacing: 0, fontWeight: 500, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{achesLevel.desc}</span>
           </h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', marginBottom: '1rem' }}>
-            Not counted as injuries. When one keeps coming up, open it and move it to Modified and it moves to Active.
+            Not counted as injuries. Everyday soreness from the body check lands here without needing review; it moves to Needs Review if the player marks it injured, writes a note, or flags the same area again (2 days in 30 for joints and low back, 3 for muscles). To manage one as an injury, open it and move it to Modified.
           </p>
           {aches.length === 0
             ? <div className="card" style={{ padding: '2rem', textAlign: 'center', color: 'var(--text-muted)' }}>No aches or pains being tracked.</div>
