@@ -10,6 +10,9 @@
 //   progress note, Cleared and Reopen adds a health_report_updates row.
 //   A report only counts as coach-entered (reportedBy: 'coach') when the
 //   coach cookie is present.
+//   PATCH also takes bodyPart / reportType to fix a mistake (wrong side,
+//   injured instead of sore): lib/healthFix.ts, which also corrects the
+//   player's body checks and notes the fix on the timeline.
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
@@ -18,6 +21,7 @@ import { adminsOnly, canSeePlayer, inList, notYourTeam, visiblePlayerIds } from 
 import { canAccessPlayer, signInAgain } from '@/lib/playerAuth'
 import { isAvailability, type Availability } from '@/lib/availability'
 import { logHealthUpdate } from '@/lib/healthUpdates'
+import { fixBodyChecks, logFix, planFix, type ReportToFix } from '@/lib/healthFix'
 
 const coachOnly = () => NextResponse.json({ error: 'Coach sign-in required' }, { status: 401 })
 
@@ -98,7 +102,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const coach = await getCoach(req)
   if (!coach) return coachOnly()
-  const { id, confirmedByCoach, coachNotes, status, expectedReturn, severity, injuryType, availability, progressNote } = await req.json()
+  const { id, confirmedByCoach, coachNotes, status, expectedReturn, severity, injuryType, availability, progressNote, bodyPart, reportType } = await req.json()
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   if (availability !== undefined && !isAvailability(availability)) {
@@ -108,7 +112,7 @@ export async function PATCH(req: NextRequest) {
   const db = createServerClient()
   const { data: existing } = await db
     .from('health_reports')
-    .select('player_id, status, availability')
+    .select('id, player_id, status, availability, body_part, report_type, reported_at, resolved_at')
     .eq('id', id)
     .maybeSingle()
   if (!existing) return NextResponse.json({ error: 'Report not found' }, { status: 404 })
@@ -121,6 +125,11 @@ export async function PATCH(req: NextRequest) {
   if (severity !== undefined) updates.severity = severity
   if (injuryType !== undefined) updates.injury_type = injuryType
   if (expectedReturn !== undefined) updates.expected_return = expectedReturn
+
+  // Fix a mistake: area and/or type
+  const fix = await planFix(db, existing as ReportToFix, { bodyPart, reportType })
+  if ('error' in fix) return NextResponse.json({ error: fix.error }, { status: fix.status })
+  Object.assign(updates, fix.updates)
 
   const wasResolved = existing.status === 'resolved'
   const clearing = status === 'resolved' && !wasResolved
@@ -146,6 +155,11 @@ export async function PATCH(req: NextRequest) {
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  if (fix.changes.length) {
+    await fixBodyChecks(db, existing as ReportToFix, fix.updates)
+    await logFix(db, existing as ReportToFix, fix.changes, coach)
+  }
 
   // Timeline: one row for what happened; the progress note rides along with it
   const note = typeof progressNote === 'string' ? progressNote : null

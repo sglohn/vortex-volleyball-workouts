@@ -7,6 +7,8 @@
 // (lib/availability.ts).
 // Watch tab: patterns in body checks, reports and workout ratings for
 // players, teams and the club (lib/healthPatterns.ts, /api/coach/health-watch).
+// Fix a mistake (in an open report): wrong side or area, or injured when she
+// meant sore. Also corrects her body checks (lib/healthFix.ts).
 import { useState, useEffect, type CSSProperties } from 'react'
 import { painLevelColor } from '@/lib/fitness'
 import {
@@ -14,6 +16,7 @@ import {
   daysBetween, isAvailability, stageTotals, type Availability, type HealthUpdate,
 } from '@/lib/availability'
 import type { FlagLevel, WatchFlag, WatchResult } from '@/lib/healthPatterns'
+import { BODY_ZONES, bodyPartToZone, otherSide, zoneToBodyPart } from '@/lib/bodyChecks'
 
 type WatchData = WatchResult
 
@@ -450,6 +453,106 @@ function WatchTab({ data, error, busy, onOpenReport, onStartTracking, onSeen, on
           {showSeen && seen.map(card)}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * "Fix a mistake" in the report modal: the player tapped the wrong side or
+ * area, or said injured when she meant sore. Saves right away (PATCH
+ * /api/player/health with bodyPart / reportType); her body checks are
+ * corrected too, and the fix goes on the timeline.
+ */
+const GENERAL_PART = 'General (no area marked)'
+function FixMistake({ r, onFixed }: { r: HealthReport; onFixed: (patch: Partial<HealthReport>) => void }) {
+  const [open, setOpen] = useState(false)
+  const [part, setPart] = useState(r.body_part)
+  const [type, setType] = useState<ReportType>(r.report_type)
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const zone = bodyPartToZone(r.body_part)
+  const swap = zone ? otherSide(zone) : null
+  const areaOptions = [GENERAL_PART, ...BODY_ZONES.map(zoneToBodyPart)]
+  if (!areaOptions.some(o => o.toLowerCase() === r.body_part.toLowerCase())) areaOptions.unshift(r.body_part)
+  const changed = part.toLowerCase() !== r.body_part.toLowerCase() || type !== r.report_type
+
+  async function save(next: { bodyPart?: string; reportType?: ReportType }) {
+    setSaving(true); setErr('')
+    const res = await fetch('/api/player/health', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: r.id, ...next }),
+    })
+    const d = await res.json().catch(() => ({}))
+    setSaving(false)
+    if (!res.ok) { setErr(d.error ?? 'Could not save — try again'); return }
+    onFixed({ body_part: d.report?.body_part ?? next.bodyPart ?? r.body_part, report_type: d.report?.report_type ?? next.reportType ?? r.report_type })
+    setOpen(false)
+  }
+
+  if (!open) {
+    return (
+      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'center', marginBottom: '1rem', fontSize: '0.8rem' }}>
+        <span style={{ color: 'var(--text-muted)' }}>Wrong side or level?</span>
+        {swap && (
+          <button type="button" className="btn-ghost" disabled={saving} onClick={() => save({ bodyPart: zoneToBodyPart(swap) })}
+            style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem' }}>
+            ⇄ Change to {zoneToBodyPart(swap)}
+          </button>
+        )}
+        {r.report_type === 'major_injury' && (
+          <button type="button" className="btn-ghost" disabled={saving} onClick={() => save({ reportType: 'soreness' })}
+            style={{ padding: '0.3rem 0.65rem', fontSize: '0.78rem' }}>
+            Only sore, not injured
+          </button>
+        )}
+        <button type="button" onClick={() => setOpen(true)}
+          style={{ background: 'none', border: 'none', color: 'var(--carolina)', cursor: 'pointer', fontWeight: 600, fontSize: '0.8rem', padding: 0 }}>
+          Fix a mistake…
+        </button>
+        {err && <span style={{ color: '#f87171', width: '100%' }}>{err}</span>}
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ border: '1px solid var(--court-border)', borderRadius: 10, padding: '0.85rem', marginBottom: '1rem' }}>
+      <label style={LABEL_STYLE}>Fix a mistake</label>
+      <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: '0.6rem' }}>
+        Changes this report and her body checks for these days, so repeat counts and the Watch tab stay right. Noted on the timeline.
+      </p>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+        <div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Area</div>
+          <select className="input" value={part} onChange={e => setPart(e.target.value)}>
+            {areaOptions.map(o => <option key={o} value={o}>{o}</option>)}
+          </select>
+        </div>
+        <div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginBottom: '0.25rem' }}>Type</div>
+          <div style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+            {(['soreness', 'nagging_pain', 'major_injury'] as const).map(t => (
+              <button key={t} type="button" onClick={() => setType(t)} aria-pressed={type === t}
+                style={{ padding: '0.35rem 0.7rem', borderRadius: 8, cursor: 'pointer', fontSize: '0.8rem', fontWeight: 600, border: `1.5px solid ${type === t ? TYPE_COLORS[t] : 'var(--court-border)'}`, background: type === t ? `${TYPE_COLORS[t]}22` : 'transparent', color: type === t ? TYPE_COLORS[t] : 'var(--text-secondary)' }}>
+                {TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      {err && <p style={{ color: '#f87171', fontSize: '0.8rem', marginTop: '0.5rem' }}>{err}</p>}
+      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+        <button type="button" className="btn-ghost" onClick={() => { setOpen(false); setPart(r.body_part); setType(r.report_type); setErr('') }} disabled={saving} style={{ flex: 1, padding: '0.55rem', fontSize: '0.82rem' }}>Cancel</button>
+        <button type="button" className="btn-volt" disabled={saving || !changed}
+          onClick={() => save({
+            ...(part.toLowerCase() !== r.body_part.toLowerCase() ? { bodyPart: part } : {}),
+            ...(type !== r.report_type ? { reportType: type } : {}),
+          })}
+          style={{ flex: 2, padding: '0.55rem', fontSize: '0.82rem' }}>
+          {saving ? 'Saving…' : 'Save fix'}
+        </button>
+      </div>
     </div>
   )
 }
@@ -916,6 +1019,14 @@ export default function CoachHealthPage() {
                 "{selected.description}"
               </div>
             )}
+
+            {/* Wrong side / injured instead of sore */}
+            <FixMistake key={`${selected.id}|${selected.body_part}|${selected.report_type}`} r={selected}
+              onFixed={patch => {
+                setSelected(s => s ? { ...s, ...patch } : s)
+                loadActive()
+                loadWatch()
+              }} />
 
             {/* Level */}
             <div style={{ marginBottom: '0.875rem' }}>
