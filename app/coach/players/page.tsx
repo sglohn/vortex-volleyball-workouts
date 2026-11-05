@@ -93,6 +93,10 @@ function FF({ label, children }: { label: string; children: React.ReactNode }) {
   )
 }
 
+// Timed tests: the fastest (lowest) number is best, so the first click on
+// these columns sorts lowest first. Every other number sorts highest first.
+const LOWER_IS_BETTER = new Set<SortKey>(['acceleration_sec', 'pro_agility_sec'])
+
 // ── Module-level SortTh ──────────────────────────────────────────────────────
 function SortTh({ col, sortKey, sortDir, onSort }: {
   col: typeof COLUMNS[number]
@@ -289,7 +293,8 @@ export default function CoachPlayersPage() {
       setSortDir(d => d === 'desc' ? 'asc' : 'desc')
     } else {
       setSortKey(key)
-      setSortDir(COLUMNS.find(c => c.key === key)?.numeric ? 'desc' : 'asc')
+      const numeric = COLUMNS.find(c => c.key === key)?.numeric || key === 'standingVert' || key === 'maxVert'
+      setSortDir(LOWER_IS_BETTER.has(key) ? 'asc' : numeric ? 'desc' : 'asc')
     }
   }
 
@@ -313,21 +318,19 @@ export default function CoachPlayersPage() {
   }, [players, scopeKey, scopeValue, search, genderFilter])
 
   const sortedPlayers = useMemo(() => {
+    // A number column's value; null = not measured yet. Players with no
+    // number always go to the bottom, whichever way the column is sorted.
+    const col = COLUMNS.find(c => c.key === sortKey)
+    const numberOf = (p: Player): number | null => {
+      if (sortKey === 'standingVert') return standingVertical(p) ?? null
+      if (sortKey === 'maxVert') return maxVertical(p) ?? null
+      return (p[sortKey as keyof Player] as number | null) ?? null
+    }
+    const isNumber = sortKey === 'standingVert' || sortKey === 'maxVert' || !!col?.numeric
     return [...scopedPlayers].sort((a, b) => {
-      const col = COLUMNS.find(c => c.key === sortKey)
-      if (sortKey === 'standingVert') {
-        const av = standingVertical(a) ?? -1
-        const bv = standingVertical(b) ?? -1
-        return sortDir === 'desc' ? bv - av : av - bv
-      }
-      if (sortKey === 'maxVert') {
-        const av = maxVertical(a) ?? -1
-        const bv = maxVertical(b) ?? -1
-        return sortDir === 'desc' ? bv - av : av - bv
-      }
-      if (col?.numeric) {
-        const an = (a[sortKey as keyof Player] as number | null) ?? -1
-        const bn = (b[sortKey as keyof Player] as number | null) ?? -1
+      if (isNumber) {
+        const an = numberOf(a), bn = numberOf(b)
+        if (an == null || bn == null) return an == null && bn == null ? a.name.localeCompare(b.name) : an == null ? 1 : -1
         return sortDir === 'desc' ? bn - an : an - bn
       }
       const as_ = (a[sortKey as keyof Player] as string | null) ?? ''
@@ -554,7 +557,9 @@ export default function CoachPlayersPage() {
         <div style={{ marginBottom:'0.75rem', fontSize:'0.8rem', color:'var(--text-muted)' }}>
           Showing <strong style={{ color:'var(--carolina-deep)' }}>{sortedPlayers.length}</strong> players
           {' '}ranked by <strong style={{ color:'var(--carolina-deep)' }}>{COLUMNS.find(c => c.key === sortKey)?.label}</strong>
-          {' '}({sortDir === 'desc' ? 'highest first' : 'lowest first'}) · {scopeLabel}
+          {' '}({LOWER_IS_BETTER.has(sortKey)
+            ? (sortDir === 'asc' ? 'fastest first' : 'slowest first')
+            : (sortDir === 'desc' ? 'highest first' : 'lowest first')}) · {scopeLabel}
         </div>
       )}
 
