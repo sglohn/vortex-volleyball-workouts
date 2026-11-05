@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { canAccessPlayer, canAccessSession, signInAgain } from '@/lib/playerAuth'
-import { checkDay, daysFlagged, mergeRegions } from '@/lib/bodyChecks'
+import { checkDay, daysFlagged, mergeRegions, zoneToBodyPart } from '@/lib/bodyChecks'
 import { logHealthUpdate } from '@/lib/healthUpdates'
 
 // ─── Zone classification ──────────────────────────────────────────────────────
@@ -45,21 +45,6 @@ function reviewAfter(zone: string): number {
 const TYPE_RANK: Record<string, number> = { soreness: 1, nagging_pain: 2, major_injury: 3 }
 
 const GENERAL_BODY_PART = 'General (no area marked)'
-
-const SPECIAL_LABELS: Record<string, string> = {
-  head: 'Head', neck: 'Neck', chest: 'Chest', core: 'Core',
-  upper_back: 'Upper Back', lower_back: 'Lower Back',
-}
-
-// "r_knee" → "Right Knee" (same format the coach Log Injury form uses,
-// so PlayerHealthCard maps it onto the body diagram correctly)
-function zoneToBodyPart(zone: string): string {
-  if (SPECIAL_LABELS[zone]) return SPECIAL_LABELS[zone]
-  const title = (s: string) => s.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-  if (zone.startsWith('r_')) return `Right ${title(zone.slice(2))}`
-  if (zone.startsWith('l_')) return `Left ${title(zone.slice(2))}`
-  return title(zone)
-}
 
 type RegionStatus = 'sore' | 'injured'
 type ExistingReport = {

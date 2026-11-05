@@ -42,15 +42,17 @@ const FRONT_ZONES: ZoneDef[] = [
   { id:'l_ankle',    label:'L. Ankle',    x:103, y:188, w:29, h:24 },
 ]
 
+// Back view is seen from behind: her left is on the left of the screen
+// (same as the player's body check, components/BodyCheck.tsx)
 const BACK_ZONES: ZoneDef[] = [
   { id:'upper_back',  label:'Upper Back',   x:85,  y:42,  w:34, h:28 },
   { id:'lower_back',  label:'Lower Back',   x:86,  y:71,  w:32, h:22 },
-  { id:'r_glute',     label:'R. Glute',     x:77,  y:94,  w:24, h:20 },
-  { id:'l_glute',     label:'L. Glute',     x:103, y:94,  w:24, h:20 },
-  { id:'r_hamstring', label:'R. Hamstring', x:78,  y:115, w:23, h:26 },
-  { id:'l_hamstring', label:'L. Hamstring', x:103, y:115, w:23, h:26 },
-  { id:'r_calf',      label:'R. Calf',      x:83,  y:165, w:18, h:22 },
-  { id:'l_calf',      label:'L. Calf',      x:103, y:165, w:18, h:22 },
+  { id:'l_glute',     label:'L. Glute',     x:77,  y:94,  w:24, h:20 },
+  { id:'r_glute',     label:'R. Glute',     x:103, y:94,  w:24, h:20 },
+  { id:'l_hamstring', label:'L. Hamstring', x:78,  y:115, w:23, h:26 },
+  { id:'r_hamstring', label:'R. Hamstring', x:103, y:115, w:23, h:26 },
+  { id:'l_calf',      label:'L. Calf',      x:83,  y:165, w:18, h:22 },
+  { id:'r_calf',      label:'R. Calf',      x:103, y:165, w:18, h:22 },
 ]
 
 const ALL_ZONES = [...FRONT_ZONES, ...BACK_ZONES]

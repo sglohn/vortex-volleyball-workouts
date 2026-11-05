@@ -2,7 +2,12 @@
 //
 // "How are you feeling today?" body check before a workout: I'm Good /
 // A bit sore / Something hurts, then a front/back body map to tap where,
-// plus an optional note for the coach. Every sore or hurt area is kept on
+// plus an optional note for the coach. Mistakes are easy to fix on the
+// same screen (no extra step): each marked area shows as a chip spelling out
+// the side ("Right Hip"), with a Sore/Hurts switch, a swap-side button and
+// a remove button. A tap on the map only marks or clears an area — it never
+// turns soreness into an injury by itself (that was the double-tap mistake).
+// Coaches can fix anything that still slips through on the Health Board. Every sore or hurt area is kept on
 // the coach Health Board (app/api/player/bodycheck); plain soreness goes to
 // Aches & Pains, while hurt areas, a note, or soreness that keeps coming
 // back go to Needs Review.
@@ -17,6 +22,7 @@
 // next (onDone). If sending fails the workout still opens.
 'use client'
 import { useState } from 'react'
+import { otherSide, zoneToBodyPart } from '@/lib/bodyChecks'
 
 type Status = 'sore' | 'injured'
 type RegionMap = Record<string, Status>
@@ -49,15 +55,18 @@ const FRONT_ZONES: ZoneDef[] = [
   { id:'l_ankle',    label:'L. Ankle',    x:103, y:188, w:29, h:24, side:'right' },
 ]
 
+// Back view is seen from behind, so her left is on the left of the screen
+// (front view: her right is on the left, like looking at someone facing you).
+// The labels above the figure say which side is which.
 const BACK_ZONES: ZoneDef[] = [
   { id:'upper_back',   label:'Upper back',   x:85,  y:42,  w:34, h:28, side:'right' },
   { id:'lower_back',   label:'Lower back',   x:86,  y:71,  w:32, h:22, side:'right' },
-  { id:'r_glute',      label:'R. Glute',     x:77,  y:94,  w:24, h:20, side:'left'  },
-  { id:'l_glute',      label:'L. Glute',     x:103, y:94,  w:24, h:20, side:'right' },
-  { id:'r_hamstring',  label:'R. Hamstring', x:78,  y:115, w:23, h:26, side:'left'  },
-  { id:'l_hamstring',  label:'L. Hamstring', x:103, y:115, w:23, h:26, side:'right' },
-  { id:'r_calf',       label:'R. Calf',      x:83,  y:165, w:18, h:22, side:'left'  },
-  { id:'l_calf',       label:'L. Calf',      x:103, y:165, w:18, h:22, side:'right' },
+  { id:'l_glute',      label:'L. Glute',     x:77,  y:94,  w:24, h:20, side:'left'  },
+  { id:'r_glute',      label:'R. Glute',     x:103, y:94,  w:24, h:20, side:'right' },
+  { id:'l_hamstring',  label:'L. Hamstring', x:78,  y:115, w:23, h:26, side:'left'  },
+  { id:'r_hamstring',  label:'R. Hamstring', x:103, y:115, w:23, h:26, side:'right' },
+  { id:'l_calf',       label:'L. Calf',      x:83,  y:165, w:18, h:22, side:'left'  },
+  { id:'r_calf',       label:'R. Calf',      x:103, y:165, w:18, h:22, side:'right' },
 ]
 
 function sc(s: Status) { return s === 'injured' ? '#ef4444' : '#facc15' }
@@ -111,13 +120,34 @@ export default function BodyCheck({ playerName, onSend, onDone, onBack }: Props)
   const [submitting, setSubmitting] = useState(false)
   const [note, setNote] = useState('')
 
+  // A tap marks the area at the level she picked (sore, or hurts for
+  // "Something hurts"), or clears it. Changing the level is the chip's job.
   function tap(id: string) {
     setRegions(prev => {
-      const cur = prev[id]
-      if (!cur) return { ...prev, [id]: 'sore' }
-      if (cur === 'sore') return { ...prev, [id]: 'injured' }
+      if (!prev[id]) return { ...prev, [id]: quickStatus === 'injured' ? 'injured' : 'sore' }
       const next = { ...prev }; delete next[id]; return next
     })
+  }
+
+  function setLevel(id: string, status: Status) {
+    setRegions(prev => ({ ...prev, [id]: status }))
+  }
+
+  /** Right Hip → Left Hip (keeps the level; merges if the other side is marked too) */
+  function swapSide(id: string) {
+    const other = otherSide(id)
+    if (!other) return
+    setRegions(prev => {
+      const next = { ...prev }
+      const status = next[id]
+      delete next[id]
+      next[other] = next[other] === 'injured' || status === 'injured' ? 'injured' : 'sore'
+      return next
+    })
+  }
+
+  function remove(id: string) {
+    setRegions(prev => { const next = { ...prev }; delete next[id]; return next })
   }
 
   // One request with the whole body map. Every sore/injured area — or a "sore"/"hurts"
@@ -200,7 +230,6 @@ export default function BodyCheck({ playerName, onSend, onDone, onBack }: Props)
   )
 
   // ── STEP 2: Body map (if sore or injured) ──
-  const defaultStatus: Status = quickStatus === 'injured' ? 'injured' : 'sore'
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', padding: '1.25rem', background: 'var(--page-bg)', maxWidth: 480, margin: '0 auto' }}>
@@ -211,7 +240,7 @@ export default function BodyCheck({ playerName, onSend, onDone, onBack }: Props)
             {quickStatus === 'injured' ? '🤕 Where does it hurt?' : '😐 Where are you sore?'}
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Tap to mark · tap again for injured · tap once more to clear
+            Tap where · tap again to clear · check the list below the buttons
           </div>
         </div>
       </div>
@@ -226,37 +255,53 @@ export default function BodyCheck({ playerName, onSend, onDone, onBack }: Props)
         ))}
       </div>
 
-      {/* Flagged regions */}
+      {/* Body figure, with which side is which */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', fontWeight: 800, letterSpacing: '0.06em', color: 'var(--carolina-dark)', padding: '0 0.25rem' }}>
+        <span>◀ YOUR {side === 'front' ? 'RIGHT' : 'LEFT'}</span>
+        <span>{side === 'front' ? 'FRONT' : 'BACK'}</span>
+        <span>YOUR {side === 'front' ? 'LEFT' : 'RIGHT'} ▶</span>
+      </div>
+      <div style={{ flex: 1 }}>
+        <Figure
+          zones={side === 'front' ? FRONT_ZONES : BACK_ZONES}
+          regions={regions} hovered={hovered}
+          onTap={tap}
+          onHover={setHovered} onLeave={() => setHovered(null)}
+          mirror={side === 'back'}
+        />
+      </div>
+
+      {/* What she's reporting, spelled out, each fixable in one tap */}
       {flagCount > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.75rem' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.75rem' }}>
           {Object.entries(regions).map(([id, status]) => {
-            const zone = [...FRONT_ZONES, ...BACK_ZONES].find(z => z.id === id)
+            const other = otherSide(id)
             return (
-              <div key={id} style={{ fontSize: '0.72rem', fontWeight: 600, padding: '0.2rem 0.6rem', borderRadius: 5, background: status === 'injured' ? 'var(--danger-light)' : '#fef9c3', color: status === 'injured' ? 'var(--danger)' : '#a16207', border: `1px solid ${status === 'injured' ? '#fecaca' : '#fde68a'}` }}>
-                {zone?.label ?? id} {status === 'injured' ? '🔴' : '🟡'}
+              <div key={id} style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', padding: '0.4rem 0.5rem', borderRadius: 8, background: status === 'injured' ? 'var(--danger-light)' : '#fef9c3', border: `1px solid ${status === 'injured' ? '#fecaca' : '#fde68a'}` }}>
+                <span style={{ flex: 1, fontWeight: 700, fontSize: '0.9rem', color: status === 'injured' ? 'var(--danger)' : '#a16207' }}>{zoneToBodyPart(id)}</span>
+                <div style={{ display: 'flex', borderRadius: 6, overflow: 'hidden', border: '1px solid var(--gray-border)' }}>
+                  {(['sore', 'injured'] as const).map(l => (
+                    <button key={l} type="button" onClick={() => setLevel(id, l)} aria-pressed={status === l}
+                      style={{ padding: '0.3rem 0.55rem', border: 'none', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, background: status === l ? (l === 'injured' ? 'var(--danger)' : '#ca8a04') : 'var(--white)', color: status === l ? '#fff' : 'var(--text-muted)' }}>
+                      {l === 'sore' ? 'Sore' : 'Hurts'}
+                    </button>
+                  ))}
+                </div>
+                {other && (
+                  <button type="button" onClick={() => swapSide(id)} title={`Change to ${zoneToBodyPart(other)}`}
+                    style={{ padding: '0.3rem 0.5rem', borderRadius: 6, border: '1px solid var(--gray-border)', background: 'var(--white)', cursor: 'pointer', fontSize: '0.72rem', fontWeight: 600, color: 'var(--carolina-dark)', whiteSpace: 'nowrap' }}>
+                    ⇄ {other.startsWith('l_') ? 'Left' : 'Right'}
+                  </button>
+                )}
+                <button type="button" onClick={() => remove(id)} aria-label={`Remove ${zoneToBodyPart(id)}`}
+                  style={{ padding: '0.3rem 0.45rem', borderRadius: 6, border: 'none', background: 'none', cursor: 'pointer', fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+                  ✕
+                </button>
               </div>
             )
           })}
         </div>
       )}
-
-      {/* Body figure */}
-      <div style={{ flex: 1 }}>
-        <Figure
-          zones={side === 'front' ? FRONT_ZONES : BACK_ZONES}
-          regions={regions} hovered={hovered}
-          onTap={id => {
-            setRegions(prev => {
-              const cur = prev[id]
-              if (!cur) return { ...prev, [id]: defaultStatus }
-              if (cur === 'sore') return { ...prev, [id]: 'injured' }
-              const next = { ...prev }; delete next[id]; return next
-            })
-          }}
-          onHover={setHovered} onLeave={() => setHovered(null)}
-          mirror={side === 'back'}
-        />
-      </div>
 
       {/* Optional note: anything written here goes to the coach for review */}
       <div style={{ marginTop: '0.75rem' }}>
