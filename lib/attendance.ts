@@ -19,8 +19,11 @@
 //                   for any team or workout: a coach override, Combine Day
 //                   and Team Mode all count).
 //   Finished        that session was finished (tapped Finish).
-//   Out             she had a health report at Out that day and didn't check
-//                   in: not counted against her (shown as "Out").
+//   Missed at Out   she had a health report at Out that day and didn't check
+//                   in. Out means out of volleyball, not the weight room, so
+//                   it counts as a miss like any other; it's shown as
+//                   "Missed (Out)" so coaches can see injured players who
+//                   aren't coming in.
 //   Today           counts once she checks in; until then it's left out, so
 //                   nobody shows a miss before the workout has happened.
 //   Extra           days she checked in with no team workout that counts
@@ -38,8 +41,9 @@ export interface AttendanceStat {
   counted: number
   attended: number
   finished: number
+  /** All misses, including the ones while Out */
   missed: number
-  /** Missed while Out (not counted) */
+  /** Of the misses, how many were while she was at Out */
   out: number
   /** Check-ins on days with no team workout */
   extra: number
@@ -140,6 +144,8 @@ export function playerAttendance(
     } else if (date === today) {
       days.push({ date, status: 'today' })
     } else if (outDates.has(date)) {
+      // Out of volleyball, not the weight room: still a miss
+      missed++
       out++
       days.push({ date, status: 'out' })
     } else {
@@ -250,6 +256,6 @@ export const DAY_STATUS: Record<DayStatus, { label: string; color: string; bg: s
   finished: { label: 'Finished',             color: '#16a34a', bg: 'rgba(22,163,74,0.12)' },
   attended: { label: 'Came, didn’t finish',  color: '#65a30d', bg: 'rgba(101,163,13,0.12)' },
   missed:   { label: 'Missed',               color: '#dc2626', bg: 'rgba(220,38,38,0.10)' },
-  out:      { label: 'Out (injured)',        color: '#6b7280', bg: 'rgba(107,114,128,0.12)' },
+  out:      { label: 'Missed (Out)',         color: '#9f1239', bg: 'rgba(159,18,57,0.12)' },
   today:    { label: 'Today, not in yet',    color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
 }
