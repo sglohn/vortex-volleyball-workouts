@@ -217,7 +217,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
             <div><strong style={{ color: 'var(--black)' }}>{attTeam.workoutsSoFar}</strong> of {attTeam.workoutsSeason} team workouts so far this season · {attTeam.attended} check-ins of {attTeam.counted} possible{attTeam.finishedPct !== null && <> · {attTeam.finishedPct}% finished</>}</div>
             {attTeam.counted > 0 && <div>{attTeam.playersHigh} player{attTeam.playersHigh === 1 ? '' : 's'} at {HIGH_PCT}%+ · <span style={{ color: attTeam.playersLow ? 'var(--danger)' : undefined }}>{attTeam.playersLow} under {LOW_PCT}%</span></div>}
             <div><SeasonHealth health={attTeam.health} prefix="Health this season: " />{attTeam.health.playersInjured > 0 && <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}> ({attTeam.health.playersInjured} player{attTeam.health.playersInjured === 1 ? '' : 's'} injured)</span>}</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tap a player&apos;s % to see each day. Days a player was Out with an injury don&apos;t count against them.</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tap a player&apos;s % to see each day. Out means out of volleyball, so a missed workout while Out still counts as missed.</div>
           </div>
           <div className="full-phone" style={{ display: 'flex', gap: '0.25rem', background: 'var(--carolina-light)', padding: '0.2rem', borderRadius: 8, border: '1px solid var(--carolina-border)', flexShrink: 0 }}>
             {([['name', 'A–Z'], ['attendance', 'Lowest % first']] as [RosterSort, string][]).map(([k, label]) => (
@@ -293,7 +293,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                       <td colSpan={rosterCols.length} style={{ padding: '0 1rem 0.9rem' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
                           {att.attendance.attended} of {att.attendance.counted} workouts · {att.attendance.finished} finished
-                          {att.attendance.out > 0 && <> · {att.attendance.out} missed while Out (not counted)</>}
+                          {att.attendance.out > 0 && <> · {att.attendance.out} missed while Out (counted)</>}
                           {att.attendance.extra > 0 && <> · {att.attendance.extra} extra day{att.attendance.extra === 1 ? '' : 's'} with no team workout</>}
                         </div>
                         <DayStrip days={att.attendance.days} />
