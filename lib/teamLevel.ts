@@ -19,3 +19,20 @@ export function teamLevelLabel(level: string | null | undefined): string | null 
 export function cleanTeamLevel(v: unknown): TeamLevel | null {
   return TEAM_LEVELS.some(l => l.key === v) ? (v as TeamLevel) : null
 }
+
+// Team number within its age group (teams.club_rank, migration
+// 2026-11-06_team_rank.sql): 1 = the age group's top team, from the USAV
+// team code (G14VRTEX1SO → 1). Set on Coach → Teams → Edit.
+
+export const TEAM_RANKS = [1, 2, 3, 4, 5]
+
+/** 1 → "1 team" */
+export function teamRankLabel(rank: number | null | undefined): string | null {
+  return rank ? `${rank} team` : null
+}
+
+/** Anything but a whole number 1–9 → null, so the database check never fails */
+export function cleanTeamRank(v: unknown): number | null {
+  const n = Number(v)
+  return v !== '' && v != null && Number.isInteger(n) && n >= 1 && n <= 9 ? n : null
+}

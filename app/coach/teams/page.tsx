@@ -18,13 +18,13 @@ import Link from 'next/link'
 import { useIsAdmin } from '@/components/CoachContext'
 import { teamInitial } from '@/lib/teamInitial'
 import { FEATURES } from '@/lib/features'
-import { TEAM_LEVELS, teamLevelLabel } from '@/lib/teamLevel'
+import { TEAM_LEVELS, TEAM_RANKS, teamLevelLabel, teamRankLabel } from '@/lib/teamLevel'
 import { AttendancePill, SeasonHealth } from '@/components/Attendance'
 import WorkoutCredit, { saveCredit } from '@/components/WorkoutCredit'
 import { dayLabel, pctColor, type TeamAttendance } from '@/lib/attendance'
 
 interface ReviewItem { playerId: string; playerName: string; teamId: string; teamName: string; date: string; status: string; done: number; planned: number; combine: boolean; credit: number }
-interface Team { id: string; name: string; age_group?: string; level?: string | null; color: string; is_active: boolean; playerCount?: number; is_open_gym?: boolean; coaches?: string[] }
+interface Team { id: string; name: string; age_group?: string; level?: string | null; club_rank?: number | null; color: string; is_active: boolean; playerCount?: number; is_open_gym?: boolean; coaches?: string[] }
 
 const COLORS = ['#56a0d3','#111827','#ef4444','#f97316','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16']
 // Season Report columns (lib/attendance.ts)
@@ -56,7 +56,7 @@ export default function CoachTeamsPage() {
   const [modal, setModal] = useState<'add'|'edit'|null>(null)
   const [editTarget, setEditTarget] = useState<Team|null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<Team|null>(null)
-  const [form, setForm] = useState({ name:'', age_group:'', level:'', color:'#56a0d3' })
+  const [form, setForm] = useState({ name:'', age_group:'', level:'', club_rank:'', color:'#56a0d3' })
   const [msg, setMsg] = useState('')
   const [msgErr, setMsgErr] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -105,17 +105,17 @@ export default function CoachTeamsPage() {
     }).catch(() => {})
   }, [])
 
-  function openAdd() { setForm({ name:'', age_group:'', level:'', color:'#56a0d3' }); setEditTarget(null); setModal('add'); setMsg('') }
-  function openEdit(t: Team) { setForm({ name:t.name, age_group:t.age_group??'', level:t.level??'', color:t.color }); setEditTarget(t); setModal('edit'); setMsg('') }
+  function openAdd() { setForm({ name:'', age_group:'', level:'', club_rank:'', color:'#56a0d3' }); setEditTarget(null); setModal('add'); setMsg('') }
+  function openEdit(t: Team) { setForm({ name:t.name, age_group:t.age_group??'', level:t.level??'', club_rank:t.club_rank ? String(t.club_rank) : '', color:t.color }); setEditTarget(t); setModal('edit'); setMsg('') }
   function closeModal() { setModal(null); setEditTarget(null); setMsg('') }
 
   async function save() {
     if (!form.name) { setMsg('Team name is required'); setMsgErr(true); return }
     setSaving(true)
     const method = modal === 'add' ? 'POST' : 'PUT'
-    // Team level is volleyball only (Comparisons → Groups); lacrosse doesn't send it
-    const { level, ...rest } = form
-    const fields = FEATURES.measurements ? { ...rest, level: level || null } : rest
+    // Team level and number are volleyball only (Comparisons → Groups); lacrosse doesn't send them
+    const { level, club_rank, ...rest } = form
+    const fields = FEATURES.measurements ? { ...rest, level: level || null, club_rank: club_rank ? Number(club_rank) : null } : rest
     const body = modal === 'edit' && editTarget ? { id: editTarget.id, ...fields } : fields
     const res = await fetch('/api/coach/teams', { method, headers:{'Content-Type':'application/json'}, body: JSON.stringify(body) })
     const data = await res.json()
@@ -228,7 +228,7 @@ export default function CoachTeamsPage() {
               <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginTop:'0.1rem' }}>
                 {t.is_open_gym
                   ? 'Schedule a workout to show on the TV — no player check-in'
-                  : <>{t.age_group && <span>{t.age_group} · </span>}{FEATURES.measurements && teamLevelLabel(t.level) && <span>{teamLevelLabel(t.level)} · </span>}<span>{t.playerCount ?? 0} players</span></>
+                  : <>{t.age_group && <span>{t.age_group} · </span>}{FEATURES.measurements && teamLevelLabel(t.level) && <span>{teamLevelLabel(t.level)} · </span>}{FEATURES.measurements && teamRankLabel(t.club_rank) && <span>{teamRankLabel(t.club_rank)} · </span>}<span>{t.playerCount ?? 0} players</span></>
                 }
               </div>
               {!t.is_open_gym && !!t.coaches?.length && (
@@ -393,6 +393,15 @@ export default function CoachTeamsPage() {
                   <select className="input" value={form.level} onChange={e => setForm(p=>({...p,level:e.target.value}))}>
                     <option value="">Not set</option>
                     {TEAM_LEVELS.map(l => <option key={l.key} value={l.key}>{l.label}</option>)}
+                  </select>
+                </div>
+              )}
+              {FEATURES.measurements && (
+                <div>
+                  <label style={{ display:'block', fontSize:'0.75rem', color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'0.05em', marginBottom:'0.4rem', fontWeight:600 }}>Team # in Age Group</label>
+                  <select className="input" value={form.club_rank} onChange={e => setForm(p=>({...p,club_rank:e.target.value}))}>
+                    <option value="">Not set</option>
+                    {TEAM_RANKS.map(r => <option key={r} value={r}>{teamRankLabel(r)}</option>)}
                   </select>
                 </div>
               )}
