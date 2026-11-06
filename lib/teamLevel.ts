@@ -38,12 +38,12 @@ export function cleanTeamRank(v: unknown): number | null {
 }
 
 /**
- * The team number is for admins only: team coaches and players never see it
- * (Steve, Nov 6). Every API that returns whole team rows passes them through
- * this unless the signed-in coach is an admin.
+ * Team level and team number are for admins only: team coaches and players
+ * never see them (Steve, Nov 6). Every API that returns whole team rows
+ * passes them through this unless the signed-in coach is an admin.
  */
-export function hideClubRank<T extends object>(team: T, isAdmin: boolean | undefined): T {
-  if (isAdmin || !team || !('club_rank' in team)) return team
-  const { club_rank: _hidden, ...rest } = team as T & { club_rank?: unknown }
+export function hideAdminTeamFields<T extends object>(team: T, isAdmin: boolean | undefined): T {
+  if (isAdmin || !team) return team
+  const { level: _level, club_rank: _rank, ...rest } = team as T & { level?: unknown; club_rank?: unknown }
   return rest as T
 }

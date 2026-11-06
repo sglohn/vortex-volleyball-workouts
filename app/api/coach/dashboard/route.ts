@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { requestSummary } from '@/lib/exerciseLevels'
 import { getCoach } from '@/lib/coachAuth'
-import { hideClubRank } from '@/lib/teamLevel'
+import { hideAdminTeamFields } from '@/lib/teamLevel'
 import { inList, signInRequired, visiblePlayerIds, visibleTeamIds } from '@/lib/coachScope'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
 import { isInjuryLevel } from '@/lib/availability'
@@ -114,7 +114,7 @@ export async function GET(req: NextRequest) {
   const teamsActive = await Promise.all((teams ?? []).map(async team => {
     const { data: phases } = await db.from('training_phases').select('phase_type, name').eq('team_id', team.id).lte('starts_on', todayStr).gte('ends_on', todayStr).limit(1)
     return {
-      ...hideClubRank(team, coach.isAdmin),
+      ...hideAdminTeamFields(team, coach.isAdmin),
       phase: phases?.[0] ?? null,
       todayWorkout: scheduleMap[team.id] ?? null,
     }
