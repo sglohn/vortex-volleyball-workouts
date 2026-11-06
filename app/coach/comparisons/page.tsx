@@ -14,11 +14,16 @@ interface Player {
   teamName?: string; gender?: string; age_group?: string; age?: number | null; position?: string
   height_in?: number; standing_reach_in?: number; approach_vertical_in?: number
 }
+// Feet and inches to the quarter inch (7'2½", net 7'4¼"). Players' numbers
+// are in halves; group averages and the net can land on quarters.
 function fi(inches: number) {
-  const totalInches = Math.round(inches)
-  const ft = Math.floor(totalInches / 12)
-  const inch = totalInches % 12
-  return `${ft}'${inch}"`
+  const total = Math.round(inches * 4) / 4
+  const ft = Math.floor(total / 12)
+  const rest = total - ft * 12
+  const whole = Math.floor(rest)
+  const frac = rest - whole
+  const part = frac >= 0.75 ? '¾' : frac >= 0.5 ? '½' : frac >= 0.25 ? '¼' : ''
+  return `${ft}'${whole}${part}"`
 }
 function avgF(arr: Player[], key: keyof Player): number {
   const vals = arr.map(p => p[key] as number).filter(v => v > 0)

@@ -1,3 +1,4 @@
+// FILE: components/MeasurementHistoryModal.tsx
 'use client'
 import { useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
@@ -130,7 +131,7 @@ export default function MeasurementHistoryModal({ playerId, playerName, statKey,
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--gray-border)" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} />
                   <YAxis domain={[min - padding, max + padding]} tick={{ fontSize: 11, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false}
-                    tickFormatter={v => isDerived ? `${v}"` : `${Math.floor(v / 12)}'${Math.round(v % 12)}"`} width={40} />
+                    tickFormatter={v => isDerived ? `${v}"` : `${Math.floor(v / 12)}'${Math.round((v % 12) * 2) / 2}"`} width={40} />
                   <Tooltip content={<CustomTooltip />} />
                   {chartData.length > 1 && <ReferenceLine y={first.val} stroke="rgba(86,160,211,0.2)" strokeDasharray="4 4" />}
                   <Line type="monotone" dataKey="val" stroke="var(--carolina)" strokeWidth={2.5} dot={{ r: 5, fill: 'var(--carolina)', strokeWidth: 2, stroke: 'var(--white)' }} activeDot={{ r: 7 }} />

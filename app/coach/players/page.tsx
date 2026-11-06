@@ -62,10 +62,15 @@ const ALL_COLUMNS: { key: SortKey; label: string; short: string; numeric?: boole
 ]
 const COLUMNS = ALL_COLUMNS.filter(c => FEATURES.measurements || !c.measure)
 
+// Feet and inches to the half inch (7'2½"), so the touch and reach columns
+// match the verticals worked out from them.
 function fi(inches: number | null | undefined): string {
   if (!inches) return '—'
-  const total = Math.round(inches)
-  return `${Math.floor(total / 12)}'${total % 12}"`
+  const total = Math.round(inches * 2) / 2
+  const ft = Math.floor(total / 12)
+  const rest = total - ft * 12
+  const whole = Math.floor(rest)
+  return `${ft}'${whole}${rest - whole >= 0.5 ? '½' : ''}"`
 }
 function fmtIn(val: number | null | undefined): string {
   if (val == null) return '—'
