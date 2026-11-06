@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getBestOneRepMax, getTrend, estimateOneRepMax } from '@/lib/fitness'
 import { getCoach } from '@/lib/coachAuth'
+import { hideClubRank } from '@/lib/teamLevel'
 import { canSeeTeam, notYourTeam, signInRequired } from '@/lib/coachScope'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
 import { seasonStart } from '@/lib/attendance'
@@ -132,5 +133,5 @@ export async function GET(req: NextRequest) {
   const today = clubDateString()
   const { data: phases } = await db.from('training_phases').select('*').eq('team_id', teamId).lte('starts_on', today).gte('ends_on', today).limit(1)
 
-  return NextResponse.json({ team, roster, currentPhase: phases?.[0] ?? null })
+  return NextResponse.json({ team: hideClubRank(team, coach.isAdmin), roster, currentPhase: phases?.[0] ?? null })
 }

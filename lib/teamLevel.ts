@@ -36,3 +36,14 @@ export function cleanTeamRank(v: unknown): number | null {
   const n = Number(v)
   return v !== '' && v != null && Number.isInteger(n) && n >= 1 && n <= 9 ? n : null
 }
+
+/**
+ * The team number is for admins only: team coaches and players never see it
+ * (Steve, Nov 6). Every API that returns whole team rows passes them through
+ * this unless the signed-in coach is an admin.
+ */
+export function hideClubRank<T extends object>(team: T, isAdmin: boolean | undefined): T {
+  if (isAdmin || !team || !('club_rank' in team)) return team
+  const { club_rank: _hidden, ...rest } = team as T & { club_rank?: unknown }
+  return rest as T
+}
