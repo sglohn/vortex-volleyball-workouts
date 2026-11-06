@@ -5,7 +5,7 @@ import { getBestOneRepMax, getTrend } from '@/lib/fitness'
 import { calculateAge } from '@/lib/age'
 import { calculateAthleticismScore, buildPopulationStats, type AthleticismInputs } from '@/lib/athleticism'
 import { getCoach } from '@/lib/coachAuth'
-import { hideClubRank } from '@/lib/teamLevel'
+import { hideAdminTeamFields } from '@/lib/teamLevel'
 import { canSeePlayer, inList, notYourTeam, signInRequired, visiblePlayerIds } from '@/lib/coachScope'
 import { mergeSameDayChecks } from '@/lib/bodyChecks'
 
@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
       athleticism_metrics_used: athleticism.metricsUsed,
     } : null
 
-    return NextResponse.json({ player: enrichedPlayer, sessions: sessions?.slice(0, 10), measurements, healthReports, bodyChecks: mergeSameDayChecks(bodyChecks ?? []), exerciseProgress, team: playerTeam?.teams ? hideClubRank(playerTeam.teams as object, coach.isAdmin) : null })
+    return NextResponse.json({ player: enrichedPlayer, sessions: sessions?.slice(0, 10), measurements, healthReports, bodyChecks: mergeSameDayChecks(bodyChecks ?? []), exerciseProgress, team: playerTeam?.teams ? hideAdminTeamFields(playerTeam.teams as object, coach.isAdmin) : null })
   }
 
   // Player list — now includes measurements + best lifts for leaderboard/sorting

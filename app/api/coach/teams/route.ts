@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getCoach } from '@/lib/coachAuth'
 import { inList } from '@/lib/coachScope'
-import { cleanTeamLevel, cleanTeamRank, hideClubRank } from '@/lib/teamLevel'
+import { cleanTeamLevel, cleanTeamRank, hideAdminTeamFields } from '@/lib/teamLevel'
 
 export async function GET(req: NextRequest) {
   const db = createServerClient()
@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
     .from('teams')
     .select('*')
     .eq('is_active', true)
-  // The team number (1 team, 2 team...) is admins only (lib/teamLevel.ts)
+  // Team level and number are admins only (lib/teamLevel.ts)
   const coach = await getCoach(req)
   if (!req.nextUrl.searchParams.get('all')) {
     if (coach && !coach.isAdmin) query = query.in('id', inList(coach.teamIds))
@@ -61,7 +61,7 @@ export async function GET(req: NextRequest) {
     }
   }
   const withCoaches = enriched.map(team => ({
-    ...hideClubRank(team, coach?.isAdmin),
+    ...hideAdminTeamFields(team, coach?.isAdmin),
     coaches: (coachesByTeam.get(team.id) ?? []).sort((a, b) => a.localeCompare(b)),
   }))
 
