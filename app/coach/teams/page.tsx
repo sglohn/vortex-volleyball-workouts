@@ -228,7 +228,7 @@ export default function CoachTeamsPage() {
               <div style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginTop:'0.1rem' }}>
                 {t.is_open_gym
                   ? 'Schedule a workout to show on the TV — no player check-in'
-                  : <>{t.age_group && <span>{t.age_group} · </span>}{FEATURES.measurements && teamLevelLabel(t.level) && <span>{teamLevelLabel(t.level)} · </span>}{FEATURES.measurements && teamRankLabel(t.club_rank) && <span>{teamRankLabel(t.club_rank)} · </span>}<span>{t.playerCount ?? 0} players</span></>
+                  : <>{t.age_group && <span>{t.age_group} · </span>}{FEATURES.measurements && teamLevelLabel(t.level) && <span>{teamLevelLabel(t.level)} · </span>}{isAdmin && FEATURES.measurements && teamRankLabel(t.club_rank) && <span>{teamRankLabel(t.club_rank)} · </span>}<span>{t.playerCount ?? 0} players</span></>
                 }
               </div>
               {!t.is_open_gym && !!t.coaches?.length && (
