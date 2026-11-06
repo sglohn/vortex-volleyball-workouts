@@ -87,9 +87,10 @@ export const COMBINE_METRICS: CombineMetric[] = [
     maxAttempts: 3, better: 'higher', usual: [84, 140], limits: [60, 155], bigChange: 8, step: 0.5,
   },
   {
-    key: 'acceleration_sec', label: 'Acceleration', short: '5 yard sprint', unit: 'sec',
-    howTo: 'Start in your ready stance and sprint 5 yards. Enter the time from the timer, like 1.12.',
-    maxAttempts: 3, better: 'lower', usual: [0.8, 2.2], limits: [0.4, 6], bigChange: 0.4, step: 0.01,
+    // Not a 5-yard sprint (Nov 2026): the club runs endline to net, 9 m (~30 ft).
+    key: 'acceleration_sec', label: 'Acceleration', short: 'Endline to net, 9 m', unit: 'sec',
+    howTo: 'Start in your ready stance on the endline and sprint to the net (9 m, about 30 feet). Enter the time from the timer, like 2.05.',
+    maxAttempts: 3, better: 'lower', usual: [1.4, 3.2], limits: [0.8, 6], bigChange: 0.4, step: 0.01,
   },
   {
     // Not a full 5-10-5 pro-agility (Nov 2026): the club's court-sized version,

@@ -7,7 +7,7 @@
 //   Standing Reach  side-on, heels flat, one hand up
 //   Block Touch     no steps, two-hand jump like a block
 //   Approach Touch  full approach, one-hand reach at the top
-//   Acceleration    ready stance, 5-yard sprint, timed
+//   Acceleration    ready stance on the endline, sprint to the net (9 m), timed
 //   Agility         start at the net, 3 m to one attack line, 6 m to the other, 3 m back to the net
 //   Swing Velocity  (optional test) arm swing past the radar gun
 //
@@ -146,14 +146,14 @@ function Drawing({ test, m, p }: { test: CombineMetricKey; m: string; p: string 
           <Floor />
           <line x1={40} y1={82} x2={40} y2={136} stroke={INK} strokeWidth={3} />
           <line x1={210} y1={82} x2={210} y2={136} stroke={INK} strokeWidth={3} strokeDasharray="5 4" />
-          <text x={40} y={76} textAnchor="middle" {...label}>START</text>
-          <text x={210} y={76} textAnchor="middle" {...label}>FINISH</text>
+          <text x={40} y={76} textAnchor="middle" {...label}>ENDLINE</text>
+          <text x={210} y={76} textAnchor="middle" {...label}>NET</text>
           {/* ready stance */}
           <circle cx={66} cy={86} r={9} {...head} />
           <path d="M62 94 L52 112 M60 98 L72 110 M58 100 L70 104 M52 112 L62 122 L58 134 M52 112 L46 134" {...fig} />
           <path d="M84 100 h20 M80 110 h28 M86 120 h16" stroke={WALL} strokeWidth={2} strokeLinecap="round" />
           <Measure x1={124} y1={110} x2={204} y2={110} m={m} />
-          <text x={164} y={102} textAnchor="middle" {...measureLabel}>5 yards</text>
+          <text x={164} y={102} textAnchor="middle" {...measureLabel}>9 m (30 ft)</text>
           {/* stopwatch */}
           <circle cx={120} cy={34} r={16} fill="none" stroke={MEASURE} strokeWidth={3} />
           <path d="M120 34 V24 M120 34 L127 38 M116 14 h8" stroke={MEASURE} strokeWidth={3} strokeLinecap="round" />
