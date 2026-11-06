@@ -44,7 +44,7 @@ const METRICS: Metric[] = [
   { key: 'approach_touch',     label: 'Approach Touch',  short: 'App Touch', unit: 'ftin' },
   { key: 'max_vert',           label: 'Max Vertical',    short: 'Max Vert',  unit: 'in' },
   { key: 'acceleration_sec',   label: 'Acceleration',    short: 'Accel',     unit: 'sec', lower: true },
-  { key: 'pro_agility_sec',    label: 'Pro-Agility',     short: 'Pro-Agil',  unit: 'sec', lower: true },
+  { key: 'pro_agility_sec',    label: 'Agility',         short: 'Agility',   unit: 'sec', lower: true },
   { key: 'swing_velocity_mph', label: 'Swing Velocity',  short: 'Swing',     unit: 'mph' },
   { key: 'score',              label: 'Athleticism Score', short: 'Score',   unit: 'score' },
 ]

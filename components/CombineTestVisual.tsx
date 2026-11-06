@@ -8,7 +8,7 @@
 //   Block Touch     no steps, two-hand jump like a block
 //   Approach Touch  full approach, one-hand reach at the top
 //   Acceleration    ready stance, 5-yard sprint, timed
-//   Pro-Agility     start in the middle, 5 one way, 10 back, 5 to the middle
+//   Agility         start at the net, 3 m to one attack line, 6 m to the other, 3 m back to the net
 //   Swing Velocity  (optional test) arm swing past the radar gun
 //
 // The orange arrow is always what gets measured. Plain inline SVG using the
@@ -165,10 +165,16 @@ function Drawing({ test, m, p }: { test: CombineMetricKey; m: string; p: string 
       return (
         <>
           <Floor />
-          {[40, 120, 200].map(x => <line key={x} x1={x} y1={56} x2={x} y2={136} stroke={INK} strokeWidth={3} />)}
-          <text x={80} y={50} textAnchor="middle" {...label}>5 yd</text>
-          <text x={160} y={50} textAnchor="middle" {...label}>5 yd</text>
-          <text x={120} y={18} textAnchor="middle" {...measureLabel}>5 – 10 – 5, touch each line</text>
+          {/* attack lines 3 m each side of the net */}
+          {[40, 200].map(x => <line key={x} x1={x} y1={56} x2={x} y2={136} stroke={INK} strokeWidth={3} />)}
+          {/* the net: posts + mesh, in the middle */}
+          <line x1={120} y1={44} x2={120} y2={136} stroke={INK} strokeWidth={4} />
+          <rect x={115} y={46} width={10} height={30} fill="none" stroke={INK} strokeWidth={1.5} strokeDasharray="2 2" />
+          <text x={80} y={50} textAnchor="middle" {...label}>3 m</text>
+          <text x={160} y={50} textAnchor="middle" {...label}>3 m</text>
+          <text x={40} y={144} textAnchor="middle" {...label} fontSize={8}>attack line</text>
+          <text x={200} y={144} textAnchor="middle" {...label} fontSize={8}>attack line</text>
+          <text x={120} y={18} textAnchor="middle" {...measureLabel}>3 – 6 – 3 m, touch each line</text>
           {/* the run: middle → right, right → left, left → middle */}
           <path d="M124 124 H194" stroke={MEASURE} strokeWidth={3} fill="none" markerEnd={`url(#${p}o)`} />
           <path d="M196 104 H46" stroke={MEASURE} strokeWidth={3} fill="none" markerEnd={`url(#${p}o)`} />
@@ -177,7 +183,7 @@ function Drawing({ test, m, p }: { test: CombineMetricKey; m: string; p: string 
           <text x={160} y={100} textAnchor="middle" {...label} fontSize={10}>2</text>
           <text x={80} y={80} textAnchor="middle" {...label} fontSize={10}>3</text>
           <circle cx={120} cy={124} r={5} fill={INK} />
-          <text x={120} y={36} textAnchor="middle" {...label}>start &amp; finish in the middle</text>
+          <text x={120} y={36} textAnchor="middle" {...label}>start &amp; finish at the net</text>
         </>
       )
 

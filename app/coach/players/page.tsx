@@ -20,7 +20,7 @@ interface Player {
   standing_vertical_in?: number | null   // stored as standing JUMP TOUCH height (ft/in)
   approach_vertical_in?: number | null   // stored as approach TOUCH height (ft/in)
   acceleration_sec?: number | null       // 5-yard acceleration sprint
-  pro_agility_sec?: number | null        // 5-10-5 pro-agility shuttle
+  pro_agility_sec?: number | null        // Agility: net shuttle 3-6-3 m (not a full 5-10-5)
   swing_velocity_mph?: number | null     // SoloSpike/radar gun swing speed
   athleticism_score?: number | null      // composite VPI-style score
   athleticism_metrics_used?: number      // how many of 8 metrics fed the score
@@ -57,7 +57,7 @@ const ALL_COLUMNS: { key: SortKey; label: string; short: string; numeric?: boole
   { key: 'approach_vertical_in', label: 'App. Touch',      short: 'App Touch', numeric: true, fmt: 'fi', measure: true },
   { key: 'maxVert',              label: 'Max Vertical',    short: 'Max Vert',  numeric: true, fmt: 'in', measure: true },
   { key: 'acceleration_sec',     label: 'Acceleration',    short: 'Accel',     numeric: true, fmt: 'in', measure: true },
-  { key: 'pro_agility_sec',      label: 'Pro-Agility',     short: 'Pro Agl',   numeric: true, fmt: 'in', measure: true },
+  { key: 'pro_agility_sec',      label: 'Agility',         short: 'Agility',   numeric: true, fmt: 'in', measure: true },
   { key: 'swing_velocity_mph',   label: 'Swing Velocity',  short: 'Swing MPH', numeric: true, fmt: 'in', measure: true },
 ]
 const COLUMNS = ALL_COLUMNS.filter(c => FEATURES.measurements || !c.measure)
@@ -668,8 +668,8 @@ export default function CoachPlayersPage() {
                   <FF label="Acceleration (5yd, sec)">
                     <input className="input" type="number" step="0.01" placeholder="e.g. 4.85" value={measurements.acceleration_sec} onChange={e => setMeasurements(m => ({ ...m, acceleration_sec: e.target.value }))} />
                   </FF>
-                  <FF label="Pro-Agility (5-10-5, sec)">
-                    <input className="input" type="number" step="0.01" placeholder="e.g. 5.02" value={measurements.pro_agility_sec} onChange={e => setMeasurements(m => ({ ...m, pro_agility_sec: e.target.value }))} />
+                  <FF label="Agility (net shuttle 3-6-3 m, sec)">
+                    <input className="input" type="number" step="0.01" placeholder="e.g. 4.12" value={measurements.pro_agility_sec} onChange={e => setMeasurements(m => ({ ...m, pro_agility_sec: e.target.value }))} />
                   </FF>
                   <FF label="Swing Velocity (mph)">
                     <input className="input" type="number" step="0.1" placeholder="e.g. 47.3" value={measurements.swing_velocity_mph} onChange={e => setMeasurements(m => ({ ...m, swing_velocity_mph: e.target.value }))} />
