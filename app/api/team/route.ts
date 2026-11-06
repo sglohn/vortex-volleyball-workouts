@@ -22,8 +22,11 @@
 //
 // Notes:
 //  - "Today" is the club's date (lib/clubTime.ts), not Vercel's UTC date.
-//  - % complete is measured against that team's full workout, without the
-//    warm-up (lib/warmup.ts): players watch the warm-up, they don't log it.
+//  - % complete is measured against her own workout: the sets saved on her
+//    session when she opened it (sessions.planned_sets: a modified workout,
+//    override or program counts its own sets), else that team's full
+//    workout, without the warm-up (lib/warmup.ts): players watch the
+//    warm-up, they don't log it.
 //  - If a player has more than one session today, all of today's sets count
 //    and the open session is the one used for logging.
 //  - Set logs are fetched in one query for everyone.
@@ -41,7 +44,7 @@ import { FEATURES } from '@/lib/features'
 
 type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
 type GuestRow = { id: string; name: string; jersey_number?: string; trains_with_team_id: string; player_teams: { team_id: string; is_primary: boolean; teams: { name: string } | { name: string }[] | null }[] | null }
-type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
+type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null; template_id?: string | null; planned_sets?: number | null }
 type LogRow = { session_id: string; exercise_id: string; completed: boolean; weight_lbs: number | null; reps_completed: number | null }
 type TeamRow = { id: string; name: string; age_group?: string | null; color: string }
 
@@ -166,7 +169,8 @@ export async function GET(req: NextRequest) {
   const { data: sessionsRaw } = playerIds.length
     ? await db
         .from('sessions')
-        .select('id, player_id, checked_in_at, completed_at')
+        // '*' so this works before planned_sets exists (workout credit migration)
+        .select('*')
         .in('player_id', playerIds)
         .gte('checked_in_at', start)
         .lt('checked_in_at', end)
@@ -235,8 +239,9 @@ export async function GET(req: NextRequest) {
       ? Math.round((new Date(latestSession.completed_at).getTime() - new Date(firstCheckIn).getTime()) / 60000)
       : null
 
-    const templateId = scheduleByTeam[p.teamId]?.templateId ?? null
-    const templateTotalSets = templateId ? totalSetsByTemplate[templateId] ?? 0 : 0
+    // Her own workout (saved on her session), else the team's
+    const templateId = activeSession.template_id ?? scheduleByTeam[p.teamId]?.templateId ?? null
+    const templateTotalSets = activeSession.planned_sets ?? (templateId ? totalSetsByTemplate[templateId] ?? 0 : 0)
     const tests = templateId ? combineTests[templateId] : undefined
     const testsDoneSet = new Set(playerSessions.flatMap(s => [...(testsBySession[s.id] ?? [])]))
 

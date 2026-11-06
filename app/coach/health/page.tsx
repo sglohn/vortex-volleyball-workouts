@@ -9,6 +9,10 @@
 // players, teams and the club (lib/healthPatterns.ts, /api/coach/health-watch).
 // Fix a mistake (in an open report): wrong side or area, or injured when she
 // meant sore. Also corrects her body checks (lib/healthFix.ts).
+// Modified workout (open report, volleyball, admins pick): a workout she gets
+// on every one of her team's workout days instead of the team's, until the
+// report is cleared (lib/checkin.ts). Her check-in still counts with her
+// team, and she logs her sets like anyone else.
 import { useState, useEffect, type CSSProperties } from 'react'
 import { painLevelColor } from '@/lib/fitness'
 import {
@@ -17,6 +21,8 @@ import {
 } from '@/lib/availability'
 import type { FlagLevel, WatchFlag, WatchResult } from '@/lib/healthPatterns'
 import { BODY_ZONES, bodyPartToZone, otherSide, zoneToBodyPart } from '@/lib/bodyChecks'
+import { FEATURES } from '@/lib/features'
+import { useIsAdmin } from '@/components/CoachContext'
 
 type WatchData = WatchResult
 
@@ -42,6 +48,8 @@ interface HealthReport {
   status: string
   availability?: Availability
   availability_since?: string
+  /** Standing modified workout while this report is open */
+  modified_template_id?: string | null
   health_report_updates?: HealthUpdate[]
   players?: { id: string; name: string; jersey_number?: string }
 }
@@ -464,6 +472,56 @@ function WatchTab({ data, error, busy, onOpenReport, onStartTracking, onSeen, on
  * corrected too, and the fix goes on the timeline.
  */
 const GENERAL_PART = 'General (no area marked)'
+/** Standing modified workout for an open report (admins pick; coaches see it) */
+function ModifiedWorkout({ r, onSaved }: { r: HealthReport; onSaved: (patch: Partial<HealthReport>) => void }) {
+  const isAdmin = useIsAdmin()
+  const [templates, setTemplates] = useState<{ id: string; name: string }[]>([])
+  const [pick, setPick] = useState<string>(r.modified_template_id ?? '')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    fetch('/api/coach/templates').then(res => res.ok ? res.json() : null)
+      .then(d => setTemplates(((d?.templates ?? []) as { id: string; name: string; is_combine?: boolean }[]).filter(t => !t.is_combine)))
+      .catch(() => {})
+  }, [])
+  if (!FEATURES.datedSchedule || r.status === 'resolved') return null
+  const current = templates.find(t => t.id === r.modified_template_id)?.name
+
+  async function save(value: string | null) {
+    setSaving(true); setErr('')
+    const res = await fetch('/api/player/health', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: r.id, modifiedTemplateId: value }) })
+    setSaving(false)
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setErr(d.error || 'Could not save'); return }
+    onSaved({ modified_template_id: value })
+  }
+
+  return (
+    <div style={{ marginBottom: '0.875rem', padding: '0.7rem 0.8rem', borderRadius: 8, background: 'var(--court-raised)', border: '1px solid var(--court-border)' }}>
+      <label style={LABEL_STYLE}>Modified workout</label>
+      <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginBottom: isAdmin ? '0.45rem' : 0 }}>
+        {r.modified_template_id
+          ? <>She gets <strong>{current ?? 'her modified workout'}</strong> on her team&apos;s workout days until this is cleared. A date override still wins on its day.</>
+          : 'None: she gets her team\u2019s workout (or a date override).'}
+      </div>
+      {isAdmin && (
+        <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+          <select className="input" value={pick} onChange={e => setPick(e.target.value)} style={{ flex: '1 1 200px', padding: '0.45rem 0.6rem', fontSize: '0.82rem' }}>
+            <option value="">Pick a workout…</option>
+            {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+          <button className="btn-volt" disabled={saving || !pick || pick === r.modified_template_id} onClick={() => save(pick)} style={{ padding: '0.45rem 0.8rem', fontSize: '0.8rem' }}>
+            {r.modified_template_id ? 'Change' : 'Give her this workout'}
+          </button>
+          {r.modified_template_id && (
+            <button className="btn-ghost" disabled={saving} onClick={() => { setPick(''); save(null) }} style={{ padding: '0.45rem 0.8rem', fontSize: '0.8rem' }}>Take off</button>
+          )}
+        </div>
+      )}
+      {err && <div style={{ color: '#f87171', fontSize: '0.78rem', marginTop: '0.35rem' }}>{err}</div>}
+    </div>
+  )
+}
+
 function FixMistake({ r, onFixed }: { r: HealthReport; onFixed: (patch: Partial<HealthReport>) => void }) {
   const [open, setOpen] = useState(false)
   const [part, setPart] = useState(r.body_part)
@@ -1027,6 +1085,10 @@ export default function CoachHealthPage() {
                 loadActive()
                 loadWatch()
               }} />
+
+            {/* Standing modified workout until cleared */}
+            <ModifiedWorkout key={`mod|${selected.id}`} r={selected}
+              onSaved={patch => { setSelected(s => s ? { ...s, ...patch } : s); loadActive() }} />
 
             {/* Level */}
             <div style={{ marginBottom: '0.875rem' }}>

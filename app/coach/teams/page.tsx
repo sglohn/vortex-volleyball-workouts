@@ -7,14 +7,22 @@
 // The session picker lists every team, not just a team coach's own, since
 // the other team in the room is often someone else's. Teams with a workout
 // scheduled today are marked and listed first.
+//
+// Workouts to review (volleyball): every day before today a player checked
+// in but didn't log every set (or logged none), that nobody has decided on.
+// Shows how far she got; admins give Full / her % / No credit (or open the
+// day for any % and a note: components/WorkoutCredit.tsx). Team coaches see
+// their own players' list without the buttons.
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useIsAdmin } from '@/components/CoachContext'
 import { teamInitial } from '@/lib/teamInitial'
 import { FEATURES } from '@/lib/features'
 import { AttendancePill, SeasonHealth } from '@/components/Attendance'
-import { pctColor, type TeamAttendance } from '@/lib/attendance'
+import WorkoutCredit, { saveCredit } from '@/components/WorkoutCredit'
+import { dayLabel, pctColor, type TeamAttendance } from '@/lib/attendance'
 
+interface ReviewItem { playerId: string; playerName: string; teamId: string; teamName: string; date: string; status: string; done: number; planned: number; combine: boolean; credit: number }
 interface Team { id: string; name: string; age_group?: string; color: string; is_active: boolean; playerCount?: number; is_open_gym?: boolean; coaches?: string[] }
 
 const COLORS = ['#56a0d3','#111827','#ef4444','#f97316','#8b5cf6','#10b981','#f59e0b','#ec4899','#06b6d4','#84cc16']
@@ -22,8 +30,8 @@ const COLORS = ['#56a0d3','#111827','#ef4444','#f97316','#8b5cf6','#10b981','#f5
 type ReportSort = 'team' | 'pct' | 'finished' | 'injuries' | 'pains' | 'outDays'
 const REPORT_COLS: { key: ReportSort; label: string; title: string }[] = [
   { key: 'team',     label: 'Team',       title: 'Team name' },
-  { key: 'pct',      label: 'Attendance', title: 'Check-ins ÷ workout days that count, whole roster' },
-  { key: 'finished', label: 'Finished',   title: 'Workouts finished (tapped Finish) ÷ workout days that count' },
+  { key: 'pct',      label: 'Attendance', title: 'Credit earned ÷ workout days that count, whole roster (full workout = every set logged; partial = its % done unless an admin decided)' },
+  { key: 'finished', label: 'Full',       title: 'Full workouts (every set logged, or given full credit) ÷ workout days that count' },
   { key: 'injuries', label: 'Injuries',   title: 'Injury reports this season (players injured)' },
   { key: 'pains',    label: 'Pain / Sore', title: 'Pain and soreness reports this season' },
   { key: 'outDays',  label: 'Days Out',   title: 'Player-days at Out this season, added up' },
@@ -62,17 +70,34 @@ export default function CoachTeamsPage() {
   const [att, setAtt] = useState<Record<string, TeamAttendance>>({})
   const [attList, setAttList] = useState<TeamAttendance[]>([])
   const [reportSort, setReportSort] = useState<{ key: ReportSort; desc: boolean }>({ key: 'pct', desc: true })
+  // Partial / signed-in workouts waiting for a decision
+  const [review, setReview] = useState<ReviewItem[]>([])
+  const [reviewOpen, setReviewOpen] = useState<string | null>(null)   // playerId|date
+  const [reviewMsg, setReviewMsg] = useState('')
+  const [reviewBusy, setReviewBusy] = useState(false)
+  const [confirmAll, setConfirmAll] = useState(false)
+
+  function loadAttendance() {
+    fetch('/api/coach/attendance').then(r => r.ok ? r.json() : null).then(d => {
+      const list = (d?.teams ?? []) as TeamAttendance[]
+      setAttList(list)
+      setAtt(Object.fromEntries(list.map(t => [t.teamId, t])))
+      setReview((d?.review ?? []) as ReviewItem[])
+    }).catch(() => {})
+  }
+
+  async function decide(items: ReviewItem[], credit: number) {
+    setReviewBusy(true); setReviewMsg('')
+    const err = await saveCredit(items.map(i => ({ playerId: i.playerId, date: i.date })), credit)
+    setReviewBusy(false)
+    if (err) { setReviewMsg(err); return }
+    loadAttendance()
+  }
 
   useEffect(() => {
     fetch('/api/coach/teams').then(r => r.json()).then(d => { setTeams(d.teams ?? []); setLoading(false) })
     fetch('/api/coach/teams?all=1').then(r => r.json()).then(d => setAllTeams(((d.teams ?? []) as Team[]).filter(t => !t.is_open_gym))).catch(() => {})
-    if (FEATURES.datedSchedule) {
-      fetch('/api/coach/attendance').then(r => r.ok ? r.json() : null).then(d => {
-        const list = (d?.teams ?? []) as TeamAttendance[]
-        setAttList(list)
-        setAtt(Object.fromEntries(list.map(t => [t.teamId, t])))
-      }).catch(() => {})
-    }
+    if (FEATURES.datedSchedule) loadAttendance()
     // Volleyball only (lib/features.ts); lacrosse just doesn't mark "today"
     fetch('/api/display-teams').then(r => r.ok ? r.json() : null).then(d => {
       if (d?.todayOnly) setTodayIds(new Set(((d.teams ?? []) as { id: string }[]).map(t => t.id)))
@@ -129,6 +154,58 @@ export default function CoachTeamsPage() {
 
       {msg && <div style={{ background: msgErr?'var(--danger-light)':'var(--carolina-light)', border:`1.5px solid ${msgErr?'#fecaca':'var(--carolina-border)'}`, borderRadius:8, padding:'0.75rem', marginBottom:'1rem', color: msgErr?'var(--danger)':'var(--carolina-deep)', fontSize:'0.9rem' }}>{msg}</div>}
 
+      {/* ── WORKOUTS TO REVIEW ── */}
+      {review.length > 0 && (
+        <div className="card" style={{ padding:'1.1rem 1.25rem', marginBottom:'1.25rem', borderLeft:'4px solid #d97706' }}>
+          <div className="wrap-phone" style={{ display:'flex', alignItems:'flex-start', gap:'0.75rem' }}>
+            <div style={{ flex:1 }}>
+              <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.1rem' }}>Workouts to review ({review.length})</h2>
+              <p style={{ color:'var(--text-muted)', fontSize:'0.78rem', marginTop:'0.2rem' }}>
+                Checked in but didn&apos;t log every set. Each counts as its % done until {isAdmin ? 'you decide' : 'an admin decides'}. Tap Details to see how far she got.
+              </p>
+            </div>
+            {isAdmin && review.length > 1 && (
+              <button disabled={reviewBusy} onClick={() => { if (confirmAll) { setConfirmAll(false); decide(review, 100) } else setConfirmAll(true) }}
+                className="btn-ghost full-phone" style={{ padding:'0.4rem 0.8rem', fontSize:'0.78rem', flexShrink:0, color: confirmAll ? '#16a34a' : undefined }}>
+                {confirmAll ? `Tap again: full credit for all ${review.length}` : `Full credit for all ${review.length}`}
+              </button>
+            )}
+          </div>
+          {reviewMsg && <div style={{ color:'var(--danger)', fontSize:'0.8rem', marginTop:'0.5rem' }}>{reviewMsg}</div>}
+          <div style={{ marginTop:'0.6rem' }}>
+            {review.map(r => {
+              const key = `${r.playerId}|${r.date}`
+              const pctDone = r.planned > 0 ? Math.min(100, Math.round(r.done / r.planned * 100)) : 0
+              const btn: React.CSSProperties = { padding:'0.25rem 0.55rem', borderRadius:6, fontSize:'0.72rem', fontWeight:700, cursor:'pointer', background:'var(--white)' }
+              return (
+                <div key={key} style={{ borderTop:'1px solid var(--gray-border)', padding:'0.55rem 0' }}>
+                  <div style={{ display:'flex', alignItems:'center', gap:'0.6rem', flexWrap:'wrap' }}>
+                    <div style={{ flex:'1 1 220px', minWidth:0 }}>
+                      <div style={{ fontWeight:700, fontSize:'0.88rem' }}>{r.playerName} <span style={{ fontWeight:500, color:'var(--text-muted)', fontSize:'0.78rem' }}>· {r.teamName} · {dayLabel(r.date)}</span></div>
+                      <div style={{ fontSize:'0.76rem', color: r.done ? '#b45309' : 'var(--danger)', fontWeight:600 }}>
+                        {r.done ? `${r.done} of ${r.planned || '?'} ${r.combine ? 'tests' : 'sets'} (${pctDone}%)` : `Signed in, no ${r.combine ? 'tests' : 'sets'} logged`}
+                      </div>
+                    </div>
+                    <div style={{ display:'flex', gap:'0.35rem', flexWrap:'wrap' }}>
+                      {isAdmin && <>
+                        <button disabled={reviewBusy} onClick={() => decide([r], 100)} style={{ ...btn, border:'1.5px solid #16a34a60', color:'#16a34a' }}>Full</button>
+                        {pctDone > 0 && <button disabled={reviewBusy} onClick={() => decide([r], pctDone)} style={{ ...btn, border:'1.5px solid #d9770660', color:'#b45309' }}>Keep {pctDone}%</button>}
+                        <button disabled={reviewBusy} onClick={() => decide([r], 0)} style={{ ...btn, border:'1.5px solid #dc262660', color:'#dc2626' }}>None</button>
+                      </>}
+                      <button onClick={() => setReviewOpen(reviewOpen === key ? null : key)} style={{ ...btn, border:'1.5px solid var(--carolina-border)', color:'var(--carolina-dark)' }}>{reviewOpen === key ? 'Hide' : 'Details'}</button>
+                    </div>
+                  </div>
+                  {reviewOpen === key && (
+                    <WorkoutCredit playerId={r.playerId} date={r.date} onClose={() => setReviewOpen(null)}
+                      onChanged={() => { setReviewOpen(null); loadAttendance() }} />
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ display:'flex', flexDirection:'column', gap:'0.625rem' }}>
         {teams.length === 0 && <div className="card" style={{ padding:'2rem', textAlign:'center', color:'var(--text-muted)' }}>No teams yet. Add your first team above.</div>}
         {teams.map(t => (
@@ -155,7 +232,7 @@ export default function CoachTeamsPage() {
               )}
               {!t.is_open_gym && att[t.id] && (
                 <div style={{ display:'flex', alignItems:'center', gap:'0.5rem', flexWrap:'wrap', marginTop:'0.35rem' }}>
-                  <AttendancePill pct={att[t.id].pct} attended={att[t.id].attended} counted={att[t.id].counted} />
+                  <AttendancePill pct={att[t.id].pct} attended={att[t.id].credit} counted={att[t.id].counted} />
                   <SeasonHealth health={att[t.id].health} prefix="" />
                 </div>
               )}
@@ -195,7 +272,7 @@ export default function CoachTeamsPage() {
           <div className="card" style={{ marginTop:'1.5rem', overflow:'hidden' }}>
             <div style={{ padding:'1.1rem 1.25rem 0.75rem' }}>
               <h2 style={{ fontFamily:'var(--font-display)', fontWeight:800, fontSize:'1.1rem' }}>Season Report</h2>
-              <p style={{ color:'var(--text-muted)', fontSize:'0.78rem', marginTop:'0.2rem' }}>Weight room attendance next to health reports, since Aug 1. Tap a column to sort. Days a player was Out with an injury don&apos;t count against attendance.</p>
+              <p style={{ color:'var(--text-muted)', fontSize:'0.78rem', marginTop:'0.2rem' }}>Weight room attendance next to health reports, since Aug 1. Tap a column to sort. A full workout is every set logged; a partial one counts its % done until an admin decides. Out means out of volleyball, so a missed workout while Out still counts as missed.</p>
             </div>
             <div style={{ overflowX:'auto' }}>
               <table className="tbl-tight" style={{ width:'100%', borderCollapse:'collapse', minWidth:620 }}>

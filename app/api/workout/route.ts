@@ -33,6 +33,11 @@
 //   lastBand            the band the player used last time, or null
 // Bands and med balls never get a weight suggestion (recommendation: null).
 //
+// Each time the workout is opened, the number of sets it asks for (after
+// skipped exercises; tests on a Combine Day) is saved on the session
+// (sessions.planned_sets) so attendance credit (lib/workoutCredit.ts) and
+// % complete measure her against the workout she was actually given.
+//
 // A template's warm-up block comes back separately as `template.warmup`
 // ({ rounds, exercises: [{ name, reps, notes, clip_url, ... }] }, or null)
 // and is left out of `template.blocks`: players watch it, they don't log it
@@ -54,6 +59,7 @@ import { isWarmupLabel } from '@/lib/warmup'
 import { asBand, asEquipment, isBandEquipment, skipsWeightSuggestion } from '@/lib/loads'
 import { lastBandUsed } from '@/lib/bandHistory'
 import { FEATURES } from '@/lib/features'
+import { combineMetricsFor } from '@/lib/combine'
 
 type Db = ReturnType<typeof createServerClient>
 
@@ -226,6 +232,15 @@ async function buildExercise(ctx: ExerciseContext, be: BlockExerciseInput, block
   }
 }
 
+/** Remember how many sets (or tests) this session's workout asks for */
+async function savePlanned(db: ReturnType<typeof createServerClient>, session: Record<string, unknown>, planned: number) {
+  if (session.planned_sets === planned) return
+  await db.from('sessions').update({ planned_sets: planned }).eq('id', session.id as string)
+}
+
+const setsIn = (blocks: { sets?: number | null; exercises: unknown[] }[]) =>
+  blocks.reduce((n, b) => n + (b.sets ?? 0) * b.exercises.length, 0)
+
 export async function GET(req: NextRequest) {
   const sessionId = req.nextUrl.searchParams.get('sessionId')
   const templateId = req.nextUrl.searchParams.get('templateId')
@@ -343,6 +358,7 @@ export async function GET(req: NextRequest) {
 
       // Combine Day: no lifting, the player enters her test numbers
       if (FEATURES.measurements && templateRow.is_combine === true) {
+        await savePlanned(db, session, combineMetricsFor(templateRow.combine_metrics as string[] | null).length)
         return NextResponse.json({
           source: 'combine',
           template: { ...template, warmup, blocks: [] },
@@ -374,6 +390,8 @@ export async function GET(req: NextRequest) {
           exercises: exercises.filter(Boolean).map(e => ({ ...e!, canRequestChange: true })),
         }
       }))
+
+      await savePlanned(db, session, setsIn(enrichedBlocks))
 
       return NextResponse.json({
         source: 'template',
@@ -422,6 +440,8 @@ export async function GET(req: NextRequest) {
         exercises: exercises.filter(Boolean),
       }
     }))
+
+    await savePlanned(db, session, setsIn(blocks))
 
     return NextResponse.json({
       source: 'template',

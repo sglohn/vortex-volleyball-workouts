@@ -8,6 +8,10 @@
 //
 // Which workout, in order:
 //   1. Coach date override (player_overrides)
+//   1b. Standing modified workout (volleyball): an open health report with
+//      health_reports.modified_template_id, on a day her team (or the team
+//      she trains with) has a workout. She gets it instead of the team
+//      workout until the report is cleared. Her session stays on her team.
 //   2. Active individual program (player_programs)
 //   3. Self-guided player (players.self_guided) → auto-built full-body
 //      workout (lib/fullBodyWorkout.ts), saved on the session so resuming
@@ -22,6 +26,10 @@
 //      sessionId: null plus `week`, for the sign-in screen to explain.
 //   5. Legacy active workout (not for week plan teams)
 // Uses the club's local date (lib/clubTime.ts), not Vercel's UTC date.
+//
+// Every new session saves the workout she got (sessions.template_id), so
+// Team Mode, the leaderboard and attendance (lib/workoutCredit.ts) measure
+// her against her own workout, not her team's.
 //
 // pickWorkout() is steps 1–4 on their own, reading only. The player home
 // page (app/api/player/home) uses it to show today's workout before she
@@ -48,6 +56,46 @@ export interface PickedWorkout {
   week: PlayerWeek | null
   /** Set when today's workout comes from the team she trains with */
   trainsWithTemplateId: string | null
+  /** Today's workout is her standing modified workout (open health report) */
+  modified: boolean
+}
+
+/** Her team's workout today (or the team she trains with). Volleyball dated schedule. */
+async function teamDayWorkout(db: Db, player: CheckInPlayer, teamId: string | null, today: string): Promise<{ templateId: string | null; fromOtherTeam: boolean }> {
+  if (!teamId) return { templateId: null, fromOtherTeam: false }
+  const { data: schedule } = await db
+    .from('team_schedule')
+    .select('template_id')
+    .eq('team_id', teamId)
+    .eq('scheduled_date', today)
+    .maybeSingle()
+  if (schedule?.template_id) return { templateId: schedule.template_id, fromOtherTeam: false }
+  // Nothing for her team today: the team she comes in with
+  const withTeam = player.trains_with_team_id
+  if (withTeam && withTeam !== teamId) {
+    const { data: other } = await db
+      .from('team_schedule')
+      .select('template_id')
+      .eq('team_id', withTeam)
+      .eq('scheduled_date', today)
+      .maybeSingle()
+    if (other?.template_id) return { templateId: other.template_id, fromOtherTeam: true }
+  }
+  return { templateId: null, fromOtherTeam: false }
+}
+
+/** Her standing modified workout: newest open report that has one (null before the migration) */
+export async function modifiedWorkoutFor(db: Db, playerId: string): Promise<string | null> {
+  const { data, error } = await db
+    .from('health_reports')
+    .select('modified_template_id, created_at')
+    .eq('player_id', playerId)
+    .in('status', ['active', 'monitoring'])
+    .not('modified_template_id', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (error) return null
+  return (data?.[0]?.modified_template_id as string | undefined) ?? null
 }
 
 /** Which workout she gets today. Reads only; makes nothing. */
@@ -57,16 +105,26 @@ export async function pickWorkout(db: Db, player: CheckInPlayer, teamId: string 
   let selfGuided = false
   let week: PlayerWeek | null = null
   let trainsWithTemplateId: string | null = null
+  let modified = false
 
   const { data: override } = await db
     .from('player_overrides')
     .select('template_id')
     .eq('player_id', playerId)
     .eq('override_date', today)
-    .single()
+    .maybeSingle()
+
+  // Volleyball team days (dated schedule); lacrosse uses the week plan below
+  const dated = !!teamId && !FEATURES.weekPlan
+  const teamDay = dated && !override?.template_id ? await teamDayWorkout(db, player, teamId, today) : null
+  const modifiedId = teamDay?.templateId ? await modifiedWorkoutFor(db, playerId) : null
 
   if (override?.template_id) {
     templateId = override.template_id
+  } else if (modifiedId) {
+    // Injured: her modified workout on her team's day, until cleared
+    templateId = modifiedId
+    modified = true
   } else {
     // Check for active player program
     const { data: program } = await db
@@ -78,7 +136,7 @@ export async function pickWorkout(db: Db, player: CheckInPlayer, teamId: string 
       .or('ended_on.is.null,ended_on.gte.' + today)
       .order('created_at', { ascending: false })
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (program) {
       // Cycle through template sequence based on session count since program start
@@ -99,32 +157,13 @@ export async function pickWorkout(db: Db, player: CheckInPlayer, teamId: string 
       // Lacrosse: next workout in this week's plan
       week = await loadPlayerWeek(db, playerId, teamId, today)
       templateId = week.templateId
-    } else if (teamId) {
-      const { data: schedule } = await db
-        .from('team_schedule')
-        .select('template_id')
-        .eq('team_id', teamId)
-        .eq('scheduled_date', today)
-        .single()
-      templateId = schedule?.template_id ?? null
-      // Nothing for her team today: the team she comes in with
-      const withTeam = player.trains_with_team_id
-      if (!templateId && withTeam && withTeam !== teamId) {
-        const { data: other } = await db
-          .from('team_schedule')
-          .select('template_id')
-          .eq('team_id', withTeam)
-          .eq('scheduled_date', today)
-          .maybeSingle()
-        if (other?.template_id) {
-          templateId = other.template_id
-          trainsWithTemplateId = other.template_id
-        }
-      }
+    } else if (teamDay) {
+      templateId = teamDay.templateId
+      if (teamDay.fromOtherTeam) trainsWithTemplateId = teamDay.templateId
     }
   }
 
-  return { templateId, selfGuided, week, trainsWithTemplateId }
+  return { templateId, selfGuided, week, trainsWithTemplateId, modified }
 }
 
 /** player: the players row (select '*'); teamId: whose team workout to use */
@@ -153,7 +192,7 @@ export async function startWorkout(db: Db, player: CheckInPlayer, teamId: string
   } catch (e) {
     return { status: 500, body: { error: 'Could not load this week\'s workouts: ' + (e as Error).message } }
   }
-  const { templateId, selfGuided, week, trainsWithTemplateId } = picked
+  const { templateId, selfGuided, week, modified } = picked
 
   // Fallback legacy (not for self-guided players — they get their own workout)
   let legacyWorkoutId: string | null = null
@@ -228,6 +267,15 @@ export async function startWorkout(db: Db, player: CheckInPlayer, teamId: string
   } else if (existingSession) {
     // Resume existing session — keep the same generated workout if it has one
     sessionId = existingSession.id
+    // Her workout changed since she started (e.g. the coach gave her a
+    // modified workout or an override): switch to it if she hasn't logged a
+    // set yet, so she's measured against the workout she's actually doing
+    if (templateId && existingSession.template_id !== templateId) {
+      const { count } = await db.from('set_logs').select('id', { count: 'exact', head: true }).eq('session_id', sessionId)
+      if (!existingSession.template_id || !count) {
+        await db.from('sessions').update({ template_id: templateId }).eq('id', sessionId)
+      }
+    }
     if (selfGuided && !asGeneratedWorkout(existingSession.generated_workout)) {
       // e.g. coach switched the player to self-guided after they checked in
       const generated = await buildFullBodyWorkout(db, playerId, today)
@@ -245,8 +293,9 @@ export async function startWorkout(db: Db, player: CheckInPlayer, teamId: string
         workout_id: legacyWorkoutId,
         team_id: teamId,
         ...(generated ? { generated_workout: generated } : {}),
-        // Another team's workout: remember which, since her team has none today
-        ...(trainsWithTemplateId ? { template_id: trainsWithTemplateId } : {}),
+        // The workout she got (team, modified, override, program, or the
+        // team she trains with), so everything measures her against it
+        ...(templateId ? { template_id: templateId } : {}),
       })
       .select('id')
       .single()
@@ -268,6 +317,7 @@ export async function startWorkout(db: Db, player: CheckInPlayer, teamId: string
     teamId,
     templateId,
     selfGuided,
+    modified,
     isResumed,
     bodyCheckDone,
     hasHealthFlags: (healthReports?.length ?? 0) > 0,

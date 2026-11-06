@@ -13,6 +13,8 @@
 //  - Template set totals are counted in one query instead of one per block.
 //  - Pounds moved counts both dumbbells on 2-dumbbell exercises (lib/loads.ts).
 //  - Warm-up blocks (lib/warmup.ts) don't count toward % complete.
+//  - % complete uses her own workout's sets when saved on her session
+//    (sessions.planned_sets: modified workout, override, program).
 
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
@@ -22,7 +24,7 @@ import { clubDateString, clubDayBounds, clubDateOf, isDateString } from '@/lib/c
 import { isWarmupLabel } from '@/lib/warmup'
 
 type PlayerJoin = { id: string; name: string; jersey_number?: string; is_active: boolean }
-type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null }
+type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null; planned_sets?: number | null }
 type LogRow = {
   session_id: string; exercise_id: string; set_number: number
   weight_lbs: number | null; reps_completed: number | null; completed: boolean
@@ -70,7 +72,8 @@ export async function GET(req: NextRequest) {
   const { data: sessionsRaw } = playerIds.length
     ? await db
         .from('sessions')
-        .select('id, player_id, checked_in_at, completed_at')
+        // '*' so this works before planned_sets exists (workout credit migration)
+        .select('*')
         .in('player_id', playerIds)
         .gte('checked_in_at', start)
         .lt('checked_in_at', end)
@@ -166,7 +169,9 @@ export async function GET(req: NextRequest) {
     const setsCompleted = completedLogs.length
 
     const templateId = templateByTeam[p.teamId]?.templateId
-    const totalSets = templateId ? (totalSetsByTemplate[templateId] ?? 0) : 0
+    // Her own workout's sets (saved on her session), else the team's
+    const planned = activeSession?.planned_sets
+    const totalSets = typeof planned === 'number' ? planned : (templateId ? (totalSetsByTemplate[templateId] ?? 0) : 0)
     const pct = totalSets > 0 ? Math.min(100, Math.round(setsCompleted / totalSets * 100)) : 0
 
     const weightedSets = completedLogs.filter(l => l.weight_lbs && l.weight_lbs > 0)

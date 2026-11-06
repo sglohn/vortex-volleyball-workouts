@@ -54,7 +54,7 @@ import { FEATURES } from '@/lib/features'
 
 type Db = ReturnType<typeof createServerClient>
 
-type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null; template_id?: string | null }
+type SessionRow = { id: string; player_id: string; checked_in_at: string; completed_at: string | null; template_id?: string | null; planned_sets?: number | null }
 type LogRow = {
   session_id: string; exercise_id: string; weight_lbs: number | null; reps_completed: number | null
   completed: boolean; velocity_ms: number | null; logged_at: string | null
@@ -266,7 +266,8 @@ export async function GET(req: NextRequest) {
   // ── Everyone who checked in today ──
   const { data: sessionsRaw } = await db
     .from('sessions')
-    .select('id, player_id, checked_in_at, completed_at, template_id')
+    // '*' so this works before planned_sets exists (workout credit migration)
+    .select('*')
     .gte('checked_in_at', start)
     .lt('checked_in_at', end)
     .order('checked_in_at', { ascending: true })
@@ -348,14 +349,19 @@ export async function GET(req: NextRequest) {
   const templateByTeam: Record<string, string> = {}
   for (const s of schedules ?? []) if (s.template_id) templateByTeam[s.team_id] = s.template_id
 
-  // A player who came in with another team (players.trains_with_team_id) has
-  // that team's workout saved on her session; her own team has none today.
+  // Each session saves the workout she got (lib/checkin.ts): her team's, a
+  // modified workout, an override, or the team she came in with. Her own
+  // workout wins; older sessions without one use the team's.
   const sessionTemplateByPlayer: Record<string, string> = {}
+  const plannedByPlayer: Record<string, number> = {}
   if (FEATURES.datedSchedule) {
-    for (const s of shownSessions) if (s.template_id) sessionTemplateByPlayer[s.player_id] = s.template_id
+    for (const s of shownSessions) {
+      if (s.template_id) sessionTemplateByPlayer[s.player_id] = s.template_id
+      if (typeof s.planned_sets === 'number') plannedByPlayer[s.player_id] = s.planned_sets
+    }
   }
   const templateOf = (p: { id: string; team: { id: string } }): string | undefined =>
-    templateByTeam[p.team.id] ?? sessionTemplateByPlayer[p.id]
+    sessionTemplateByPlayer[p.id] ?? templateByTeam[p.team.id]
 
   const templateIds = [...new Set([...Object.values(templateByTeam), ...Object.values(sessionTemplateByPlayer)])]
 
@@ -438,7 +444,7 @@ export async function GET(req: NextRequest) {
     const logs = logsByPlayer.get(p.id) ?? []
     const totalWeight = logs.reduce((sum, l) => sum + setPoundsMoved(l.weight_lbs, l.reps_completed, eq(l.exercise_id)), 0)
     const templateId = templateOf(p)
-    const totalSets = templateId ? (totalSetsByTemplate[templateId] ?? 0) : 0
+    const totalSets = plannedByPlayer[p.id] ?? (templateId ? (totalSetsByTemplate[templateId] ?? 0) : 0)
     return {
       ...p,
       completed: playerSessions.length > 0 && playerSessions.every(s => !!s.completed_at),
