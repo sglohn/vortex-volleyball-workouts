@@ -8,7 +8,8 @@ import { PHASE_CONFIG, PhaseType } from '@/lib/types'
 import { FEATURES, POSITIONS } from '@/lib/features'
 import { useIsAdmin } from '@/components/CoachContext'
 import { teamInitial } from '@/lib/teamInitial'
-import { AttendancePill, DayStrip, SeasonHealth, seasonHealthParts } from '@/components/Attendance'
+import { AttendancePill, DayStrip, SeasonHealth, fmtCredit, seasonHealthParts } from '@/components/Attendance'
+import WorkoutCredit from '@/components/WorkoutCredit'
 import { pctColor, HIGH_PCT, LOW_PCT, type PlayerAttendance, type TeamAttendance } from '@/lib/attendance'
 
 interface Measurement { height_in?: number; wingspan_in?: number; standing_reach_in?: number; standing_vertical_in?: number; approach_vertical_in?: number; measured_at?: string }
@@ -57,6 +58,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
   const [attTeam, setAttTeam] = useState<TeamAttendance | null>(null)
   const [attByPlayer, setAttByPlayer] = useState<Record<string, PlayerAttendance>>({})
   const [openDays, setOpenDays] = useState<string | null>(null)
+  const [openDay, setOpenDay] = useState<string | null>(null)   // date opened in that player's strip
   const [rosterSort, setRosterSort] = useState<RosterSort>('name')
 
   // Edit player modal
@@ -214,10 +216,11 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
             <div style={{ fontSize: '0.66rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, marginTop: '0.25rem' }}>Attendance</div>
           </div>
           <div style={{ flex: 1, minWidth: 200, fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: 1.55 }}>
-            <div><strong style={{ color: 'var(--black)' }}>{attTeam.workoutsSoFar}</strong> of {attTeam.workoutsSeason} team workouts so far this season · {attTeam.attended} check-ins of {attTeam.counted} possible{attTeam.finishedPct !== null && <> · {attTeam.finishedPct}% finished</>}</div>
+            <div><strong style={{ color: 'var(--black)' }}>{attTeam.workoutsSoFar}</strong> of {attTeam.workoutsSeason} team workouts so far this season · {fmtCredit(attTeam.credit)} workouts of credit from {attTeam.counted} possible · {attTeam.finished} full{attTeam.partial > 0 && <> · {attTeam.partial} partial</>}{attTeam.signedIn > 0 && <> · {attTeam.signedIn} signed in, no sets</>}</div>
+            {attTeam.toReview > 0 && <div style={{ color: '#b45309', fontWeight: 600 }}>{attTeam.toReview} workout{attTeam.toReview === 1 ? '' : 's'} to review (marked •)</div>}
             {attTeam.counted > 0 && <div>{attTeam.playersHigh} player{attTeam.playersHigh === 1 ? '' : 's'} at {HIGH_PCT}%+ · <span style={{ color: attTeam.playersLow ? 'var(--danger)' : undefined }}>{attTeam.playersLow} under {LOW_PCT}%</span></div>}
             <div><SeasonHealth health={attTeam.health} prefix="Health this season: " />{attTeam.health.playersInjured > 0 && <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary)' }}> ({attTeam.health.playersInjured} player{attTeam.health.playersInjured === 1 ? '' : 's'} injured)</span>}</div>
-            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tap a player&apos;s % to see each day. Out means out of volleyball, so a missed workout while Out still counts as missed.</div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Tap a player&apos;s % to see each day, then a day to see how far she got. A full workout = every set logged; a partial one counts its % done until an admin decides. Out means out of volleyball, so a missed workout while Out still counts as missed.</div>
           </div>
           <div className="full-phone" style={{ display: 'flex', gap: '0.25rem', background: 'var(--carolina-light)', padding: '0.2rem', borderRadius: 8, border: '1px solid var(--carolina-border)', flexShrink: 0 }}>
             {([['name', 'A–Z'], ['attendance', 'Lowest % first']] as [RosterSort, string][]).map(([k, label]) => (
@@ -258,7 +261,7 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                     {showAtt && (
                       <td style={{ padding: '0.875rem 1rem' }}>
                         {att
-                          ? <AttendancePill pct={att.attendance.pct} attended={att.attendance.attended} counted={att.attendance.counted} open={daysOpen} onClick={() => setOpenDays(daysOpen ? null : p.id)} />
+                          ? <AttendancePill pct={att.attendance.pct} attended={att.attendance.credit} counted={att.attendance.counted} open={daysOpen} onClick={() => { setOpenDays(daysOpen ? null : p.id); setOpenDay(null) }} />
                           : <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>—</span>}
                       </td>
                     )}
@@ -292,11 +295,18 @@ export default function TeamDetailPage({ params }: { params: Promise<{ id: strin
                     <tr style={{ borderBottom: '1px solid var(--gray-border)', background: i % 2 === 0 ? 'var(--white)' : 'rgba(238,244,255,0.3)' }}>
                       <td colSpan={rosterCols.length} style={{ padding: '0 1rem 0.9rem' }}>
                         <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginBottom: '0.4rem' }}>
-                          {att.attendance.attended} of {att.attendance.counted} workouts · {att.attendance.finished} finished
+                          Came to {att.attendance.attended} of {att.attendance.counted} workouts · {att.attendance.finished} full
+                          {att.attendance.partial > 0 && <> · {att.attendance.partial} partial</>}
+                          {att.attendance.signedIn > 0 && <> · {att.attendance.signedIn} signed in, no sets</>}
+                          {' '}· {fmtCredit(att.attendance.credit)} workouts of credit
                           {att.attendance.out > 0 && <> · {att.attendance.out} missed while Out (counted)</>}
                           {att.attendance.extra > 0 && <> · {att.attendance.extra} extra day{att.attendance.extra === 1 ? '' : 's'} with no team workout</>}
                         </div>
-                        <DayStrip days={att.attendance.days} />
+                        <DayStrip days={att.attendance.days} selected={openDay}
+                          onDay={d => setOpenDay(openDay === d.date ? null : d.date)} />
+                        {openDay && (
+                          <WorkoutCredit playerId={p.id} date={openDay} onClose={() => setOpenDay(null)} onChanged={loadData} />
+                        )}
                       </td>
                     </tr>
                   )}

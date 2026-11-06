@@ -7,7 +7,8 @@
 // Returns:
 //   player      name, team (name + color)
 //   today       today's workout (lib/checkin.ts pickWorkout, so it's the
-//               same one "Begin" will start: date override → program →
+//               same one "Begin" will start: date override → modified
+//               workout (health report) → program →
 //               self-guided → team schedule → trains-with team), and her
 //               session today if she already began (in progress or done)
 //   next        her next scheduled workout after today
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
   // An unfinished one first (that's the one Begin resumes), else the latest
   const open = (todaySessions ?? []).find(s => !s.completed_at) ?? null
   const latest = open ?? (todaySessions ?? [])[0] ?? null
-  let todaySession: { id: string; finished: boolean; bodyCheckDone: boolean; setsDone: number; name: string } | null = null
+  let todaySession: { id: string; finished: boolean; bodyCheckDone: boolean; setsDone: number; planned: number | null; name: string } | null = null
   if (latest) {
     const [{ data: checks }, { count }] = await Promise.all([
       db.from('body_checks').select('id').eq('session_id', latest.id).limit(1),
@@ -101,6 +102,7 @@ export async function GET(req: NextRequest) {
       finished: !!latest.completed_at,
       bodyCheckDone: (checks?.length ?? 0) > 0,
       setsDone: count ?? 0,
+      planned: typeof latest.planned_sets === 'number' ? latest.planned_sets : null,
       name: await sessionName(db, latest),
     }
   }
@@ -168,6 +170,7 @@ export async function GET(req: NextRequest) {
       date: today,
       workoutName,
       isCombine: tmpl?.isCombine === true,
+      modified: picked.modified,
       hasWorkout: !!workoutName,
       session: todaySession,
     },

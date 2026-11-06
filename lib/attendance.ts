@@ -15,41 +15,85 @@
 //                   (player_teams.joined_at). A player who trains with
 //                   another team (players.trains_with_team_id) follows that
 //                   team's workout days instead, still counted on her team.
-//   Attended        she checked in that day (a session that club-local date,
-//                   for any team or workout: a coach override, Combine Day
-//                   and Team Mode all count).
-//   Finished        that session was finished (tapped Finish).
+//   Her workout     whatever she was given that day (team workout, modified
+//                   workout, override, program): sessions.planned_sets, saved
+//                   when she opened it (lib/workoutCredit.ts works it out for
+//                   older sessions). Combine Day: the tests.
+//   Credit          signing in isn't enough. Each workout day earns credit:
+//                     Full      every set logged (every test on a Combine
+//                               Day): a whole workout
+//                     Partial   some sets: her % done (12 of 24 = half)
+//                     Signed in no sets: nothing
+//                   until an admin decides (attendance_credit), which then
+//                   wins: full, none, or any % in between. Partial and
+//                   signed-in days from before today wait in "To review".
 //   Missed at Out   she had a health report at Out that day and didn't check
 //                   in. Out means out of volleyball, not the weight room, so
 //                   it counts as a miss like any other; it's shown as
 //                   "Missed (Out)" so coaches can see injured players who
 //                   aren't coming in.
-//   Today           counts once she checks in; until then it's left out, so
-//                   nobody shows a miss before the workout has happened.
+//   Today           counts once she's done every set (or an admin decides);
+//                   until then it's shown in progress and left out, so
+//                   nobody drops mid-workout.
 //   Extra           days she checked in with no team workout that counts
 //                   (no workout scheduled, or a make-up day).
 //
-// Attendance % = attended ÷ workout days that count. A team's % is the whole
-// roster added together (attended ÷ counted), so every workout weighs the same.
+// Attendance % = credit earned ÷ workout days that count. A team's % is the
+// whole roster added together, so every workout weighs the same.
 
-export type DayStatus = 'finished' | 'attended' | 'missed' | 'out' | 'today'
+export type DayStatus = 'finished' | 'partial' | 'signedIn' | 'missed' | 'out' | 'today'
 
-export interface AttendanceDay { date: string; status: DayStatus }
+export interface AttendanceDay {
+  date: string
+  status: DayStatus
+  /** Sets logged (tests done on a Combine Day) / what her workout asked for */
+  done?: number
+  planned?: number
+  /** Credit this day earns, 0–100 (null for today while it's left out) */
+  credit?: number | null
+  /** An admin set the credit (attendance_credit) */
+  decided?: boolean
+  note?: string | null
+  /** Partial or signed-in, before today, nobody has decided yet */
+  toReview?: boolean
+  combine?: boolean
+}
+
+/** One day's check-in, for the rules below */
+export interface DayWork {
+  /** Sets logged (completed) that day, or Combine tests with a number */
+  done: number
+  /** What her workout asked for (0 = not known) */
+  planned: number
+  combine?: boolean
+  /** Admin decision (attendance_credit), 0–100 */
+  credit?: number | null
+  note?: string | null
+}
 
 export interface AttendanceStat {
   /** Workout days that count (attended + missed) */
   counted: number
+  /** Days she checked in (any amount done) */
   attended: number
+  /** Full workouts: every set logged (or given full credit) */
   finished: number
+  /** Checked in but not every set, and signed in with nothing */
+  partial: number
+  signedIn: number
+  /** Workouts' worth of credit earned, e.g. 3.5 */
+  credit: number
   /** All misses, including the ones while Out */
   missed: number
   /** Of the misses, how many were while she was at Out */
   out: number
   /** Check-ins on days with no team workout */
   extra: number
-  /** attended ÷ counted, 0–100, null when nothing counts yet */
+  /** Partial / signed-in days waiting for an admin */
+  toReview: number
+  /** credit ÷ counted, 0–100, null when nothing counts yet */
   pct: number | null
-  /** finished ÷ counted */
+  /** full workouts ÷ counted */
   finishedPct: number | null
   /** Every workout day so far, oldest first */
   days: AttendanceDay[]
@@ -78,6 +122,12 @@ export interface TeamAttendance {
   attended: number
   finished: number
   counted: number
+  /** Partial / signed-in check-ins, and how many wait for an admin */
+  partial: number
+  signedIn: number
+  toReview: number
+  /** Workouts' worth of credit earned by the roster */
+  credit: number
   pct: number | null
   finishedPct: number | null
   /** Players at 90%+ / under 70% (of those with something counted) */
@@ -117,46 +167,76 @@ export function eachDate(from: string, to: string): string[] {
   return out
 }
 
+/** Credit a checked-in day earns (0–100) before/after an admin decides */
+export function dayCredit(w: DayWork): { status: 'finished' | 'partial' | 'signedIn'; credit: number; pctDone: number } {
+  const pctDone = w.planned > 0 ? Math.min(100, Math.round((w.done / w.planned) * 100)) : (w.done > 0 ? 100 : 0)
+  const full = w.planned > 0 ? w.done >= w.planned : w.done > 0
+  const status = full ? 'finished' : w.done > 0 ? 'partial' : 'signedIn'
+  const decided = typeof w.credit === 'number'
+  if (!decided) return { status, credit: full ? 100 : pctDone, pctDone }
+  // An admin decided: full credit shows as a full workout, anything less as partial
+  const credit = w.credit as number
+  return { status: credit === 100 ? 'finished' : w.done > 0 || credit > 0 ? 'partial' : 'signedIn', credit, pctDone }
+}
+
 /**
  * One player's attendance for one team.
  *   workoutDates  the team's workout days from the season start through today
  *   joinedOn      player_teams.joined_at (null = whole season)
- *   checkIns      club-local date → finished? (true if any session that day was finished)
+ *   checkIns      club-local date → what she did that day (any team or workout)
  *   outDates      club-local dates she was at Out
  */
 export function playerAttendance(
   workoutDates: string[],
   joinedOn: string | null,
-  checkIns: Map<string, boolean>,
+  checkIns: Map<string, DayWork>,
   outDates: Set<string>,
   today: string,
 ): AttendanceStat {
   const days: AttendanceDay[] = []
-  let attended = 0, finished = 0, missed = 0, out = 0
+  let attended = 0, finished = 0, partial = 0, signedIn = 0, missed = 0, out = 0, toReview = 0, credit = 0
   const workoutSet = new Set(workoutDates)
-  for (const date of [...workoutDates].sort()) {
+  for (const date of [...new Set(workoutDates)].sort()) {
     if (joinedOn && date < joinedOn) continue
-    const ci = checkIns.get(date)
-    if (ci !== undefined) {
+    const w = checkIns.get(date)
+    if (w) {
+      const c = dayCredit(w)
+      const decided = typeof w.credit === 'number'
+      const base = { date, done: w.done, planned: w.planned, decided, note: w.note ?? null, combine: !!w.combine }
+      if (date === today && c.status !== 'finished' && !decided) {
+        // In progress: left out until she's done or the day is over
+        days.push({ ...base, status: 'today', credit: null })
+        continue
+      }
       attended++
-      if (ci) finished++
-      days.push({ date, status: ci ? 'finished' : 'attended' })
+      credit += c.credit
+      if (c.status === 'finished') finished++
+      else if (c.status === 'partial') partial++
+      else signedIn++
+      const review = c.status !== 'finished' && !decided
+      if (review) toReview++
+      days.push({ ...base, status: c.status, credit: c.credit, toReview: review })
     } else if (date === today) {
-      days.push({ date, status: 'today' })
+      days.push({ date, status: 'today', credit: null })
     } else if (outDates.has(date)) {
       // Out of volleyball, not the weight room: still a miss
       missed++
       out++
-      days.push({ date, status: 'out' })
+      days.push({ date, status: 'out', credit: 0 })
     } else {
       missed++
-      days.push({ date, status: 'missed' })
+      days.push({ date, status: 'missed', credit: 0 })
     }
   }
   let extra = 0
   for (const date of checkIns.keys()) if (!workoutSet.has(date)) extra++
   const counted = attended + missed
-  return { counted, attended, finished, missed, out, extra, pct: percent(attended, counted), finishedPct: percent(finished, counted), days }
+  return {
+    counted, attended, finished, partial, signedIn, credit: Math.round(credit) / 100,
+    missed, out, extra, toReview,
+    pct: counted > 0 ? Math.round(credit / counted) : null,
+    finishedPct: percent(finished, counted), days,
+  }
 }
 
 export interface ReportForHealth {
@@ -253,9 +333,10 @@ export function pctColor(pct: number | null): string {
 }
 
 export const DAY_STATUS: Record<DayStatus, { label: string; color: string; bg: string }> = {
-  finished: { label: 'Finished',             color: '#16a34a', bg: 'rgba(22,163,74,0.12)' },
-  attended: { label: 'Came, didn’t finish',  color: '#65a30d', bg: 'rgba(101,163,13,0.12)' },
+  finished: { label: 'Full workout',         color: '#16a34a', bg: 'rgba(22,163,74,0.12)' },
+  partial:  { label: 'Part of the workout',  color: '#d97706', bg: 'rgba(217,119,6,0.12)' },
+  signedIn: { label: 'Signed in, no sets',   color: '#b45309', bg: 'rgba(180,83,9,0.14)' },
   missed:   { label: 'Missed',               color: '#dc2626', bg: 'rgba(220,38,38,0.10)' },
   out:      { label: 'Missed (Out)',         color: '#9f1239', bg: 'rgba(159,18,57,0.12)' },
-  today:    { label: 'Today, not in yet',    color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
+  today:    { label: 'Today (counts when done)', color: '#2563eb', bg: 'rgba(37,99,235,0.10)' },
 }

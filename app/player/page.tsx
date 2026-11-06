@@ -31,8 +31,10 @@ interface Home {
     date: string
     workoutName: string | null
     isCombine: boolean
+    /** Her modified workout (injured), instead of the team's */
+    modified?: boolean
     hasWorkout: boolean
-    session: { id: string; finished: boolean; bodyCheckDone: boolean; setsDone: number; name: string } | null
+    session: { id: string; finished: boolean; bodyCheckDone: boolean; setsDone: number; planned?: number | null; name: string } | null
   }
   player: { id: string; name: string; team: { id: string; name: string; color: string } | null }
   next: { date: string; name: string } | null
@@ -148,7 +150,9 @@ export default function PlayerHomePage() {
         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Today’s workout · in progress</div>
         <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.35rem', color: 'var(--black)', margin: '0.2rem 0 0.15rem' }}>{sess.name}</div>
         <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '0.9rem' }}>
-          {sess.setsDone ? `${sess.setsDone} set${sess.setsDone === 1 ? '' : 's'} logged so far` : 'Started — nothing logged yet'}
+          {sess.planned
+            ? `${sess.setsDone} of ${sess.planned} sets logged. Log every set for a full workout.`
+            : sess.setsDone ? `${sess.setsDone} set${sess.setsDone === 1 ? '' : 's'} logged so far` : 'Started — nothing logged yet'}
         </div>
         <button className="btn-volt" onClick={begin} disabled={starting} style={{ width: '100%', padding: '0.95rem', fontSize: '1.05rem' }}>
           {starting ? 'Opening…' : 'Keep going →'}
@@ -162,8 +166,11 @@ export default function PlayerHomePage() {
         <div style={{ minWidth: 0 }}>
           <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.2rem', color: 'var(--black)' }}>Done for today!</div>
           <div style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            {sess.name}{sess.setsDone ? ` · ${sess.setsDone} sets` : ''}
+            {sess.name}{sess.planned ? ` · ${sess.setsDone} of ${sess.planned} sets` : sess.setsDone ? ` · ${sess.setsDone} sets` : ''}
           </div>
+          {!!sess.planned && sess.setsDone < sess.planned && !today.isCombine && (
+            <div style={{ fontSize: '0.75rem', color: '#b45309', marginTop: '0.2rem' }}>Not every set was logged, so this counts as part of a workout.</div>
+          )}
           {next && <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>Next: <strong>{niceDate(next.date)}</strong> · {next.name}</div>}
         </div>
       </div>
@@ -172,7 +179,10 @@ export default function PlayerHomePage() {
     todayCard = (
       <>
         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Today’s workout</div>
-        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.35rem', color: 'var(--black)', margin: '0.2rem 0 0.9rem' }}>{today.workoutName}</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.35rem', color: 'var(--black)', margin: '0.2rem 0 0.9rem' }}>
+          {today.workoutName}
+          {today.modified && <span style={{ display: 'block', fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginTop: '0.15rem' }}>Your modified workout while you heal</span>}
+        </div>
         <button className="btn-volt" onClick={begin} disabled={starting} style={{ width: '100%', padding: '1rem', fontSize: '1.1rem' }}>
           {starting ? 'Starting…' : today.isCombine ? 'Begin Combine Day' : 'Begin today’s workout'}
         </button>
@@ -236,11 +246,14 @@ export default function PlayerHomePage() {
             </div>
             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
               {attendance.counted
-                ? <>Came to <strong>{attendance.attended}</strong> of {attendance.counted} team workouts<br />Finished <strong>{attendance.finished}</strong>{attendance.extra ? ` · ${attendance.extra} extra` : ''}</>
+                ? <>Full workouts: <strong>{attendance.finished}</strong> of {attendance.counted}<br />
+                    {attendance.partial + attendance.signedIn > 0 ? <>Part of a workout: {attendance.partial + attendance.signedIn} · </> : null}
+                    Came to {attendance.attended}{attendance.extra ? ` · ${attendance.extra} extra` : ''}</>
                 : 'No team workouts yet this season.'}
             </div>
           </div>
           {attendance.days.length > 0 && <DayStrip days={attendance.days.slice(-12)} />}
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '0.45rem' }}>A workout counts in full when you log every set.</div>
         </div>
       )}
 

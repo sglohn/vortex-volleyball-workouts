@@ -10,6 +10,9 @@
 //   progress note, Cleared and Reopen adds a health_report_updates row.
 //   A report only counts as coach-entered (reportedBy: 'coach') when the
 //   coach cookie is present.
+//   PATCH also takes modifiedTemplateId (admins only): a standing modified
+//   workout she gets on her team's workout days while this report is open
+//   (lib/checkin.ts), null to take it off. Noted on the timeline.
 //   PATCH also takes bodyPart / reportType to fix a mistake (wrong side,
 //   injured instead of sore): lib/healthFix.ts, which also corrects the
 //   player's body checks and notes the fix on the timeline.
@@ -102,7 +105,7 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const coach = await getCoach(req)
   if (!coach) return coachOnly()
-  const { id, confirmedByCoach, coachNotes, status, expectedReturn, severity, injuryType, availability, progressNote, bodyPart, reportType } = await req.json()
+  const { id, confirmedByCoach, coachNotes, status, expectedReturn, severity, injuryType, availability, progressNote, bodyPart, reportType, modifiedTemplateId } = await req.json()
 
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
   if (availability !== undefined && !isAvailability(availability)) {
@@ -125,6 +128,20 @@ export async function PATCH(req: NextRequest) {
   if (severity !== undefined) updates.severity = severity
   if (injuryType !== undefined) updates.injury_type = injuryType
   if (expectedReturn !== undefined) updates.expected_return = expectedReturn
+
+  // Standing modified workout (admins only: team coaches can't change workouts)
+  let modifiedName: string | null | undefined
+  if (modifiedTemplateId !== undefined) {
+    if (!coach.isAdmin) return adminsOnly()
+    if (modifiedTemplateId === null) {
+      modifiedName = null
+    } else {
+      const { data: t } = await db.from('workout_templates').select('id, name').eq('id', modifiedTemplateId).maybeSingle()
+      if (!t) return NextResponse.json({ error: 'Workout not found' }, { status: 400 })
+      modifiedName = t.name as string
+    }
+    updates.modified_template_id = modifiedTemplateId
+  }
 
   // Fix a mistake: area and/or type
   const fix = await planFix(db, existing as ReportToFix, { bodyPart, reportType })
@@ -172,6 +189,12 @@ export async function PATCH(req: NextRequest) {
     await logHealthUpdate(db, { ...base, kind: 'level', from: before, to: availability as Availability })
   } else if (note?.trim()) {
     await logHealthUpdate(db, { ...base, kind: 'note', to: before })
+  }
+  if (modifiedName !== undefined) {
+    await logHealthUpdate(db, {
+      reportId: id, playerId: existing.player_id as string, coach, kind: 'note', to: (availability ?? before) as Availability,
+      note: modifiedName ? `Modified workout: ${modifiedName} on her team's workout days until cleared` : 'Modified workout taken off',
+    })
   }
 
   return NextResponse.json({ report })

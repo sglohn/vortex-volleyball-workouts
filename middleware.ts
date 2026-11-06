@@ -44,6 +44,7 @@ const COACH_ROUTES: Record<string, string[]> = {
   '/api/coach/health-watch':    ['GET', 'POST', 'DELETE'],    // Watch tab patterns (own teams/players), mark seen / undo
   '/api/coach/team-detail':     ['GET'],
   '/api/coach/attendance':      ['GET'],                      // season attendance + health counts (own teams only)
+  '/api/coach/attendance/credit': ['GET'],                   // how far a player got on a workout day (own players); credit is admins only
   '/api/coach/players':         ['GET'],
   '/api/coach/logs':            ['GET'],
   '/api/coach/logs/check':      ['POST'],                     // "Looks right" on flagged sets (own players only)
