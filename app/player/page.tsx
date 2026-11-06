@@ -216,7 +216,7 @@ export default function PlayerHomePage() {
     tiles.push({ label: 'Block Touch', value: feetInchesText(block), sub: v != null ? `${v}″ standing vertical` : undefined })
   }
   if (val('acceleration_sec') != null) tiles.push({ label: 'Acceleration', value: `${val('acceleration_sec')!.toFixed(2)}s` })
-  if (val('pro_agility_sec') != null) tiles.push({ label: 'Pro-Agility', value: `${val('pro_agility_sec')!.toFixed(2)}s` })
+  if (val('pro_agility_sec') != null) tiles.push({ label: 'Agility', value: `${val('pro_agility_sec')!.toFixed(2)}s` })
   if (val('height_in') != null) tiles.push({ label: 'Height', value: feetInchesText(val('height_in')!) })
   if (reach != null) tiles.push({ label: 'Standing Reach', value: feetInchesText(reach) })
   if (val('wingspan_in') != null) tiles.push({ label: 'Wingspan', value: feetInchesText(val('wingspan_in')!) })

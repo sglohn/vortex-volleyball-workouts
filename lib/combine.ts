@@ -92,9 +92,12 @@ export const COMBINE_METRICS: CombineMetric[] = [
     maxAttempts: 3, better: 'lower', usual: [0.8, 2.2], limits: [0.4, 6], bigChange: 0.4, step: 0.01,
   },
   {
-    key: 'pro_agility_sec', label: 'Pro-Agility', short: '5-10-5 shuttle', unit: 'sec',
-    howTo: 'Start in the middle. 5 yards one way, 10 yards back, 5 yards to the middle, touching each line. Enter the time, like 5.38.',
-    maxAttempts: 3, better: 'lower', usual: [4.2, 7], limits: [3, 12], bigChange: 1, step: 0.01,
+    // Not a full 5-10-5 pro-agility (Nov 2026): the club's court-sized version,
+    // net → attack line (3 m) → the other attack line (6 m) → net (3 m) = 12 m,
+    // so times run about a second faster. Stored in measurements.pro_agility_sec.
+    key: 'pro_agility_sec', label: 'Agility', short: 'Net shuttle, 3-6-3 m', unit: 'sec',
+    howTo: 'Start at the net. Run to the attack line on one side (3 m), back past the net to the other attack line (6 m), then back to the net (3 m). Touch each line. Enter the time, like 4.12.',
+    maxAttempts: 3, better: 'lower', usual: [3, 6], limits: [2, 10], bigChange: 0.8, step: 0.01,
   },
   {
     key: 'swing_velocity_mph', label: 'Swing Velocity', short: 'Radar, hitting arm', unit: 'mph',

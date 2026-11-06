@@ -18,7 +18,7 @@
 //   STANDING VERTICAL  block touch minus standing reach
 //   BLOCK TOUCH
 //   ACCELERATION       fastest time first
-//   PRO-AGILITY        fastest time first
+//   AGILITY            net shuttle (3-6-3 m), fastest time first
 //   SWING VELOCITY     only when someone entered a swing today (optional test)
 //   WINGSPAN
 //   STANDING REACH
@@ -75,7 +75,7 @@ export type CombineBoards = {
 const TV_SHORT: Record<CombineMetricKey, string> = {
   height_in: 'Height', wingspan_in: 'Wingspan', standing_reach_in: 'Reach',
   standing_vertical_in: 'Block Touch', approach_vertical_in: 'Appr Touch',
-  acceleration_sec: 'Accel', pro_agility_sec: 'Pro-Agility', swing_velocity_mph: 'Swing',
+  acceleration_sec: 'Accel', pro_agility_sec: 'Agility', swing_velocity_mph: 'Swing',
 }
 
 // Tests that go into the athleticism score (wingspan doesn't)
@@ -365,7 +365,7 @@ export async function buildCombineBoards(db: Db, opts: {
     verticalSection('STANDING VERTICAL', 'standing_vertical_in', 'Standing Vertical', 'Block touch minus reach', 'Best standing verticals'),
     testSection('BLOCK TOUCH', 'standing_vertical_in', 'jump', 'Block Touch', 'Highest touch today', 'Highest block touches'),
     testSection('ACCELERATION', 'acceleration_sec', 'sprint', 'Acceleration', '5 yards, fastest time', 'Fastest 5 yards'),
-    testSection('PRO-AGILITY', 'pro_agility_sec', 'sprint', 'Pro-Agility', '5-10-5, fastest time', 'Fastest 5-10-5'),
+    testSection('AGILITY', 'pro_agility_sec', 'sprint', 'Agility', 'Net shuttle 3-6-3 m, fastest time', 'Fastest agility shuttles'),
     testSection('WINGSPAN', 'wingspan_in', 'length', 'Wingspan', 'Fingertip to fingertip', 'Longest wingspans'),
     testSection('STANDING REACH', 'standing_reach_in', 'length', 'Standing Reach', 'Flat-footed, one hand', 'Highest standing reach'),
   ]
