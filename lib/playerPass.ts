@@ -36,3 +36,27 @@ export async function playerFetch(url: string, init: RequestInit = {}): Promise<
   }
   return res
 }
+
+/**
+ * After Finish on her own phone (volleyball): keep her signed in so she can
+ * go back to her home page (app/player/page.tsx), but drop the workout.
+ * Coaches' workout profiles, Team Mode and lacrosse sign out as before.
+ * Returns true when she's still signed in.
+ */
+export function endStoredWorkout(weekPlan: boolean): boolean {
+  try {
+    const raw = localStorage.getItem('vx_session')
+    const s = raw ? JSON.parse(raw) : null
+    if (!s || weekPlan || s.teamMode || s.isCoach || !s.playerPass) {
+      localStorage.removeItem('vx_session')
+      return false
+    }
+    localStorage.setItem('vx_session', JSON.stringify({
+      ...s, sessionId: null, templateId: null, isResumed: false, bodyCheckDone: false,
+    }))
+    return true
+  } catch {
+    try { localStorage.removeItem('vx_session') } catch { /* ignore */ }
+    return false
+  }
+}

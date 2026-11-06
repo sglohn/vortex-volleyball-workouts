@@ -1,7 +1,8 @@
 'use client'
 // FILE: app/player/bodycheck/page.tsx
 //
-// Body check on the player's phone, right after sign-in. The screen itself
+// Body check on the player's phone, after she taps "Begin today's workout"
+// on her home page (volleyball) or right after sign-in (lacrosse). The screen itself
 // is components/BodyCheck.tsx (Team Mode uses the same one).
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
@@ -16,6 +17,8 @@ export default function BodyCheckPage() {
     const s = localStorage.getItem('vx_session')
     if (!s) { router.push('/'); return }
     const parsed = JSON.parse(s)
+    // Signed in but no workout begun yet: the body check comes after Begin on Home
+    if (!parsed.sessionId) { router.replace('/player'); return }
     setSignIn({ sessionId: parsed.sessionId, playerId: parsed.playerId, playerName: parsed.playerName ?? '' })
   }, [router])
 

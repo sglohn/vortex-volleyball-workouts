@@ -22,6 +22,11 @@
 //      sessionId: null plus `week`, for the sign-in screen to explain.
 //   5. Legacy active workout (not for week plan teams)
 // Uses the club's local date (lib/clubTime.ts), not Vercel's UTC date.
+//
+// pickWorkout() is steps 1–4 on their own, reading only. The player home
+// page (app/api/player/home) uses it to show today's workout before she
+// taps "Begin today's workout", so signing in to look makes no session and
+// doesn't count as coming in (lib/attendance.ts).
 
 import { createServerClient } from '@/lib/supabase'
 import { clubDateString, clubDayBounds } from '@/lib/clubTime'
@@ -34,34 +39,23 @@ type Db = ReturnType<typeof createServerClient>
 
 export interface CheckInResult { status: number; body: Record<string, unknown> }
 
-/** player: the players row (select '*'); teamId: whose team workout to use */
-export async function startWorkout(
-  db: Db,
-  player: { id: string; name: string; self_guided?: boolean | null; trains_with_team_id?: string | null },
-  teamId: string | null,
-): Promise<CheckInResult> {
+type CheckInPlayer = { id: string; name: string; self_guided?: boolean | null; trains_with_team_id?: string | null }
+
+/** Today's workout for her, before any session is made (steps 1–4 above) */
+export interface PickedWorkout {
+  templateId: string | null
+  selfGuided: boolean
+  week: PlayerWeek | null
+  /** Set when today's workout comes from the team she trains with */
+  trainsWithTemplateId: string | null
+}
+
+/** Which workout she gets today. Reads only; makes nothing. */
+export async function pickWorkout(db: Db, player: CheckInPlayer, teamId: string | null, today: string): Promise<PickedWorkout> {
   const playerId = player.id
-  // Club-local date — Vercel's clock is UTC, which rolls to tomorrow at 8 PM Eastern
-  const today = clubDateString()
-  const { start: dayStart, end: dayEnd } = clubDayBounds(today)
-
-  // Check for today's existing incomplete session — resume it
-  const { data: existingSession } = await db
-    .from('sessions')
-    .select('*')
-    .eq('player_id', playerId)
-    .gte('checked_in_at', dayStart)
-    .lt('checked_in_at', dayEnd)
-    .is('completed_at', null)
-    .order('checked_in_at', { ascending: false })
-    .limit(1)
-    .single()
-
-  // Find today's template — priority: date override → player program → self-guided → team schedule
   let templateId: string | null = null
   let selfGuided = false
   let week: PlayerWeek | null = null
-  // Set when today's workout comes from the team she trains with
   let trainsWithTemplateId: string | null = null
 
   const { data: override } = await db
@@ -103,11 +97,7 @@ export async function startWorkout(
       selfGuided = true
     } else if (teamId && FEATURES.weekPlan) {
       // Lacrosse: next workout in this week's plan
-      try {
-        week = await loadPlayerWeek(db, playerId, teamId, today)
-      } catch (e) {
-        return { status: 500, body: { error: 'Could not load this week\'s workouts: ' + (e as Error).message } }
-      }
+      week = await loadPlayerWeek(db, playerId, teamId, today)
       templateId = week.templateId
     } else if (teamId) {
       const { data: schedule } = await db
@@ -133,6 +123,37 @@ export async function startWorkout(
       }
     }
   }
+
+  return { templateId, selfGuided, week, trainsWithTemplateId }
+}
+
+/** player: the players row (select '*'); teamId: whose team workout to use */
+export async function startWorkout(db: Db, player: CheckInPlayer, teamId: string | null): Promise<CheckInResult> {
+  const playerId = player.id
+  // Club-local date — Vercel's clock is UTC, which rolls to tomorrow at 8 PM Eastern
+  const today = clubDateString()
+  const { start: dayStart, end: dayEnd } = clubDayBounds(today)
+
+  // Check for today's existing incomplete session — resume it
+  const { data: existingSession } = await db
+    .from('sessions')
+    .select('*')
+    .eq('player_id', playerId)
+    .gte('checked_in_at', dayStart)
+    .lt('checked_in_at', dayEnd)
+    .is('completed_at', null)
+    .order('checked_in_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  // Find today's template — priority: date override → player program → self-guided → team schedule
+  let picked: PickedWorkout
+  try {
+    picked = await pickWorkout(db, player, teamId, today)
+  } catch (e) {
+    return { status: 500, body: { error: 'Could not load this week\'s workouts: ' + (e as Error).message } }
+  }
+  const { templateId, selfGuided, week, trainsWithTemplateId } = picked
 
   // Fallback legacy (not for self-guided players — they get their own workout)
   let legacyWorkoutId: string | null = null
