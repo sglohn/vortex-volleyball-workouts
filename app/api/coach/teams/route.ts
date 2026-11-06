@@ -5,11 +5,14 @@
 //                player sign-in screen and TV display use it, middleware.ts).
 //                A signed-in team coach gets only their own teams, unless
 //                ?all=1 (the sign-in screen and TV display ask for all).
-//   POST / PUT   admins only (middleware.ts)
+//   POST / PUT   admins only (middleware.ts). `level` (national / regional /
+//                local, lib/teamLevel.ts) is only saved when it's sent, so
+//                the lacrosse site (no level picker) never touches it.
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getCoach } from '@/lib/coachAuth'
 import { inList } from '@/lib/coachScope'
+import { cleanTeamLevel } from '@/lib/teamLevel'
 
 export async function GET(req: NextRequest) {
   const db = createServerClient()
@@ -71,13 +74,16 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { name, age_group, color } = await req.json()
+  const body = await req.json()
+  const { name, age_group, color } = body
   if (!name) return NextResponse.json({ error: 'Name required' }, { status: 400 })
 
   const db = createServerClient()
+  const row: Record<string, unknown> = { name, age_group: age_group ?? null, color: color ?? '#4ade80' }
+  if ('level' in body) row.level = cleanTeamLevel(body.level)
   const { data: team, error } = await db
     .from('teams')
-    .insert({ name, age_group: age_group ?? null, color: color ?? '#4ade80' })
+    .insert(row)
     .select()
     .single()
 
@@ -86,13 +92,16 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const { id, name, age_group, color, is_active } = await req.json()
+  const body = await req.json()
+  const { id, name, age_group, color, is_active } = body
   if (!id) return NextResponse.json({ error: 'Missing id' }, { status: 400 })
 
   const db = createServerClient()
+  const changes: Record<string, unknown> = { name, age_group, color, is_active }
+  if ('level' in body) changes.level = cleanTeamLevel(body.level)
   const { data: team, error } = await db
     .from('teams')
-    .update({ name, age_group, color, is_active })
+    .update(changes)
     .eq('id', id)
     .select()
     .single()
