@@ -19,7 +19,7 @@ const MEASUREMENT_FIELDS: { key: string; label: string; unit: 'ft-in' | 'sec' | 
   { key: 'standing_reach_in', label: 'Standing Reach', unit: 'ft-in' },
   { key: 'standing_vertical_in', label: 'Standing Vertical', unit: 'ft-in' },
   { key: 'approach_vertical_in', label: 'Approach Vertical', unit: 'ft-in' },
-  { key: 'acceleration_sec', label: 'Acceleration (5yd)', unit: 'sec' },
+  { key: 'acceleration_sec', label: 'Acceleration (9 m)', unit: 'sec' },
   { key: 'pro_agility_sec', label: 'Agility (3-6-3 m)', unit: 'sec' },
   { key: 'swing_velocity_mph', label: 'Swing Velocity', unit: 'mph' },
 ]

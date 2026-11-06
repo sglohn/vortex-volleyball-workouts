@@ -22,7 +22,7 @@ const FIELDS: Array<{ key: MeasurementKey; label: string; unit: 'in' | 'sec' | '
   { key: 'standing_reach_in',    label: 'Standing Reach',    unit: 'in',  showFt: true  },
   { key: 'standing_vertical_in', label: 'Block Touch',       unit: 'in',  showFt: true  },
   { key: 'approach_vertical_in', label: 'Approach Touch',    unit: 'in',  showFt: true  },
-  { key: 'acceleration_sec',     label: 'Acceleration (5yd)',unit: 'sec', showFt: false },
+  { key: 'acceleration_sec',     label: 'Acceleration (9 m)',unit: 'sec', showFt: false },
   { key: 'pro_agility_sec',      label: 'Agility (3-6-3 m)', unit: 'sec', showFt: false },
   { key: 'swing_velocity_mph',   label: 'Swing Velocity',    unit: 'mph', showFt: false },
 ]

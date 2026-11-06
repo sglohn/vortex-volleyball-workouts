@@ -19,7 +19,7 @@ interface Player {
   standing_reach_in?: number | null
   standing_vertical_in?: number | null   // stored as standing JUMP TOUCH height (ft/in)
   approach_vertical_in?: number | null   // stored as approach TOUCH height (ft/in)
-  acceleration_sec?: number | null       // 5-yard acceleration sprint
+  acceleration_sec?: number | null       // Acceleration: endline to net, 9 m (not 5 yards)
   pro_agility_sec?: number | null        // Agility: net shuttle 3-6-3 m (not a full 5-10-5)
   swing_velocity_mph?: number | null     // SoloSpike/radar gun swing speed
   athleticism_score?: number | null      // composite VPI-style score
@@ -665,8 +665,8 @@ export default function CoachPlayersPage() {
                   <FF label="Approach Touch">
                     <FeetInchesInput value={measurements.approach_vertical_in} onChange={v => setMeasurements(m => ({ ...m, approach_vertical_in: v }))} placeholder="e.g. 108" />
                   </FF>
-                  <FF label="Acceleration (5yd, sec)">
-                    <input className="input" type="number" step="0.01" placeholder="e.g. 4.85" value={measurements.acceleration_sec} onChange={e => setMeasurements(m => ({ ...m, acceleration_sec: e.target.value }))} />
+                  <FF label="Acceleration (endline to net 9 m, sec)">
+                    <input className="input" type="number" step="0.01" placeholder="e.g. 2.05" value={measurements.acceleration_sec} onChange={e => setMeasurements(m => ({ ...m, acceleration_sec: e.target.value }))} />
                   </FF>
                   <FF label="Agility (net shuttle 3-6-3 m, sec)">
                     <input className="input" type="number" step="0.01" placeholder="e.g. 4.12" value={measurements.pro_agility_sec} onChange={e => setMeasurements(m => ({ ...m, pro_agility_sec: e.target.value }))} />
