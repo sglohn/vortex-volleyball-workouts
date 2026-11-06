@@ -29,7 +29,8 @@ import {
 } from '@/lib/loads'
 import WeightPicker from '@/components/WeightPicker'
 import Confetti from '@/components/Confetti'
-import { playerFetch } from '@/lib/playerPass'
+import { endStoredWorkout, playerFetch } from '@/lib/playerPass'
+import { FEATURES } from '@/lib/features'
 import ExerciseClip from '@/components/ExerciseClip'
 import WarmupCard, { type Warmup } from '@/components/WarmupCard'
 import FixSetsSheet, { type FixSetValues } from '@/components/FixSetsSheet'
@@ -82,6 +83,8 @@ function ChangeExerciseButton({ onClick, title, sub }: { onClick: () => void; ti
 
 export default function PlayerWorkoutPage() {
   const router = useRouter()
+  // After Finish: still signed in on her own phone, so "See my stats" can go Home
+  const [stillSignedIn, setStillSignedIn] = useState(false)
   const [session, setSession] = useState<{ sessionId: string; playerName: string; templateId?: string; checkedInAt?: string; teamMode?: boolean; teamModeUrl?: string } | null>(null)
   const [workout, setWorkout] = useState<WorkoutData | null>(null)
   // Combine Day: name, description and warm-up (no lifting blocks)
@@ -150,6 +153,8 @@ export default function PlayerWorkoutPage() {
     const stored = localStorage.getItem('vx_session')
     if (!stored) { router.push('/'); return }
     const s = JSON.parse(stored)
+    // Signed in but no workout begun: Home has "Begin today's workout"
+    if (!s.sessionId && FEATURES.datedSchedule) { router.replace('/player'); return }
     setSession(s)
     loadWorkout(s)
       .then(() => setLoading(false))
@@ -464,7 +469,8 @@ export default function PlayerWorkoutPage() {
       router.push(s.teamModeUrl)
       return
     }
-    localStorage.removeItem('vx_session')
+    // Still signed in on her own phone (volleyball): she can go back to Home
+    setStillSignedIn(endStoredWorkout(FEATURES.weekPlan))
     setFinishStats({ completedSets, totalWeight: Math.round(totalWeight), durationMin })
     setFinished(true)
   }
@@ -519,7 +525,10 @@ export default function PlayerWorkoutPage() {
           ))}
         </div>
       )}
-      <button className="btn-black" onClick={() => router.push('/')} style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>Sign Out</button>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem', width: '100%', maxWidth: 320 }}>
+        {stillSignedIn && <button className="btn-volt" onClick={() => router.push('/player')} style={{ padding: '0.8rem 2rem', fontSize: '1rem' }}>See my stats</button>}
+        <button className="btn-black" onClick={() => router.push('/')} style={{ padding: '0.75rem 2rem', fontSize: '1rem' }}>Sign Out</button>
+      </div>
     </div>
   )
 

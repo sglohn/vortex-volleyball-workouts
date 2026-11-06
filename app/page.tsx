@@ -13,7 +13,10 @@
 // Lacrosse (week plan teams, lib/weekPlan.ts): after the PIN, a "this week"
 // card shows her Days in order — the one waiting, the ones done, the ones
 // still locked — or why nothing is waiting (done today, done for the week,
-// no workouts posted). Volleyball goes straight to the body check as before.
+// no workouts posted). Volleyball: the PIN only signs her in and opens her
+// home page (app/player/page.tsx: her stats and history, with "Begin today's
+// workout" at the top when she has one). The body check comes after Begin,
+// so signing in just to look doesn't make a session or count as coming in.
 // A Day that's waiting but can't open yet (she finished one today) shows
 // "Tomorrow" instead of Start. If the one she finished today was started on
 // an earlier day (forgot to tap Finish), she can ask an admin to unlock the
@@ -27,6 +30,7 @@ import { useRouter } from 'next/navigation'
 import BrandMark from '@/components/BrandMark'
 import { BRAND } from '@/lib/brand'
 import { teamInitial } from '@/lib/teamInitial'
+import { FEATURES } from '@/lib/features'
 
 interface Team { id: string; name: string; age_group?: string; color: string; coaches?: string[] }
 
@@ -225,10 +229,16 @@ export default function HomePage() {
       const res = await fetch('/api/checkin', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ playerId: selectedPlayer.id, pin }),
+        // Volleyball: sign in only; the workout starts from her home page
+        body: JSON.stringify({ playerId: selectedPlayer.id, pin, ...(FEATURES.weekPlan ? {} : { start: false }) }),
       })
       const data = await res.json()
       if (!res.ok) { setError(data.error || 'Invalid PIN'); setPin(''); setCheckingIn(false); return }
+      if (data.signedIn) {
+        saveSession(data)
+        router.push('/player')
+        return
+      }
       if (data.week) {
         // Week plan team: show her week first. Only save a sign-in when
         // there's a workout waiting.
@@ -452,7 +462,7 @@ export default function HomePage() {
               <button onClick={() => { setStep('player'); setSelectedPlayer(null); setSelectedCoach(null); setPin(''); setError('') }}
                 style={{ background: 'var(--carolina-light)', border: '1.5px solid var(--carolina-border)', borderRadius: 8, color: 'var(--carolina-dark)', cursor: 'pointer', padding: '0.35rem 0.875rem', fontSize: '0.85rem', fontWeight: 600 }}>← Back</button>
               <span style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-                {selectedCoach ? 'Signing in as ' : 'Checking in as '}<strong style={{ color: 'var(--black)' }}>{selectedPlayer.name}</strong>
+                {selectedCoach || FEATURES.datedSchedule ? 'Signing in as ' : 'Checking in as '}<strong style={{ color: 'var(--black)' }}>{selectedPlayer.name}</strong>
               </span>
             </div>
 
@@ -483,7 +493,7 @@ export default function HomePage() {
                   disabled={checkingIn}>{k}</button>
               ))}
             </div>
-            {checkingIn && <div style={{ textAlign: 'center', color: 'var(--carolina-dark)', fontWeight: 500 }}>{selectedCoach ? 'Signing in…' : 'Checking in…'}</div>}
+            {checkingIn && <div style={{ textAlign: 'center', color: 'var(--carolina-dark)', fontWeight: 500 }}>{selectedCoach || FEATURES.datedSchedule ? 'Signing in…' : 'Checking in…'}</div>}
           </div>
         )}
 

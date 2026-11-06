@@ -34,7 +34,8 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { playerFetch, withPass } from '@/lib/playerPass'
+import { endStoredWorkout, playerFetch, withPass } from '@/lib/playerPass'
+import { FEATURES } from '@/lib/features'
 import WarmupCard, { type Warmup } from '@/components/WarmupCard'
 import CombineTestVisual from '@/components/CombineTestVisual'
 import InchModeSwitch from '@/components/InchModeSwitch'
@@ -183,6 +184,7 @@ export default function CombineDay({ session, name, description, warmup, warmupN
   const [finishArmed, setFinishArmed] = useState(false)
   const [finishing, setFinishing] = useState(false)
   const [finished, setFinished] = useState(false)
+  const [stillSignedIn, setStillSignedIn] = useState(false)
 
   const load = useCallback(async () => {
     const params = new URLSearchParams({ sessionId: session.sessionId })
@@ -244,12 +246,14 @@ export default function CombineDay({ session, name, description, warmup, warmupN
     if (exitRef.current) { exitRef.current('finished'); return }
     const stored = localStorage.getItem('vx_session')
     const s = stored ? JSON.parse(stored) : {}
-    localStorage.removeItem('vx_session')
     if (s.teamMode && s.teamModeUrl) {
+      localStorage.removeItem('vx_session')
       sessionStorage.setItem('vx_team_return', JSON.stringify({ name: session.playerName, totalWeight: 0, durationMin: 0, completedSets: doneCount, totalSets: metrics.length }))
       router.push(s.teamModeUrl)
       return
     }
+    // Her own phone (volleyball): stays signed in so "See my stats" can go Home
+    setStillSignedIn(endStoredWorkout(FEATURES.weekPlan))
     setFinishing(false)
     setFinished(true)
   }
@@ -288,6 +292,7 @@ export default function CombineDay({ session, name, description, warmup, warmupN
           )
         })}
       </div>
+      {stillSignedIn && <button className="btn-volt" onClick={() => router.push('/player')} style={{ width: '100%', padding: '0.85rem', fontSize: '1rem', marginBottom: '0.6rem' }}>See my stats</button>}
       <button className="btn-black" onClick={() => router.push('/')} style={{ width: '100%', padding: '0.85rem', fontSize: '1rem' }}>Sign Out</button>
     </div>
   )
