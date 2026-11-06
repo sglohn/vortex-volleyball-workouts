@@ -6,13 +6,14 @@
 //                A signed-in team coach gets only their own teams, unless
 //                ?all=1 (the sign-in screen and TV display ask for all).
 //   POST / PUT   admins only (middleware.ts). `level` (national / regional /
-//                local, lib/teamLevel.ts) is only saved when it's sent, so
-//                the lacrosse site (no level picker) never touches it.
+//                local) and `club_rank` (team number in its age group,
+//                lib/teamLevel.ts) are only saved when they're sent, so
+//                the lacrosse site (no pickers) never touches them.
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@/lib/supabase'
 import { getCoach } from '@/lib/coachAuth'
 import { inList } from '@/lib/coachScope'
-import { cleanTeamLevel } from '@/lib/teamLevel'
+import { cleanTeamLevel, cleanTeamRank } from '@/lib/teamLevel'
 
 export async function GET(req: NextRequest) {
   const db = createServerClient()
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest) {
   const db = createServerClient()
   const row: Record<string, unknown> = { name, age_group: age_group ?? null, color: color ?? '#4ade80' }
   if ('level' in body) row.level = cleanTeamLevel(body.level)
+  if ('club_rank' in body) row.club_rank = cleanTeamRank(body.club_rank)
   const { data: team, error } = await db
     .from('teams')
     .insert(row)
@@ -99,6 +101,7 @@ export async function PUT(req: NextRequest) {
   const db = createServerClient()
   const changes: Record<string, unknown> = { name, age_group, color, is_active }
   if ('level' in body) changes.level = cleanTeamLevel(body.level)
+  if ('club_rank' in body) changes.club_rank = cleanTeamRank(body.club_rank)
   const { data: team, error } = await db
     .from('teams')
     .update(changes)

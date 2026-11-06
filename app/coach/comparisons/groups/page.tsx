@@ -1,7 +1,8 @@
 // FILE: app/coach/comparisons/groups/page.tsx
 //
 // Coach → Comparisons → Groups (admins, volleyball). Groups players by team,
-// age group, age, position, team level or girls/boys and compares each
+// age group, age, position, team level, team # in its age group (1 team,
+// 2 team, ...) or girls/boys and compares each
 // group's average numbers. Data: /api/coach/comparisons/groups (each
 // player's latest measurements, the same numbers as Coach → Players).
 //
@@ -16,7 +17,7 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import ComparisonTabs from '@/components/ComparisonTabs'
 import { POSITIONS } from '@/lib/features'
-import { TEAM_LEVELS, teamLevelLabel } from '@/lib/teamLevel'
+import { TEAM_LEVELS, TEAM_RANKS, teamLevelLabel, teamRankLabel } from '@/lib/teamLevel'
 
 // ── Data ────────────────────────────────────────────────────────────────
 
@@ -26,7 +27,7 @@ type MetricKey =
 
 interface Player {
   id: string; name: string; gender: 'F' | 'M'; position: string | null; age: number | null
-  teamId: string; teamName: string; teamColor: string; ageGroup: string | null; level: string | null
+  teamId: string; teamName: string; teamColor: string; ageGroup: string | null; level: string | null; rank: number | null
   measuredAt: string | null
   metrics: Record<MetricKey, number | null>
 }
@@ -50,13 +51,14 @@ const METRICS: Metric[] = [
 
 // ── Grouping ────────────────────────────────────────────────────────────
 
-type GroupBy = 'team' | 'ageGroup' | 'age' | 'position' | 'level' | 'gender'
+type GroupBy = 'team' | 'ageGroup' | 'age' | 'position' | 'level' | 'rank' | 'gender'
 const GROUP_BY: { key: GroupBy; label: string }[] = [
   { key: 'team',     label: 'Team' },
   { key: 'ageGroup', label: 'Age group' },
   { key: 'age',      label: 'Age' },
   { key: 'position', label: 'Position' },
   { key: 'level',    label: 'Team level' },
+  { key: 'rank',     label: 'Team #' },
   { key: 'gender',   label: 'Girls vs boys' },
 ]
 
@@ -92,6 +94,10 @@ function groupOf(p: Player, by: GroupBy): GroupDef {
         ? { key: '-', label: 'Level not set', order: '9' }
         : { key: p.level!, label: TEAM_LEVELS[i].label, order: String(i) }
     }
+    case 'rank':
+      return p.rank == null
+        ? { key: '-', label: 'Team # not set', order: '9' }
+        : { key: String(p.rank), label: teamRankLabel(p.rank)!, order: String(p.rank) }
     case 'gender':
       return p.gender === 'M' ? { key: 'M', label: 'Boys', order: '1' } : { key: 'F', label: 'Girls', order: '0' }
   }
@@ -169,6 +175,7 @@ export default function GroupComparisonsPage() {
   const [gender, setGender] = useState<'F' | 'M' | 'all'>('F')
   const [levelFilter, setLevelFilter] = useState('')
   const [ageGroupFilter, setAgeGroupFilter] = useState('')
+  const [rankFilter, setRankFilter] = useState('')
   const [minTested, setMinTested] = useState(1)
   const [sort, setSort] = useState<{ key: MetricKey | 'group' | 'tested'; best: boolean }>({ key: 'group', best: true })
   const [chartKey, setChartKey] = useState<MetricKey>('max_vert')
@@ -188,13 +195,15 @@ export default function GroupComparisonsPage() {
   const shown = useMemo(() => players.filter(p =>
     (groupBy === 'gender' || gender === 'all' || p.gender === gender) &&
     (!levelFilter || (levelFilter === '-' ? !p.level : p.level === levelFilter)) &&
-    (!ageGroupFilter || p.ageGroup === ageGroupFilter)
-  ), [players, groupBy, gender, levelFilter, ageGroupFilter])
+    (!ageGroupFilter || p.ageGroup === ageGroupFilter) &&
+    (!rankFilter || (rankFilter === '-' ? p.rank == null : String(p.rank) === rankFilter))
+  ), [players, groupBy, gender, levelFilter, ageGroupFilter, rankFilter])
 
   const ageGroups = useMemo(() =>
     [...new Set(players.map(p => p.ageGroup).filter((g): g is string => !!g))].sort((a, b) => ageGroupOrder(a).localeCompare(ageGroupOrder(b))),
   [players])
   const anyLevelSet = players.some(p => p.level)
+  const anyRankSet = players.some(p => p.rank != null)
   const anySwing = players.some(p => p.metrics.swing_velocity_mph != null)
   const metrics = METRICS.filter(m => m.key !== 'swing_velocity_mph' || anySwing)
 
@@ -293,6 +302,14 @@ export default function GroupComparisonsPage() {
             </select>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+            <label style={labelStyle}>Team #</label>
+            <select className="input" value={rankFilter} onChange={e => setRankFilter(e.target.value)} style={{ fontSize: 13 }}>
+              <option value="">All teams</option>
+              {TEAM_RANKS.map(r => <option key={r} value={r}>{teamRankLabel(r)}s only</option>)}
+              <option value="-">Team # not set</option>
+            </select>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             <label style={labelStyle}>Show groups with</label>
             <select className="input" value={minTested} onChange={e => setMinTested(Number(e.target.value))} style={{ fontSize: 13 }}>
               <option value={1}>1+ player tested</option>
@@ -301,9 +318,9 @@ export default function GroupComparisonsPage() {
             </select>
           </div>
         </div>
-        {!anyLevelSet && (
+        {(!anyLevelSet || !anyRankSet) && (
           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-            No team levels set yet. Set National / Regional / Local on <strong>Coach → Teams → Edit</strong>.
+            {!anyLevelSet ? 'No team levels' : 'No team numbers'}{!anyLevelSet && !anyRankSet ? ' or numbers' : ''} set yet. Set them on <strong>Coach → Teams → Edit</strong>.
           </div>
         )}
       </div>
@@ -452,7 +469,7 @@ function GroupRows({ group, metrics, base, open, onToggle, sortKey }: {
           <tr key={p.id} style={{ borderBottom: '1px solid var(--gray-border)', background: '#fcfcfd', fontSize: 12 }}>
             <td style={{ padding: '0.35rem 0.7rem 0.35rem 1.4rem', position: 'sticky', left: 0, background: '#fcfcfd', minWidth: 140, maxWidth: 220 }}>
               <a href={`/coach/players/${p.id}`} onClick={e => e.stopPropagation()} style={{ color: 'var(--carolina-dark)', textDecoration: 'none', fontWeight: 600 }}>{p.name}</a>
-              <div style={{ color: 'var(--text-muted)', fontSize: 11, lineHeight: 1.3 }}>{[p.teamName, p.position, teamLevelLabel(p.level)].filter(Boolean).join(' · ')}</div>
+              <div style={{ color: 'var(--text-muted)', fontSize: 11, lineHeight: 1.3 }}>{[p.teamName, p.position, teamLevelLabel(p.level), teamRankLabel(p.rank)].filter(Boolean).join(' · ')}</div>
             </td>
             <td style={{ padding: '0.35rem 0.7rem', textAlign: 'right', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
               {p.measuredAt ? new Date(p.measuredAt + (p.measuredAt.length <= 10 ? 'T12:00:00' : '')).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'not tested'}

@@ -5,7 +5,8 @@
 //
 // Every active player on a team (primary team; not Open Gym teams, not
 // coaches' workout profiles) with what Coach → Comparisons → Groups groups
-// by (team, age group, age, position, team level, girls/boys) and her
+// by (team, age group, age, position, team level, team # in its age group,
+// girls/boys) and her
 // current numbers: her latest measurements row, the same numbers Coach →
 // Players and the athleticism score use. Verticals are touch minus that
 // row's standing reach. Players with no numbers are included so each group
@@ -15,7 +16,7 @@ import { createServerClient } from '@/lib/supabase'
 import { calculateAge } from '@/lib/age'
 import { verticalFrom } from '@/lib/combine'
 import { buildPopulationStats, calculateAthleticismScore, type AthleticismInputs } from '@/lib/athleticism'
-import { cleanTeamLevel } from '@/lib/teamLevel'
+import { cleanTeamLevel, cleanTeamRank } from '@/lib/teamLevel'
 
 const PAGE_ROWS = 1000
 
@@ -25,7 +26,7 @@ type PlayerJoin = {
 }
 type TeamJoin = {
   id: string; name: string; color?: string | null; age_group?: string | null
-  level?: string | null; is_active?: boolean | null; is_open_gym?: boolean | null
+  level?: string | null; club_rank?: number | null; is_active?: boolean | null; is_open_gym?: boolean | null
 }
 type MeasRow = {
   player_id: string; measured_at: string | null
@@ -113,6 +114,7 @@ export async function GET() {
       teamColor: t.color ?? '#888',
       ageGroup: t.age_group || null,
       level: cleanTeamLevel(t.level),
+      rank: cleanTeamRank(t.club_rank),
       measuredAt: m?.measured_at ?? null,
       metrics: {
         height_in: num(m?.height_in),
