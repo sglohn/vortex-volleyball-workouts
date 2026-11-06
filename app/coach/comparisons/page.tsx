@@ -7,7 +7,7 @@ const STAND_URL = '/sil_stand_f.png'
 const JUMP_URL  = '/sil_jump_f.png'
 const NET_URL   = '/volleyball_net.webp'
 const FEMALE_NET = 88.25
-const MALE_NET   = 95.5
+const MALE_NET   = 95.625  // 7'11⅝"
 
 type CompGroup = 'team' | 'cf' | 'ca' | 'age' | 'pos' | 't25' | 'no'
 interface Player {
@@ -16,14 +16,15 @@ interface Player {
   height_in?: number; standing_reach_in?: number; approach_vertical_in?: number
 }
 // Feet and inches to the quarter inch (7'2½", net 7'4¼"). Players' numbers
-// are in halves; group averages and the net can land on quarters.
-function fi(inches: number) {
-  const total = Math.round(inches * 4) / 4
-  const ft = Math.floor(total / 12)
-  const rest = total - ft * 12
-  const whole = Math.floor(rest)
-  const frac = rest - whole
-  const part = frac >= 0.75 ? '¾' : frac >= 0.5 ? '½' : frac >= 0.25 ? '¼' : ''
+// are in halves; group averages can land on quarters. Pass steps=8 for
+// eighths (the boys net is 7'11⅝").
+const FRACTIONS: Record<number, string> = { 1:'⅛', 2:'¼', 3:'⅜', 4:'½', 5:'⅝', 6:'¾', 7:'⅞' }
+function fi(inches: number, steps: 4 | 8 = 4) {
+  const eighths = Math.round(inches * steps) * (8 / steps)
+  const ft = Math.floor(eighths / 96)
+  const rest = eighths - ft * 96
+  const whole = Math.floor(rest / 8)
+  const part = FRACTIONS[rest - whole * 8] ?? ''
   return `${ft}'${whole}${part}"`
 }
 function avgF(arr: Player[], key: keyof Player): number {
@@ -49,7 +50,10 @@ const standCX=xp(.18), jumpCX=xp(.65), GHOST_OFF=14
 
 // Net — locked to calibration. Do not change these values.
 const NET_L='36.0%', NET_T='12.9%', NET_W='92.4%', NET_H_GIRLS='97.4%'
-const NET_T_BOYS='2.3%', NET_H_BOYS='110.6%'
+// Boys: the girls net picture scaled up from the floor so the top of the
+// tape lands at 7'11⅝" (pole stays on the floor). Was 2.3% / 110.6%, which
+// put the tape at about 8'4¾".
+const NET_T_BOYS='6.5%', NET_H_BOYS='105.7%'
 const NET_LABEL_X=xp(0.320)+20  // SVG net label x position
 
 function standProps(hIn:number,cx:number){
@@ -149,7 +153,7 @@ export default function ComparisonsPage(){
       const al=el('text',{x:pJump.left+pJump.width*.88,y:pJump.tipY+4,'font-size':'10',fill:above>=0?'#16a34a':'#dc2626','font-weight':'500'});al.textContent=`${above>=0?'+':''}${above.toFixed(1)}" vs net`;svg.appendChild(al)
     }
     if(gJump&&co.length){svg.appendChild(el('line',{x1:gJump.left-4,y1:gJump.tipY,x2:gJump.left+gJump.width*.85,y2:gJump.tipY,stroke:'#94a3b8','stroke-width':'1','stroke-dasharray':'4,3'}))}
-    const nl=el('text',{x:NET_LABEL_X,y:yp(net)-8,'font-size':'11',fill:'#1d4ed8','font-weight':'500'});nl.textContent=`Net ${fi(net)}`;svg.appendChild(nl)
+    const nl=el('text',{x:NET_LABEL_X,y:yp(net)-8,'font-size':'11',fill:'#1d4ed8','font-weight':'500'});nl.textContent=`Net ${fi(net, 8)}`;svg.appendChild(nl)
     const pnl=el('text',{x:standCX,y:TOP+cH+16,'text-anchor':'middle','font-size':'11',fill:'#0f172a','font-weight':'600'});pnl.textContent=`${sp.name.split(' ')[0]}  ${fi(pH)}`;svg.appendChild(pnl)
     if(co.length&&aH>0){const dH=pH-aH;const dl=el('text',{x:standCX,y:TOP+cH+28,'text-anchor':'middle','font-size':'10',fill:dH>=0?'#16a34a':'#dc2626'});dl.textContent=`${dH>=0?'+':''}${dH.toFixed(1)}" vs ${GROUP_LABELS[group]} (${fi(aH)})`;svg.appendChild(dl)}
     const jnl=el('text',{x:jumpCX,y:TOP+cH+16,'text-anchor':'middle','font-size':'11',fill:'#0f172a','font-weight':'600'});jnl.textContent=`${sp.name.split(' ')[0]}  reach ${fi(pAV)}`;svg.appendChild(jnl)
@@ -172,7 +176,7 @@ export default function ComparisonsPage(){
           <label style={{fontSize:13,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}}>Net</label>
           <select className="input" value={gender} onChange={e=>{const g=e.target.value as 'F'|'M';setGender(g);const first=players.find(p=>{return (p.gender==='M'?'M':'F')===g});if(first)setSelId(first.id)}} style={{fontSize:13}}>
             <option value="F">Girls — 7'4.25"</option>
-            <option value="M">Boys — 7'11.5"</option>
+            <option value="M">Boys — 7'11⅝"</option>
           </select>
         </div>
         <div style={{display:'flex',flexDirection:'column',gap:3,minWidth:220}}>
