@@ -181,7 +181,7 @@ export default function PlayerHomePage() {
         <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--carolina-dark)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Today’s workout</div>
         <div style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '1.35rem', color: 'var(--black)', margin: '0.2rem 0 0.9rem' }}>
           {today.workoutName}
-          {today.modified && <span style={{ display: 'block', fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginTop: '0.15rem' }}>Your modified workout while you heal</span>}
+          {today.modified && <span style={{ display: 'block', fontFamily: 'inherit', fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginTop: '0.15rem' }}>Your Workout (modified)</span>}
         </div>
         <button className="btn-volt" onClick={begin} disabled={starting} style={{ width: '100%', padding: '1rem', fontSize: '1.1rem' }}>
           {starting ? 'Starting…' : today.isCombine ? 'Begin Combine Day' : 'Begin today’s workout'}
