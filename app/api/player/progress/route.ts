@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
     { key: 'standing_reach_in', label: 'Standing Reach' },
     { key: 'standing_vertical_in', label: 'Standing Vertical' },
     { key: 'approach_vertical_in', label: 'Approach Vertical' },
-    { key: 'acceleration_sec', label: 'Acceleration (5yd)' },
+    { key: 'acceleration_sec', label: 'Acceleration (9 m)' },
     { key: 'pro_agility_sec', label: 'Agility (3-6-3 m)' },
     { key: 'swing_velocity_mph', label: 'Swing Velocity' },
   ]

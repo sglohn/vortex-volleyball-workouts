@@ -364,7 +364,7 @@ export async function buildCombineBoards(db: Db, opts: {
     testSection('APPROACH TOUCH', 'approach_vertical_in', 'jump', 'Approach Touch', 'Highest touch today', 'Highest approach touches'),
     verticalSection('STANDING VERTICAL', 'standing_vertical_in', 'Standing Vertical', 'Block touch minus reach', 'Best standing verticals'),
     testSection('BLOCK TOUCH', 'standing_vertical_in', 'jump', 'Block Touch', 'Highest touch today', 'Highest block touches'),
-    testSection('ACCELERATION', 'acceleration_sec', 'sprint', 'Acceleration', '5 yards, fastest time', 'Fastest 5 yards'),
+    testSection('ACCELERATION', 'acceleration_sec', 'sprint', 'Acceleration', 'Endline to net 9 m, fastest time', 'Fastest endline to net'),
     testSection('AGILITY', 'pro_agility_sec', 'sprint', 'Agility', 'Net shuttle 3-6-3 m, fastest time', 'Fastest agility shuttles'),
     testSection('WINGSPAN', 'wingspan_in', 'length', 'Wingspan', 'Fingertip to fingertip', 'Longest wingspans'),
     testSection('STANDING REACH', 'standing_reach_in', 'length', 'Standing Reach', 'Flat-footed, one hand', 'Highest standing reach'),
