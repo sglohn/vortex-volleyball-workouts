@@ -1,6 +1,7 @@
 // FILE: app/coach/comparisons/page.tsx
 'use client'
 import { useState, useEffect, useRef } from 'react'
+import ComparisonTabs from '@/components/ComparisonTabs'
 
 const STAND_URL = '/sil_stand_f.png'
 const JUMP_URL  = '/sil_jump_f.png'
@@ -165,6 +166,7 @@ export default function ComparisonsPage(){
         <h1 style={{fontFamily:'var(--font-display)',fontSize:'2rem',fontWeight:800,marginBottom:'.25rem'}}>Player Comparisons</h1>
         <p style={{color:'var(--text-muted)',fontSize:'.85rem'}}>Standing height and approach touch vs net</p>
       </div>
+      <ComparisonTabs active="player" />
       <div style={{display:'flex',gap:10,flexWrap:'wrap',alignItems:'flex-end',marginBottom:'0.75rem'}}>
         <div style={{display:'flex',flexDirection:'column',gap:3}}>
           <label style={{fontSize:13,color:'var(--text-muted)',fontWeight:600,textTransform:'uppercase',letterSpacing:'.05em'}}>Net</label>
